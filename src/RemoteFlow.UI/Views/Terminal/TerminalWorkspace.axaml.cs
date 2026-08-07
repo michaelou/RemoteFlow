@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using RemoteFlow.UI.Input;
 using RemoteFlow.UI.ViewModels.Terminal;
 using SvcSystems.UI.Terminal;
 
@@ -115,32 +116,21 @@ public sealed partial class TerminalWorkspace : UserControl
             return;
         }
 
-        var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
-        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        var alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
-        if (control && shift && e.Key == Key.T)
+        var router = new TerminalInputRouter(viewModel.Keymap);
+        if (await router.RouteAsync(e, viewModel, ToggleFullscreen).ConfigureAwait(true))
         {
-            e.Handled = true;
-            _ = await viewModel.AddLocalSessionAsync().ConfigureAwait(true);
-            FocusTerminal();
-        }
-        else if (control && shift && e.Key == Key.W && viewModel.SelectedSession is { } selected)
-        {
-            e.Handled = true;
-            _ = await viewModel.CloseSessionAsync(selected).ConfigureAwait(true);
-            FocusTerminal();
-        }
-        else if (control && e.Key == Key.Tab)
-        {
-            viewModel.CycleSession(shift);
             e.Handled = true;
             FocusTerminal();
         }
-        else if (alt && !control && !shift && e.Key is >= Key.D1 and <= Key.D9)
+    }
+
+    private void ToggleFullscreen()
+    {
+        if (TopLevel.GetTopLevel(this) is Window window)
         {
-            viewModel.SelectSession((int)e.Key - (int)Key.D1 + 1);
-            e.Handled = true;
-            FocusTerminal();
+            window.WindowState = window.WindowState == WindowState.FullScreen
+                ? WindowState.Normal
+                : WindowState.FullScreen;
         }
     }
 

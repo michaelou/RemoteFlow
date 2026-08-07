@@ -4,6 +4,7 @@ using System.IO.Pipelines;
 using System.Text;
 using System.Text.RegularExpressions;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Services;
 using RemoteFlow.Infrastructure.Pty;
 using Xunit;
 
@@ -27,6 +28,32 @@ public sealed partial class PortaPtyServiceTests
             token);
 
         Assert.Contains("REMOTEFLOW_PTY_OK", Encoding.UTF8.GetString(output), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task KeymapCtrlCBytesInterruptARunawayPtyCommand()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var service = new PortaPtyService();
+        await using var session = await service.SpawnAsync(InteractiveShell(), token);
+        var runaway = OperatingSystem.IsWindows()
+            ? "ping -t 127.0.0.1\r\n"
+            : "yes REMOTEFLOW_RUNNING\n";
+        await session.WriteAsync(Encoding.UTF8.GetBytes(runaway), token);
+        await Task.Delay(500, token);
+
+        var keymap = new KeymapService();
+        var interrupt = keymap.Resolve(
+            new TerminalKeyStroke(TerminalKey.C, TerminalModifiers.Control),
+            OperatingSystem.IsMacOS() ? KeymapPlatform.MacOs : KeymapPlatform.WindowsLinux);
+        await session.WriteAsync(interrupt.Bytes, token);
+        await session.WriteAsync(Encoding.UTF8.GetBytes($"echo REMOTEFLOW_INTERRUPTED{NewLine()}"), token);
+        var output = await ReadUntilAsync(
+            session.Output,
+            bytes => Encoding.UTF8.GetString(bytes).Contains("REMOTEFLOW_INTERRUPTED", StringComparison.Ordinal),
+            token);
+
+        Assert.Contains("REMOTEFLOW_INTERRUPTED", Encoding.UTF8.GetString(output), StringComparison.Ordinal);
     }
 
     [Fact]

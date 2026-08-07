@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IConnectionCredentialService, ConnectionCredentialService>();
         services.TryAddSingleton<ITagService, TagService>();
         services.TryAddSingleton<IFolderService, FolderService>();
+        services.TryAddSingleton<KeymapService>();
         return services;
     }
 }

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Services;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
 
@@ -20,7 +21,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     }
 
     public TerminalWorkspaceViewModel(IPtyService ptyService, IUiDispatcher dispatcher)
-        : this(ptyService, dispatcher, null, null)
+        : this(ptyService, dispatcher, null, null, null)
     {
     }
 
@@ -28,16 +29,20 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         IPtyService ptyService,
         IUiDispatcher dispatcher,
         ISettingsStore? settings,
-        IConfirmationDialogService? confirmation)
+        IConfirmationDialogService? confirmation,
+        KeymapService? keymap)
         : base("Terminals")
     {
         _ptyService = ptyService ?? throw new ArgumentNullException(nameof(ptyService));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _settings = settings;
         _confirmation = confirmation;
+        Keymap = keymap ?? new KeymapService();
     }
 
     public ObservableCollection<TerminalSessionViewModel> Sessions { get; } = [];
+
+    public KeymapService Keymap { get; } = new();
 
     public TerminalSessionViewModel? SelectedSession { get; private set; }
 

@@ -75,6 +75,8 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     public bool IsEnded => !IsLive;
 
+    public bool ApplicationCursorKeys { get; set; }
+
     [ObservableProperty]
     public partial string Title { get; private set; }
 
@@ -102,6 +104,28 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     internal void SetActive(bool isActive)
     {
         IsActive = isActive;
+    }
+
+    public async ValueTask SendInputAsync(
+        ReadOnlyMemory<byte> data,
+        CancellationToken cancellationToken = default)
+    {
+        if (data.IsEmpty || Volatile.Read(ref _disposeStarted) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await _channel.WriteAsync(data, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || _lifetime.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            await SetFailedAsync($"Terminal input failed: {exception.Message}").ConfigureAwait(false);
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -207,17 +231,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
             return;
         }
 
-        try
-        {
-            await _channel.WriteAsync(e.Data, _lifetime.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            await SetFailedAsync($"Terminal input failed: {exception.Message}").ConfigureAwait(false);
-        }
+        await SendInputAsync(e.Data, _lifetime.Token).ConfigureAwait(false);
     }
 
     private ValueTask SetFailedAsync(string message)

@@ -6,6 +6,7 @@ using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Desktop;
 using RemoteFlow.Infrastructure.Diagnostics;
 using RemoteFlow.UI.ViewModels;
+using RemoteFlow.UI.ViewModels.Terminal;
 using RemoteFlow.UI.Navigation;
 using RemoteFlow.UI.Views;
 using Xunit;
