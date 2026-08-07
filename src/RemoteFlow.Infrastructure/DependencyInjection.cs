@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Infrastructure.Diagnostics;
 using RemoteFlow.Infrastructure.Platform;
+using RemoteFlow.Infrastructure.Pty;
 using RemoteFlow.Infrastructure.Security;
 using RemoteFlow.Infrastructure.Security.Crypto;
 
@@ -20,6 +21,7 @@ public static class DependencyInjection
 
         services.TryAddSingleton<IAppPaths>(appPaths);
         services.TryAddSingleton<ISecureRandom, SecureRandom>();
+        services.TryAddSingleton<IPtyService, PortaPtyService>();
         services.TryAddSingleton<ISecretRegistry, SecretRegistry>();
         services.TryAddSingleton<IGlobalExceptionHandler, GlobalExceptionHandler>();
         services.TryAddSingleton<WindowsCredentialProvider>();
