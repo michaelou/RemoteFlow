@@ -36,6 +36,8 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     private readonly IConnectionChangeNotifier _changeNotifier;
     private readonly IGuidProvider _guidProvider;
     private readonly IClock _clock;
+    private readonly ConnectionEditorViewModelFactory? _editorFactory;
+    private readonly IConfirmationDialogService? _confirmation;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
     private CancellationTokenSource? _filterDebounce;
     private bool _disposed;
@@ -81,6 +83,37 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         IConnectionChangeNotifier changeNotifier,
         IGuidProvider guidProvider,
         IClock clock)
+        : this(
+            queries,
+            folders,
+            tags,
+            connections,
+            folderService,
+            recent,
+            settings,
+            sessionOpener,
+            changeNotifier,
+            guidProvider,
+            clock,
+            null,
+            null)
+    {
+    }
+
+    public ConnectionsPageViewModel(
+        IConnectionQueryService queries,
+        IFolderRepository folders,
+        ITagRepository tags,
+        IConnectionService connections,
+        IFolderService folderService,
+        IRecentConnectionStore recent,
+        ISettingsStore settings,
+        IConnectionSessionOpener sessionOpener,
+        IConnectionChangeNotifier changeNotifier,
+        IGuidProvider guidProvider,
+        IClock clock,
+        ConnectionEditorViewModelFactory? editorFactory,
+        IConfirmationDialogService? confirmation)
         : base("Connections")
     {
         _queries = queries;
@@ -94,6 +127,8 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         _changeNotifier = changeNotifier;
         _guidProvider = guidProvider;
         _clock = clock;
+        _editorFactory = editorFactory;
+        _confirmation = confirmation;
         changeNotifier.ConnectionChanged += OnConnectionChanged;
         ProtocolFilters =
         [
@@ -128,6 +163,16 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     public Task ConnectionChangesSettled { get; private set; } = Task.CompletedTask;
 
     public Task SearchChangesSettled { get; private set; } = Task.CompletedTask;
+
+    public Task WorkspaceChangesSettled { get; private set; } = Task.CompletedTask;
+
+    [ObservableProperty]
+    public partial ConnectionEditorViewModel? Editor { get; private set; }
+
+    [ObservableProperty]
+    public partial ConnectionDetailsViewModel? Details { get; private set; }
+
+    public bool IsEditorOpen => Editor is not null;
 
     [ObservableProperty]
     public partial string? SearchText { get; set; }
@@ -211,6 +256,11 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         {
             node.IsSelected = true;
             SelectedNodes.Add(node);
+        }
+
+        if (node.Kind == ExplorerNodeKind.Connection && node.Id is { } connectionId && Editor is null)
+        {
+            WorkspaceChangesSettled = ShowDetailsAsync(connectionId);
         }
     }
 
@@ -315,7 +365,63 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
     public void RequestCreateConnection()
     {
-        ActionRequested?.Invoke(this, new ExplorerActionRequestedEventArgs(null, null, ExplorerAction.Edit));
+        if (_editorFactory is null)
+        {
+            ActionRequested?.Invoke(this, new ExplorerActionRequestedEventArgs(null, null, ExplorerAction.Edit));
+            return;
+        }
+
+        WorkspaceChangesSettled = OpenEditorAsync(null);
+    }
+
+    public async Task<bool> SaveEditorAsync(
+        ReadOnlyMemory<char> capturedSecret,
+        CancellationToken cancellationToken = default)
+    {
+        if (Editor is null || !await Editor.SaveAsync(capturedSecret, cancellationToken).ConfigureAwait(true))
+        {
+            return false;
+        }
+
+        var connectionId = Editor.ConnectionId!.Value;
+        Editor = null;
+        OnPropertyChanged(nameof(IsEditorOpen));
+        await RefreshAsync(cancellationToken).ConfigureAwait(true);
+        await ShowDetailsAsync(connectionId, cancellationToken).ConfigureAwait(true);
+        return true;
+    }
+
+    public async Task<bool> CloseEditorAsync(CancellationToken cancellationToken = default)
+    {
+        if (Editor is null)
+        {
+            return true;
+        }
+
+        if (Editor.IsDirty && _confirmation is not null &&
+            !await _confirmation.ConfirmAsync(
+                "Discard unsaved changes?",
+                $"Discard the unsaved changes to '{Editor.Name}'?",
+                "Discard",
+                cancellationToken).ConfigureAwait(true))
+        {
+            return false;
+        }
+
+        var connectionId = Editor.ConnectionId;
+        Editor = null;
+        OnPropertyChanged(nameof(IsEditorOpen));
+        if (connectionId is { } id)
+        {
+            await ShowDetailsAsync(id, cancellationToken).ConfigureAwait(true);
+        }
+
+        return true;
+    }
+
+    public Task<bool> CanNavigateAwayAsync(CancellationToken cancellationToken = default)
+    {
+        return CloseEditorAsync(cancellationToken);
     }
 
     public void Dispose()
@@ -581,6 +687,14 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
                 await RefreshAsync().ConfigureAwait(true);
                 break;
             case ExplorerAction.Delete:
+                if (_confirmation is not null && !await _confirmation.ConfirmAsync(
+                        "Delete connection?",
+                        $"Delete '{node.Name}'? This action cannot be undone.",
+                        "Delete").ConfigureAwait(true))
+                {
+                    break;
+                }
+
                 if (node.Kind == ExplorerNodeKind.Folder)
                 {
                     _ = await _folderService.DeleteAsync(node.Id!.Value).ConfigureAwait(true);
@@ -594,10 +708,18 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
                 break;
             case ExplorerAction.Edit:
             case ExplorerAction.NewFolder:
-                ActionRequested?.Invoke(this, new ExplorerActionRequestedEventArgs(
-                    node.Kind == ExplorerNodeKind.Connection ? node.Id : null,
-                    node.Kind == ExplorerNodeKind.Folder ? node.Id : null,
-                    action));
+                if (action == ExplorerAction.Edit && _editorFactory is not null)
+                {
+                    await OpenEditorAsync(node.Id).ConfigureAwait(true);
+                }
+                else
+                {
+                    ActionRequested?.Invoke(this, new ExplorerActionRequestedEventArgs(
+                        node.Kind == ExplorerNodeKind.Connection ? node.Id : null,
+                        node.Kind == ExplorerNodeKind.Folder ? node.Id : null,
+                        action));
+                }
+
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(action));
@@ -656,6 +778,79 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     {
         ConnectionChangesSettled = RefreshAsync();
         await ConnectionChangesSettled.ConfigureAwait(true);
+    }
+
+    private async Task OpenEditorAsync(Guid? connectionId, CancellationToken cancellationToken = default)
+    {
+        if (_editorFactory is null || !await CloseEditorAsync(cancellationToken).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        Editor = await _editorFactory.CreateEditorAsync(connectionId, cancellationToken).ConfigureAwait(true);
+        Details = null;
+        OnPropertyChanged(nameof(IsEditorOpen));
+    }
+
+    private async Task ShowDetailsAsync(Guid connectionId, CancellationToken cancellationToken = default)
+    {
+        if (_editorFactory is null)
+        {
+            return;
+        }
+
+        Details = await _editorFactory.CreateDetailsAsync(
+            connectionId,
+            mode => OpenFromDetailsAsync(connectionId, mode),
+            () => OpenEditorAsync(connectionId),
+            () => DuplicateFromDetailsAsync(connectionId),
+            () => DeleteFromDetailsAsync(connectionId),
+            cancellationToken).ConfigureAwait(true);
+    }
+
+    private async Task OpenFromDetailsAsync(Guid connectionId, ConnectionOpenMode mode)
+    {
+        if (await _sessionOpener.OpenAsync(connectionId, mode).ConfigureAwait(true))
+        {
+            await _recent.RecordOpenedAsync(connectionId, _clock.UtcNow).ConfigureAwait(true);
+            await ShowDetailsAsync(connectionId).ConfigureAwait(true);
+            await RefreshAsync().ConfigureAwait(true);
+        }
+    }
+
+    private async Task DuplicateFromDetailsAsync(Guid connectionId)
+    {
+        var result = await _connections.DuplicateAsync(connectionId).ConfigureAwait(true);
+        if (result.IsFailure)
+        {
+            FeedbackMessage = result.Error.Message;
+            return;
+        }
+
+        await RefreshAsync().ConfigureAwait(true);
+        await ShowDetailsAsync(result.Value.Id).ConfigureAwait(true);
+    }
+
+    private async Task DeleteFromDetailsAsync(Guid connectionId)
+    {
+        var name = Details?.Name ?? "this connection";
+        if (_confirmation is not null && !await _confirmation.ConfirmAsync(
+                "Delete connection?",
+                $"Delete '{name}'? This action cannot be undone.",
+                "Delete").ConfigureAwait(true))
+        {
+            return;
+        }
+
+        var deleted = await _connections.DeleteAsync(connectionId).ConfigureAwait(true);
+        if (deleted.IsFailure)
+        {
+            FeedbackMessage = deleted.Error.Message;
+            return;
+        }
+
+        Details = null;
+        await RefreshAsync().ConfigureAwait(true);
     }
 
     private sealed class EmptyTagRepository : ITagRepository

@@ -17,6 +17,7 @@ public sealed partial class MainWindow : Window
     private readonly WindowGeometryService _geometryService;
     private WindowGeometry _normalGeometry = WindowGeometry.Default;
     private bool _initialized;
+    private bool _restoringNavigationSelection;
     private IInputElement? _focusBeforePalette;
 
     public MainWindow()
@@ -85,12 +86,25 @@ public sealed partial class MainWindow : Window
         _geometryService.SaveAsync(geometry).GetAwaiter().GetResult();
     }
 
-    private void NavigationList_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    private async void NavigationList_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (sender is ListBox { SelectedItem: NavigationItemViewModel item })
+        if (_restoringNavigationSelection || sender is not ListBox { SelectedItem: NavigationItemViewModel item } list)
         {
-            _viewModel.Navigate(item);
+            return;
         }
+
+        if (_viewModel.CurrentPage is ConnectionsPageViewModel connections &&
+            !string.Equals(item.Title, connections.Title, StringComparison.Ordinal) &&
+            !await connections.CanNavigateAwayAsync().ConfigureAwait(true))
+        {
+            _restoringNavigationSelection = true;
+            list.SelectedItem = _viewModel.NavigationItems.First(candidate =>
+                string.Equals(candidate.Title, _viewModel.CurrentPage.Title, StringComparison.Ordinal));
+            _restoringNavigationSelection = false;
+            return;
+        }
+
+        _viewModel.Navigate(item);
     }
 
     private void NavigationList_OnKeyDown(object? sender, KeyEventArgs e)

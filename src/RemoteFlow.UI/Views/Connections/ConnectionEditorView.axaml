@@ -1,0 +1,139 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Connections.ConnectionEditorView"
+    x:DataType="connectionViewModels:ConnectionEditorViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections">
+  <Border Padding="20" Background="{DynamicResource Brush.Surface.1}" CornerRadius="8">
+    <Grid RowDefinitions="Auto,*,Auto">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock FontSize="22" FontWeight="SemiBold" Text="{Binding Title}" />
+        <TextBlock
+            Grid.Column="1"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brush.Warning}"
+            IsVisible="{Binding IsDirty}"
+            Text="Unsaved changes" />
+      </Grid>
+
+      <ScrollViewer Grid.Row="1" Margin="0,16,0,12">
+        <StackPanel Spacing="10">
+          <TextBlock Text="Name" />
+          <TextBox TabIndex="1" Text="{Binding Name, Mode=TwoWay}" />
+          <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding NameError}" />
+
+          <TextBlock Text="Host" />
+          <TextBox TabIndex="2" Text="{Binding Host, Mode=TwoWay}" />
+          <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding HostError}" />
+
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+            <StackPanel>
+              <TextBlock Text="Protocol" />
+              <ComboBox TabIndex="3" ItemsSource="{Binding Protocols}" SelectedItem="{Binding Protocol, Mode=TwoWay}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1">
+              <TextBlock Text="Port" />
+              <NumericUpDown TabIndex="4" Minimum="1" Maximum="65535" Value="{Binding Port, Mode=TwoWay}" />
+              <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding PortError}" />
+            </StackPanel>
+          </Grid>
+
+          <TextBlock Text="Username" />
+          <TextBox TabIndex="5" Text="{Binding Username, Mode=TwoWay}" />
+          <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding UsernameError}" />
+
+          <TextBlock Text="Authentication" />
+          <ComboBox TabIndex="6" ItemsSource="{Binding AuthMethods}" SelectedItem="{Binding AuthMethod, Mode=TwoWay}" />
+          <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding AuthMethodError}" />
+
+          <StackPanel IsVisible="{Binding IsSshSectionVisible}" Spacing="6">
+            <TextBlock FontWeight="SemiBold" Text="SSH options" />
+            <TextBlock Text="Private key path" />
+            <TextBox TabIndex="7" Text="{Binding PrivateKeyPath, Mode=TwoWay}" />
+            <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding PrivateKeyPathError}" />
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding IsSftpSectionVisible}" Spacing="6">
+            <TextBlock FontWeight="SemiBold" Text="SFTP options" />
+            <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="SFTP transfer settings use their defaults." />
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding IsRdpSectionVisible}" Spacing="6">
+            <TextBlock FontWeight="SemiBold" Text="RDP options" />
+            <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="RDP display settings are configured when launching." />
+          </StackPanel>
+
+          <TextBlock Text="Credential" />
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+            <TextBlock VerticalAlignment="Center" Text="{Binding CredentialStatusText}" />
+            <TextBlock
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                Foreground="{DynamicResource Brush.Text.Secondary}"
+                Text="{Binding CredentialProviderName}" />
+            <Button
+                Grid.Column="2"
+                Click="ClearCredential_OnClick"
+                Content="Clear"
+                IsEnabled="{Binding CanClearCredential}" />
+          </Grid>
+
+          <StackPanel IsVisible="{Binding !IsPrivateKeyPassphraseVisible}" Spacing="4">
+            <TextBlock Text="Password (leave blank to keep the current credential)" />
+            <TextBox x:Name="PasswordCapture" TabIndex="8" PasswordChar="●" />
+            <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding CredentialActionLabel}" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding IsPrivateKeyPassphraseVisible}" Spacing="4">
+            <TextBlock Text="Private-key passphrase (leave blank to keep the current credential)" />
+            <TextBox x:Name="PassphraseCapture" TabIndex="8" PasswordChar="●" />
+            <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding CredentialActionLabel}" />
+          </StackPanel>
+
+          <TextBlock Text="Folder" />
+          <ComboBox
+              TabIndex="9"
+              DisplayMemberBinding="{Binding Path}"
+              ItemsSource="{Binding FolderChoices}"
+              SelectedItem="{Binding SelectedFolder, Mode=TwoWay}" />
+
+          <TextBlock Text="Tags" />
+          <TextBox TabIndex="10" PlaceholderText="Add tags, separated by commas" Text="{Binding TagInput, Mode=TwoWay}" />
+          <ItemsControl ItemsSource="{Binding TagChoices}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="connectionViewModels:TagChoiceViewModel">
+                <CheckBox Margin="0,0,8,4" Content="{Binding Name}" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Text="Environment" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <ComboBox TabIndex="11" ItemsSource="{Binding Environments}" SelectedItem="{Binding Environment, Mode=TwoWay}" />
+            <Border Grid.Column="1" Width="32" Background="{Binding EnvironmentPreviewBrush}" CornerRadius="4" />
+          </Grid>
+          <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding EnvironmentError}" />
+          <TextBlock Text="Environment colour override" />
+          <TextBox TabIndex="12" PlaceholderText="#RRGGBB" Text="{Binding ColorOverrideHex, Mode=TwoWay}" />
+
+          <CheckBox TabIndex="13" Content="Favorite" IsChecked="{Binding IsFavorite, Mode=TwoWay}" />
+
+          <TextBlock Text="Notes" />
+          <TextBox
+              TabIndex="14"
+              AcceptsReturn="True"
+              MinHeight="80"
+              TextWrapping="Wrap"
+              Text="{Binding Notes, Mode=TwoWay}" />
+
+          <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding SaveError}" />
+        </StackPanel>
+      </ScrollViewer>
+
+      <StackPanel Grid.Row="2" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+        <Button TabIndex="16" Click="Cancel_OnClick" Content="Cancel" />
+        <Button TabIndex="15" Click="Save_OnClick" Content="Save" IsEnabled="{Binding !IsSaving}" />
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

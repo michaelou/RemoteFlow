@@ -36,6 +36,8 @@ public static class DependencyInjection
         _ = services.AddSingleton<ICredentialProvider>(provider =>
             provider.GetRequiredService<LibSecretProvider>());
         services.TryAddSingleton<CredentialProviderSelector>();
+        services.TryAddSingleton<ICredentialProviderSelector>(provider =>
+            provider.GetRequiredService<CredentialProviderSelector>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, RedactingLoggerProvider>());
         return services;
     }

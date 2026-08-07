@@ -15,6 +15,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IGuidProvider>(SystemGuidProvider.Instance);
         services.TryAddSingleton<IConnectionChangeNotifier, ConnectionChangeNotifier>();
         services.TryAddSingleton<IConnectionService, ConnectionService>();
+        services.TryAddSingleton<IConnectionCredentialService, ConnectionCredentialService>();
         services.TryAddSingleton<ITagService, TagService>();
         services.TryAddSingleton<IFolderService, FolderService>();
         return services;

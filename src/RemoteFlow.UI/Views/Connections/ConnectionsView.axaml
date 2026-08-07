@@ -6,6 +6,14 @@
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
     xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
     Loaded="ConnectionsView_OnLoaded">
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="{x:Type connectionViewModels:ConnectionEditorViewModel}" x:DataType="connectionViewModels:ConnectionEditorViewModel">
+      <connectionViews:ConnectionEditorView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type connectionViewModels:ConnectionDetailsViewModel}" x:DataType="connectionViewModels:ConnectionDetailsViewModel">
+      <connectionViews:ConnectionDetailsView />
+    </DataTemplate>
+  </UserControl.DataTemplates>
   <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,*">
     <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
       <StackPanel>
@@ -27,7 +35,7 @@
       <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding FeedbackMessage}" />
     </Border>
 
-    <Grid Grid.Row="3">
+    <Grid Grid.Row="3" ColumnDefinitions="2*,3*" ColumnSpacing="16">
       <TreeView
           x:Name="ConnectionTree"
           DragDrop.AllowDrop="True"
@@ -101,6 +109,7 @@
       </TreeView>
 
       <Border
+          Grid.Column="0"
           Padding="40"
           Background="{DynamicResource Brush.Surface.1}"
           CornerRadius="{DynamicResource Radius.Control}"
@@ -120,6 +129,9 @@
               IsVisible="{Binding HasActiveFilters}" />
         </StackPanel>
       </Border>
+
+      <ContentControl Grid.Column="1" Content="{Binding Details}" IsVisible="{Binding !IsEditorOpen}" />
+      <ContentControl Grid.Column="1" Content="{Binding Editor}" IsVisible="{Binding IsEditorOpen}" />
     </Grid>
   </Grid>
 </UserControl>

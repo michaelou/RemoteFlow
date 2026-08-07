@@ -17,6 +17,7 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton<ConnectionsPageViewModel>();
+        services.TryAddSingleton<ConnectionEditorViewModelFactory>();
         services.TryAddSingleton<CommandPaletteViewModel>();
         services.TryAddSingleton<TerminalsPageViewModel>();
         services.TryAddSingleton<TransfersPageViewModel>();
@@ -44,6 +45,7 @@ public static class DependencyInjection
         services.TryAddSingleton<WindowGeometryService>();
         services.TryAddSingleton<MainWindow>();
         services.TryAddSingleton<IErrorDialogService, ErrorDialogService>();
+        services.TryAddSingleton<IConfirmationDialogService, ConfirmationDialogService>();
         services.TryAddSingleton<IConnectionSessionOpener, DeferredConnectionSessionOpener>();
         services.TryAddSingleton<IThemeService>(provider => new ThemeService(
             provider.GetRequiredService<App>(),

@@ -13,7 +13,7 @@ public sealed class CredentialProviderSelector(
     ISettingsStore settingsStore,
     IEnumerable<ICredentialProvider> providers,
     CredentialPlatform? platform = null,
-    CredentialSecurityState? securityState = null)
+    CredentialSecurityState? securityState = null) : ICredentialProviderSelector
 {
     private readonly IReadOnlyList<ICredentialProvider> _providers = [.. providers];
     private readonly CredentialPlatform _platform = platform ?? CurrentPlatform();
