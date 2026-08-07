@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Queries;
+using RemoteFlow.Persistence.Queries;
 using RemoteFlow.Persistence.Repositories;
 
 namespace RemoteFlow.Persistence;
@@ -15,7 +17,7 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(appPaths);
 
-        services.TryAddSingleton<IAppPaths>(appPaths);
+        services.TryAddSingleton(appPaths);
         AddPersistenceServices(services, appPaths.DataDirectory);
         _ = services.AddSingleton<IDbInitializer, DbInitializer>();
         return services;
@@ -58,5 +60,6 @@ public static class DependencyInjection
         _ = services.AddSingleton<IUnitOfWork>(provider => new UnitOfWork(
             provider.GetRequiredService<IDbContextFactory<RemoteFlowDbContext>>(),
             provider.GetRequiredService<DbContextScopeAccessor>()));
+        _ = services.AddSingleton<IConnectionQueryService, ConnectionQueryService>();
     }
 }
