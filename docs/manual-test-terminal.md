@@ -138,6 +138,18 @@ For the scrollback budget, start a fresh process, produce exactly 10,000 short n
 3. Search for text in scrolled-off output, cycle through matches with Next, and confirm the viewport follows.
 4. Change `FontFamily`, `FontSize`, and selected `SvcSystems.UI.TerminalColor*` resources in the harness, rebuild, and verify the instance/palette hooks take effect.
 
+## Scrollback and find
+
+RemoteFlow uses SvcSystems.UI.Terminal's native buffer-search API for the default case-insensitive,
+literal search, so every match receives the control's built-in highlight. Case-sensitive and regular
+expression modes evaluate the control's buffer snapshot and use the native selection/navigation hook
+for the active result. An invalid or excessively expensive expression is reported in the find bar.
+
+1. Produce 10,000 numbered lines, scroll upward with the wheel, Page Up and the scrollbar, then let new output arrive. The viewport must not jump to the bottom.
+2. Return to the bottom and produce more output. The viewport must follow the new output.
+3. Press Ctrl+Shift+F, find a repeated word, and navigate forward with Enter and backward with Shift+Enter. Confirm all literal matches are highlighted.
+4. Toggle case sensitivity and regex mode. Try a valid pattern and an invalid pattern such as `[`. The invalid pattern must show a message without closing the session.
+
 ## Regression outcome
 
 Attach evidence for any failure and apply ADR-0005's reconsideration rule. Passing routine checks requires no ADR status change. Validating Linux or macOS requires a separate issue and an ADR amendment.

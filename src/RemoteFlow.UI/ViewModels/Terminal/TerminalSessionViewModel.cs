@@ -1,10 +1,12 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels.Settings;
 using SvcSystems.UI.Terminal;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace RemoteFlow.UI.ViewModels.Terminal;
 
@@ -25,6 +27,9 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     private readonly Lock _resizeSync = new();
     private CancellationTokenSource? _pendingResize;
     private long _droppedOutputBytes;
+    private List<SearchNavigationMatch> _filteredSearchMatches = [];
+    private bool _usesNativeSearch = true;
+    private int _currentFilteredSearchMatch = -1;
     private int _disposeStarted;
 
     public TerminalSessionViewModel(
@@ -75,6 +80,27 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     [ObservableProperty]
     public partial string TerminalForeground { get; private set; } = TerminalColorSchemes.Dark.Foreground;
+
+    [ObservableProperty]
+    public partial bool IsFindOpen { get; private set; }
+
+    [ObservableProperty]
+    public partial string SearchText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool IsSearchCaseSensitive { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsSearchRegex { get; set; }
+
+    [ObservableProperty]
+    public partial int SearchMatchCount { get; private set; }
+
+    [ObservableProperty]
+    public partial string SearchStatus { get; private set; } = "Type to find in scrollback";
+
+    [ObservableProperty]
+    public partial string? SearchError { get; private set; }
 
     public EnvironmentKind Environment { get; }
 
@@ -199,6 +225,37 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         Model.FullBufferUpdate();
     }
 
+    [RelayCommand]
+    public void OpenFind()
+    {
+        IsFindOpen = true;
+        RefreshSearch();
+    }
+
+    [RelayCommand]
+    public void CloseFind()
+    {
+        IsFindOpen = false;
+        SearchError = null;
+        SearchStatus = string.Empty;
+        SearchMatchCount = 0;
+        _filteredSearchMatches = [];
+        _currentFilteredSearchMatch = -1;
+        _ = Model.Search(string.Empty);
+    }
+
+    [RelayCommand]
+    public void FindNext()
+    {
+        NavigateSearch(forward: true);
+    }
+
+    [RelayCommand]
+    public void FindPrevious()
+    {
+        NavigateSearch(forward: false);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
@@ -263,12 +320,30 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
                             : $"\r\n[RemoteFlow: output truncated; dropped {droppedThisFrame:N0} bytes]\r\n";
                         await _dispatcher.InvokeAsync(() =>
                         {
+                            var wasAtBottom = Model.Terminal.Buffer.IsAtBottom;
+                            var previousViewport = Model.Terminal.Buffer.YDisp;
                             if (truncationNotice.Length > 0)
                             {
                                 Model.Feed(truncationNotice);
                             }
 
                             Model.Feed(text);
+                            if (IsFindOpen && SearchText.Length > 0)
+                            {
+                                RefreshSearch();
+                            }
+
+                            if (wasAtBottom)
+                            {
+                                Model.EnsureCaretIsVisible();
+                            }
+                            else
+                            {
+                                Model.ScrollToYDisp(previousViewport);
+                                Model.Terminal.Buffer.ViewportY = previousViewport;
+                                Model.FullBufferUpdate();
+                            }
+
                             if (UserTitleOverride is null && reportedTitles.Count > 0)
                             {
                                 Title = reportedTitles[^1];
@@ -415,6 +490,134 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         OnPropertyChanged(nameof(ChromeTintHex));
     }
 
+    partial void OnSearchTextChanged(string value)
+    {
+        if (IsFindOpen)
+        {
+            RefreshSearch();
+        }
+    }
+
+    partial void OnIsSearchCaseSensitiveChanged(bool value)
+    {
+        if (IsFindOpen)
+        {
+            RefreshSearch();
+        }
+    }
+
+    partial void OnIsSearchRegexChanged(bool value)
+    {
+        if (IsFindOpen)
+        {
+            RefreshSearch();
+        }
+    }
+
+    private void RefreshSearch()
+    {
+        SearchError = null;
+        _currentFilteredSearchMatch = -1;
+        if (string.IsNullOrEmpty(SearchText))
+        {
+            _ = Model.Search(string.Empty);
+            SearchMatchCount = 0;
+            SearchStatus = "Type to find in scrollback";
+            _filteredSearchMatches = [];
+            return;
+        }
+
+        _usesNativeSearch = !IsSearchCaseSensitive && !IsSearchRegex;
+        if (_usesNativeSearch)
+        {
+            SearchMatchCount = Model.Search(SearchText);
+            Model.CurrentSearchResultIndex = -1;
+            SearchStatus = SearchMatchCount == 0 ? "No matches" : $"{SearchMatchCount:N0} matches";
+            _filteredSearchMatches = [];
+            return;
+        }
+
+        try
+        {
+            var pattern = IsSearchRegex ? SearchText : Regex.Escape(SearchText);
+            var options = RegexOptions.CultureInvariant;
+            if (!IsSearchCaseSensitive)
+            {
+                options |= RegexOptions.IgnoreCase;
+            }
+
+            var regex = new Regex(pattern, options, TimeSpan.FromMilliseconds(100));
+            var snapshot = Model.SearchService.GetSnapshot();
+            var matches = regex.Matches(snapshot.Text).Cast<Match>().Where(match => match.Length > 0).ToArray();
+            _filteredSearchMatches = ToNavigationMatches(snapshot.Text, matches);
+            SearchMatchCount = _filteredSearchMatches.Count;
+            SearchStatus = SearchMatchCount == 0 ? "No matches" : $"{SearchMatchCount:N0} matches";
+            _ = Model.Search(matches.FirstOrDefault()?.Value ?? string.Empty);
+        }
+        catch (ArgumentException exception)
+        {
+            _ = Model.Search(string.Empty);
+            SearchMatchCount = 0;
+            _filteredSearchMatches = [];
+            SearchError = $"Invalid regular expression: {exception.Message}";
+            SearchStatus = "Invalid regular expression";
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            _ = Model.Search(string.Empty);
+            SearchMatchCount = 0;
+            _filteredSearchMatches = [];
+            SearchError = "The regular expression took too long to evaluate.";
+            SearchStatus = "Search timed out";
+        }
+    }
+
+    private void NavigateSearch(bool forward)
+    {
+        if (SearchMatchCount == 0 || SearchError is not null)
+        {
+            return;
+        }
+
+        if (_usesNativeSearch)
+        {
+            var index = forward ? Model.SelectNextSearchResult() : Model.SelectPreviousSearchResult();
+            SearchStatus = index < 0 ? "No matches" : $"{index + 1:N0} / {SearchMatchCount:N0}";
+            return;
+        }
+
+        _currentFilteredSearchMatch = forward
+            ? (_currentFilteredSearchMatch + 1) % _filteredSearchMatches.Count
+            : (_currentFilteredSearchMatch <= 0 ? _filteredSearchMatches.Count : _currentFilteredSearchMatch) - 1;
+        var match = _filteredSearchMatches[_currentFilteredSearchMatch];
+        _ = Model.Search(match.Text);
+        _ = Model.SelectNextSearchResult();
+        Model.ScrollToYDisp(match.Line);
+        SearchStatus = $"{_currentFilteredSearchMatch + 1:N0} / {SearchMatchCount:N0}";
+    }
+
+    private static List<SearchNavigationMatch> ToNavigationMatches(string text, Match[] matches)
+    {
+        var result = new List<SearchNavigationMatch>(matches.Length);
+        var line = 0;
+        var scanned = 0;
+        foreach (var match in matches)
+        {
+            for (var index = scanned; index < match.Index; index++)
+            {
+                if (text[index] == '\n')
+                {
+                    line++;
+                }
+            }
+
+            result.Add(new SearchNavigationMatch(line, match.Value));
+            scanned = match.Index;
+        }
+
+        return result;
+    }
+
     private static string ResolveAccentColor(EnvironmentKind environment, string? colorOverrideHex)
     {
         return !string.IsNullOrWhiteSpace(colorOverrideHex) &&
@@ -429,4 +632,6 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
                 _ => throw new ArgumentOutOfRangeException(nameof(environment)),
             };
     }
+
+    private sealed record SearchNavigationMatch(int Line, string Text);
 }

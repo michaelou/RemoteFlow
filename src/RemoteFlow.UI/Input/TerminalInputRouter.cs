@@ -93,6 +93,9 @@ public sealed class TerminalInputRouter(KeymapService keymap)
             case KeymapCommand.SelectAll:
                 selected?.Model.SelectAll();
                 break;
+            case KeymapCommand.FindTerminal:
+                selected?.OpenFind();
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(args));
         }

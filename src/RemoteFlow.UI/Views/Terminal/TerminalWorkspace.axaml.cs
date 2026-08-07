@@ -116,11 +116,43 @@ public sealed partial class TerminalWorkspace : UserControl
             return;
         }
 
+        if (e.Source is TextBox && viewModel.SelectedSession is { } searchSession)
+        {
+            if (e.Key == Key.Escape)
+            {
+                searchSession.CloseFind();
+                e.Handled = true;
+                FocusTerminal();
+            }
+            else if (e.Key == Key.Enter)
+            {
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                {
+                    searchSession.FindPrevious();
+                }
+                else
+                {
+                    searchSession.FindNext();
+                }
+
+                e.Handled = true;
+            }
+
+            return;
+        }
+
         var router = new TerminalInputRouter(viewModel.Keymap);
         if (await router.RouteAsync(e, viewModel, ToggleFullscreen).ConfigureAwait(true))
         {
             e.Handled = true;
-            FocusTerminal();
+            if (viewModel.SelectedSession?.IsFindOpen == true)
+            {
+                FocusFindBox();
+            }
+            else
+            {
+                FocusTerminal();
+            }
         }
     }
 
@@ -138,5 +170,13 @@ public sealed partial class TerminalWorkspace : UserControl
     {
         var terminal = this.GetVisualDescendants().OfType<TerminalControl>().FirstOrDefault();
         _ = terminal?.Focus();
+    }
+
+    private void FocusFindBox()
+    {
+        var find = this.GetVisualDescendants().OfType<TextBox>()
+            .FirstOrDefault(textBox => textBox.Name == "FindTextBox" && textBox.IsVisible);
+        _ = find?.Focus();
+        find?.SelectAll();
     }
 }

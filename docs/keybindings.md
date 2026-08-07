@@ -8,9 +8,9 @@ This file is generated from `KeymapService.Bindings`. Changes must be made in th
 | All | `Ctrl+Shift+T` | Open a new terminal |
 | All | `Ctrl+Shift+W` | Close the active terminal |
 | All | `Ctrl+Shift+A` | Select all terminal text |
+| All | `Ctrl+Shift+F` | Find in terminal scrollback |
 | All | `Ctrl+Tab` | Select the next terminal |
 | All | `Ctrl+Shift+Tab` | Select the previous terminal |
-| All | `F11` | Toggle full screen |
 | All | `Alt+1` | Select terminal 1 |
 | All | `Alt+2` | Select terminal 2 |
 | All | `Alt+3` | Select terminal 3 |
@@ -20,6 +20,7 @@ This file is generated from `KeymapService.Bindings`. Changes must be made in th
 | All | `Alt+7` | Select terminal 7 |
 | All | `Alt+8` | Select terminal 8 |
 | All | `Alt+9` | Select terminal 9 |
+| All | `F11` | Toggle full screen |
 | Windows/Linux | `Ctrl+Shift+C` | Copy selection |
 | Windows/Linux | `Ctrl+Insert` | Copy selection |
 | Windows/Linux | `Ctrl+Shift+V` | Paste |
