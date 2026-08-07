@@ -12,7 +12,8 @@ public enum CredentialPlatform
 public sealed class CredentialProviderSelector(
     ISettingsStore settingsStore,
     IEnumerable<ICredentialProvider> providers,
-    CredentialPlatform? platform = null)
+    CredentialPlatform? platform = null,
+    CredentialSecurityState? securityState = null)
 {
     private readonly IReadOnlyList<ICredentialProvider> _providers = [.. providers];
     private readonly CredentialPlatform _platform = platform ?? CurrentPlatform();
@@ -20,6 +21,7 @@ public sealed class CredentialProviderSelector(
     public async Task<ICredentialProvider> SelectAsync(CancellationToken cancellationToken = default)
     {
         var forceFileVault = await settingsStore.Get(SettingKeys.ForceFileVault, cancellationToken).ConfigureAwait(false);
+        securityState?.SetKeyringUnavailable(false);
         var desiredName = forceFileVault
             ? "file-vault"
             : _platform switch
@@ -39,6 +41,11 @@ public sealed class CredentialProviderSelector(
 
         var fallback = _providers.FirstOrDefault(provider =>
             provider.IsAvailable && string.Equals(provider.Name, "file-vault", StringComparison.Ordinal));
+        if (!forceFileVault && _platform == CredentialPlatform.Linux && fallback is not null)
+        {
+            securityState?.SetKeyringUnavailable(true);
+        }
+
         return fallback ?? throw new CredentialProviderException(
             $"Credential provider '{desiredName}' is unavailable and no file vault is configured.");
     }
