@@ -23,6 +23,8 @@ public static class DependencyInjection
         services.TryAddSingleton<IGlobalExceptionHandler, GlobalExceptionHandler>();
         services.TryAddSingleton<WindowsCredentialProvider>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ICredentialProvider, WindowsCredentialProvider>());
+        services.TryAddSingleton<MacOsKeychainProvider>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ICredentialProvider, MacOsKeychainProvider>());
         services.TryAddSingleton<CredentialProviderSelector>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, RedactingLoggerProvider>());
         return services;
