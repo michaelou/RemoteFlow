@@ -13,6 +13,7 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton<IClock>(SystemClock.Instance);
         services.TryAddSingleton<IGuidProvider>(SystemGuidProvider.Instance);
+        services.TryAddSingleton<IConnectionChangeNotifier, ConnectionChangeNotifier>();
         services.TryAddSingleton<IConnectionService, ConnectionService>();
         services.TryAddSingleton<ITagService, TagService>();
         services.TryAddSingleton<IFolderService, FolderService>();

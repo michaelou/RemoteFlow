@@ -144,7 +144,9 @@ public sealed class ConnectionQueryService(IDbContextFactory<RemoteFlowDbContext
                 Protocol = connection.Protocol,
                 Environment = connection.Environment,
                 IsFavorite = connection.IsFavorite,
+                FolderId = connection.FolderId,
                 FolderPath = folder == null ? null : folder.Path,
+                ColorOverrideHex = connection.ColorOverrideHex,
                 LastOpenedUtc = recent == null ? null : recent.LastOpenedUtc,
                 SortOrder = connection.SortOrder,
             };
@@ -204,7 +206,10 @@ public sealed class ConnectionQueryService(IDbContextFactory<RemoteFlowDbContext
             row.Protocol,
             row.Environment,
             row.IsFavorite,
+            row.FolderId,
             row.FolderPath,
+            row.ColorOverrideHex,
+            row.SortOrder,
             tagsByConnection.GetValueOrDefault(row.Id, []),
             row.LastOpenedUtc))];
     }
@@ -275,7 +280,11 @@ public sealed class ConnectionQueryService(IDbContextFactory<RemoteFlowDbContext
 
         public bool IsFavorite { get; init; }
 
+        public Guid? FolderId { get; init; }
+
         public string? FolderPath { get; init; }
+
+        public string? ColorOverrideHex { get; init; }
 
         public DateTimeOffset? LastOpenedUtc { get; init; }
 

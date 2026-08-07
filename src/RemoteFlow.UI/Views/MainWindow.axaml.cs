@@ -5,6 +5,7 @@ using RemoteFlow.Application.Abstractions;
 using RemoteFlow.UI.Navigation;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels;
+using RemoteFlow.UI.ViewModels.Connections;
 
 namespace RemoteFlow.UI.Views;
 
@@ -35,6 +36,11 @@ public sealed partial class MainWindow : Window
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        if (_viewModel.CurrentPage is ConnectionsPageViewModel connectionsPage)
+        {
+            await connectionsPage.RefreshAsync(cancellationToken).ConfigureAwait(true);
+        }
+
         var geometry = await _geometryService.RestoreAsync(
             WindowGeometryService.FromScreens(Screens),
             cancellationToken).ConfigureAwait(true);

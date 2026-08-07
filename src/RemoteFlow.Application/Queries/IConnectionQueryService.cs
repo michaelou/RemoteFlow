@@ -47,7 +47,10 @@ public sealed record ConnectionListItem(
     ProtocolType Protocol,
     EnvironmentKind Environment,
     bool IsFavorite,
+    Guid? FolderId,
     string? FolderPath,
+    string? ColorOverrideHex,
+    int? SortOrder,
     IReadOnlyList<string> TagNames,
     DateTimeOffset? LastOpenedUtc);
 

@@ -10,8 +10,6 @@ public partial class PageViewModel(string title) : ObservableObject
     public partial string StateText { get; set; } = string.Empty;
 }
 
-public sealed class ConnectionsPageViewModel() : PageViewModel("Connections");
-
 public sealed class TerminalsPageViewModel() : PageViewModel("Terminals");
 
 public sealed class TransfersPageViewModel() : PageViewModel("Transfers");

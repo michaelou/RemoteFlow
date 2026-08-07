@@ -3,6 +3,8 @@
     x:DataType="viewModels:MainWindowViewModel"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
+    xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels"
     Title="RemoteFlow"
     Width="1200"
@@ -11,6 +13,9 @@
     MinHeight="420"
     Background="{DynamicResource Brush.Surface.0}">
   <Window.DataTemplates>
+    <DataTemplate DataType="{x:Type connectionViewModels:ConnectionsPageViewModel}" x:DataType="connectionViewModels:ConnectionsPageViewModel">
+      <connectionViews:ConnectionsView />
+    </DataTemplate>
     <DataTemplate DataType="{x:Type viewModels:PageViewModel}" x:DataType="viewModels:PageViewModel">
       <Grid Margin="32" RowDefinitions="Auto,Auto,*">
         <TextBlock FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Text.Primary}" Text="{Binding Title}" />

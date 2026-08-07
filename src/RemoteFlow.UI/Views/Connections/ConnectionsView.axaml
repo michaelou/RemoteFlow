@@ -1,0 +1,113 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Connections.ConnectionsView"
+    x:DataType="connectionViewModels:ConnectionsPageViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
+    Loaded="ConnectionsView_OnLoaded">
+  <Grid Margin="24" RowDefinitions="Auto,Auto,*">
+    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+      <StackPanel>
+        <TextBlock FontSize="28" FontWeight="SemiBold" Text="Connections" />
+        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Favorites, recent sessions, and all saved connections" />
+      </StackPanel>
+      <Button Grid.Column="1" Click="ClearRecent_OnClick" Content="Clear recent" VerticalAlignment="Center" />
+    </Grid>
+
+    <Border
+        Grid.Row="1"
+        Margin="0,0,0,8"
+        Padding="10,6"
+        Background="{DynamicResource Brush.Surface.2}"
+        CornerRadius="{DynamicResource Radius.Control}"
+        IsVisible="{Binding FeedbackMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding FeedbackMessage}" />
+    </Border>
+
+    <Grid Grid.Row="2">
+      <TreeView
+          x:Name="ConnectionTree"
+          DragDrop.AllowDrop="True"
+          ItemsSource="{Binding RootNodes}"
+          DragDrop.DragOver="ConnectionTree_OnDragOver"
+          DragDrop.Drop="ConnectionTree_OnDrop"
+          KeyDown="ConnectionTree_OnKeyDown"
+          DoubleTapped="ConnectionTree_OnDoubleTapped"
+          SelectionChanged="ConnectionTree_OnSelectionChanged"
+          SelectionMode="Multiple">
+        <TreeView.Styles>
+          <Style Selector="TreeViewItem">
+            <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded, Mode=TwoWay}" />
+          </Style>
+        </TreeView.Styles>
+        <TreeView.ItemsPanel>
+          <ItemsPanelTemplate>
+            <VirtualizingStackPanel />
+          </ItemsPanelTemplate>
+        </TreeView.ItemsPanel>
+        <TreeView.DataTemplates>
+          <TreeDataTemplate
+              DataType="{x:Type connectionViewModels:ExplorerNodeViewModel}"
+              ItemsSource="{Binding Children}"
+              x:DataType="connectionViewModels:ExplorerNodeViewModel">
+            <Grid ColumnDefinitions="24,Auto,Auto,*" Margin="2" PointerPressed="Node_OnPointerPressed">
+              <TextBlock VerticalAlignment="Center" Text="{Binding Icon}" />
+              <Grid Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" />
+                <TextBox
+                    x:Name="InlineRenameBox"
+                    IsVisible="{Binding IsRenaming}"
+                    KeyDown="InlineRename_OnKeyDown"
+                    MinWidth="140"
+                    Text="{Binding EditName}" />
+              </Grid>
+              <Border
+                  Grid.Column="2"
+                  Margin="8,0"
+                  Padding="6,2"
+                  Background="{Binding Badge.Background}"
+                  CornerRadius="4"
+                  IsVisible="{Binding Badge, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <TextBlock FontWeight="Bold" Text="{Binding Badge.Icon}" />
+                  <TextBlock FontSize="11" FontWeight="Bold" Text="{Binding Badge.Text}" />
+                </StackPanel>
+              </Border>
+              <TextBlock
+                  Grid.Column="3"
+                  VerticalAlignment="Center"
+                  Foreground="{DynamicResource Brush.Text.Secondary}"
+                  Text="{Binding SecondaryText}" />
+              <Grid.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Command="{Binding ConnectCommand}" Header="Connect" />
+                  <MenuItem Command="{Binding OpenSftpCommand}" Header="Open SFTP" />
+                  <MenuItem Command="{Binding OpenRdpCommand}" Header="Launch RDP" />
+                  <Separator />
+                  <MenuItem Command="{Binding EditCommand}" Header="Edit" />
+                  <MenuItem Command="{Binding DuplicateCommand}" Header="Duplicate" />
+                  <MenuItem Command="{Binding DeleteCommand}" Header="Delete" />
+                  <Separator />
+                  <MenuItem Command="{Binding NewFolderCommand}" Header="New Folder" />
+                  <MenuItem Command="{Binding BeginRenameCommand}" Header="Rename (F2)" />
+                </ContextMenu>
+              </Grid.ContextMenu>
+            </Grid>
+          </TreeDataTemplate>
+        </TreeView.DataTemplates>
+      </TreeView>
+
+      <Border
+          Padding="40"
+          Background="{DynamicResource Brush.Surface.1}"
+          CornerRadius="{DynamicResource Radius.Control}"
+          IsVisible="{Binding IsEmpty}">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+          <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="No connections yet" />
+          <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Create your first connection to get started." />
+          <Button Click="CreateFirstConnection_OnClick" Content="Create connection" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

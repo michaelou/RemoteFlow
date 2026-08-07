@@ -21,6 +21,10 @@ public interface IConnectionService
     Task<Result<Connection>> MoveToFolderAsync(Guid id, Guid? folderId, CancellationToken cancellationToken = default);
 
     Task<Result<Connection>> ToggleFavoriteAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<Result<Connection>> RenameAsync(Guid id, string name, CancellationToken cancellationToken = default);
+
+    Task<Result<Connection>> SetSortOrderAsync(Guid id, int? sortOrder, CancellationToken cancellationToken = default);
 }
 
 public sealed class ConnectionService(
@@ -29,7 +33,8 @@ public sealed class ConnectionService(
     IEnumerable<ICredentialProvider> credentialProviders,
     IUnitOfWork unitOfWork,
     IGuidProvider guidProvider,
-    IClock clock) : IConnectionService
+    IClock clock,
+    IConnectionChangeNotifier? changeNotifier = null) : IConnectionService
 {
     private readonly IReadOnlyList<ICredentialProvider> _credentialProviders = [.. credentialProviders];
 
@@ -41,7 +46,7 @@ public sealed class ConnectionService(
         var validation = ValidateFirst(input);
         return validation is not null
             ? Task.FromResult(Result<Connection>.Failure(validation))
-            : unitOfWork.ExecuteAsync(async token =>
+            : NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var created = Connection.Create(
                 guidProvider,
@@ -64,7 +69,7 @@ public sealed class ConnectionService(
 
             await connections.AddAsync(connection, token).ConfigureAwait(false);
             return Result<Connection>.Success(connection);
-        }, cancellationToken);
+        }, cancellationToken), ConnectionChangeKind.Created);
     }
 
     public Task<Result<Connection>> UpdateAsync(
@@ -76,7 +81,7 @@ public sealed class ConnectionService(
         var validation = ValidateFirst(input);
         return validation is not null
             ? Task.FromResult(Result<Connection>.Failure(validation))
-            : unitOfWork.ExecuteAsync(async token =>
+            : NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var connection = await connections.GetByIdAsync(id, token).ConfigureAwait(false);
             if (connection is null)
@@ -118,12 +123,12 @@ public sealed class ConnectionService(
 
             await connections.UpdateAsync(connection, token).ConfigureAwait(false);
             return Result<Connection>.Success(connection);
-        }, cancellationToken);
+        }, cancellationToken), ConnectionChangeKind.Updated);
     }
 
     public Task<Result<Connection>> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return unitOfWork.ExecuteAsync(async token =>
+        return NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var connection = await connections.GetByIdAsync(id, token).ConfigureAwait(false);
             if (connection is null)
@@ -148,12 +153,12 @@ public sealed class ConnectionService(
             await recentConnections.RemoveAsync(id, token).ConfigureAwait(false);
             await connections.DeleteAsync(id, token).ConfigureAwait(false);
             return Result<Connection>.Success(connection);
-        }, cancellationToken);
+        }, cancellationToken), ConnectionChangeKind.Deleted);
     }
 
     public Task<Result<Connection>> DuplicateAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return unitOfWork.ExecuteAsync(async token =>
+        return NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var source = await connections.GetByIdAsync(id, token).ConfigureAwait(false);
             if (source is null)
@@ -198,7 +203,7 @@ public sealed class ConnectionService(
 
             await connections.AddAsync(duplicate, token).ConfigureAwait(false);
             return Result<Connection>.Success(duplicate);
-        }, cancellationToken);
+        }, cancellationToken), ConnectionChangeKind.Created);
     }
 
     public Task<Result<Connection>> MoveToFolderAsync(
@@ -217,12 +222,47 @@ public sealed class ConnectionService(
             cancellationToken);
     }
 
+    public Task<Result<Connection>> RenameAsync(
+        Guid id,
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        return NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
+        {
+            var connection = await connections.GetByIdAsync(id, token).ConfigureAwait(false);
+            if (connection is null)
+            {
+                return MissingConnection(id);
+            }
+
+            var renamed = connection.Rename(name, guidProvider, clock.UtcNow);
+            if (renamed.IsFailure)
+            {
+                return renamed;
+            }
+
+            await connections.UpdateAsync(connection, token).ConfigureAwait(false);
+            return renamed;
+        }, cancellationToken), ConnectionChangeKind.Updated);
+    }
+
+    public Task<Result<Connection>> SetSortOrderAsync(
+        Guid id,
+        int? sortOrder,
+        CancellationToken cancellationToken = default)
+    {
+        return MutateAsync(
+            id,
+            connection => connection.SetSortOrder(sortOrder, guidProvider, clock.UtcNow),
+            cancellationToken);
+    }
+
     private Task<Result<Connection>> MutateAsync(
         Guid id,
         Func<Connection, Connection> mutation,
         CancellationToken cancellationToken)
     {
-        return unitOfWork.ExecuteAsync(async token =>
+        return NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var connection = await connections.GetByIdAsync(id, token).ConfigureAwait(false);
             if (connection is null)
@@ -233,7 +273,7 @@ public sealed class ConnectionService(
             _ = mutation(connection);
             await connections.UpdateAsync(connection, token).ConfigureAwait(false);
             return Result<Connection>.Success(connection);
-        }, cancellationToken);
+        }, cancellationToken), ConnectionChangeKind.Updated);
     }
 
     private Result<Connection> Configure(Connection connection, ConnectionInput input)
@@ -273,5 +313,23 @@ public sealed class ConnectionService(
         return Result<Connection>.Failure(RemoteFlowError.NotFound(
             "connection.not_found",
             $"Connection '{id}' was not found."));
+    }
+
+    private void Notify(Guid connectionId, ConnectionChangeKind kind)
+    {
+        changeNotifier?.Notify(connectionId, kind);
+    }
+
+    private async Task<Result<Connection>> NotifyAfterAsync(
+        Task<Result<Connection>> operation,
+        ConnectionChangeKind kind)
+    {
+        var result = await operation.ConfigureAwait(false);
+        if (result.IsSuccess)
+        {
+            Notify(result.Value.Id, kind);
+        }
+
+        return result;
     }
 }

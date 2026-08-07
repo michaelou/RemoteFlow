@@ -4,6 +4,7 @@ using RemoteFlow.Application.Abstractions;
 using RemoteFlow.UI.Navigation;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels;
+using RemoteFlow.UI.ViewModels.Connections;
 using RemoteFlow.UI.Views;
 
 namespace RemoteFlow.UI;
@@ -41,6 +42,7 @@ public static class DependencyInjection
         services.TryAddSingleton<WindowGeometryService>();
         services.TryAddSingleton<MainWindow>();
         services.TryAddSingleton<IErrorDialogService, ErrorDialogService>();
+        services.TryAddSingleton<IConnectionSessionOpener, DeferredConnectionSessionOpener>();
         services.TryAddSingleton<IThemeService>(provider => new ThemeService(
             provider.GetRequiredService<App>(),
             provider.GetRequiredService<ISettingsStore>()));
