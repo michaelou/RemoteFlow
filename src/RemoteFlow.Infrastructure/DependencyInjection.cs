@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Infrastructure.Diagnostics;
 using RemoteFlow.Infrastructure.Platform;
+using RemoteFlow.Infrastructure.Security;
 
 namespace RemoteFlow.Infrastructure;
 
@@ -20,6 +21,9 @@ public static class DependencyInjection
         services.TryAddSingleton<ISecureRandom, SecureRandom>();
         services.TryAddSingleton<ISecretRegistry, SecretRegistry>();
         services.TryAddSingleton<IGlobalExceptionHandler, GlobalExceptionHandler>();
+        services.TryAddSingleton<WindowsCredentialProvider>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<ICredentialProvider, WindowsCredentialProvider>());
+        services.TryAddSingleton<CredentialProviderSelector>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<ILoggerProvider, RedactingLoggerProvider>());
         return services;
     }
