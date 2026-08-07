@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.UI.Navigation;
 using RemoteFlow.UI.Services;
@@ -15,6 +17,7 @@ public sealed partial class MainWindow : Window
     private readonly WindowGeometryService _geometryService;
     private WindowGeometry _normalGeometry = WindowGeometry.Default;
     private bool _initialized;
+    private IInputElement? _focusBeforePalette;
 
     public MainWindow()
         : this(
@@ -32,6 +35,7 @@ public sealed partial class MainWindow : Window
         PositionChanged += OnPositionChanged;
         Resized += OnResized;
         Closed += OnClosed;
+        AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -110,6 +114,52 @@ public sealed partial class MainWindow : Window
         {
             _viewModel.Navigate(item);
             e.Handled = true;
+        }
+    }
+
+    private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.K && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            if (!_viewModel.Palette.IsOpen)
+            {
+                _focusBeforePalette = FocusManager?.GetFocusedElement();
+                _viewModel.Palette.Open();
+                Dispatcher.UIThread.Post(CommandPalette.FocusSearch);
+            }
+
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && _viewModel.Palette.IsOpen)
+        {
+            _viewModel.Palette.Close();
+            RestorePaletteFocus();
+            e.Handled = true;
+        }
+    }
+
+    private void CommandPalette_OnCloseRequested(object? sender, EventArgs e)
+    {
+        RestorePaletteFocus();
+    }
+
+    private void PaletteOverlay_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, PaletteOverlay))
+        {
+            _viewModel.Palette.Close();
+            RestorePaletteFocus();
+            e.Handled = true;
+        }
+    }
+
+    private void RestorePaletteFocus()
+    {
+        var target = _focusBeforePalette;
+        _focusBeforePalette = null;
+        if (target is not null)
+        {
+            Dispatcher.UIThread.Post(() => _ = target.Focus());
         }
     }
 

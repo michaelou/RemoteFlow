@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
     xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
+    xmlns:paletteViews="using:RemoteFlow.UI.Views.CommandPalette"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels"
     Title="RemoteFlow"
     Width="1200"
@@ -30,8 +31,9 @@
       </Grid>
     </DataTemplate>
   </Window.DataTemplates>
-  <Grid ColumnDefinitions="220,*">
-    <ListBox
+  <Grid>
+    <Grid ColumnDefinitions="220,*">
+      <ListBox
         x:Name="NavigationList"
         Classes="navigation"
         ItemsSource="{Binding NavigationItems}"
@@ -43,9 +45,25 @@
           <TextBlock Text="{Binding Title}" />
         </DataTemplate>
       </ListBox.ItemTemplate>
-    </ListBox>
-    <Border Grid.Column="1" Background="{DynamicResource Brush.Surface.0}">
-      <ContentControl Content="{Binding CurrentPage}" />
+      </ListBox>
+      <Border Grid.Column="1" Background="{DynamicResource Brush.Surface.0}">
+        <ContentControl Content="{Binding CurrentPage}" />
+      </Border>
+    </Grid>
+
+    <Border
+        x:Name="PaletteOverlay"
+        Background="#99000000"
+        IsVisible="{Binding Palette.IsOpen}"
+        PointerPressed="PaletteOverlay_OnPointerPressed"
+        ZIndex="1000">
+      <paletteViews:CommandPaletteView
+          x:Name="CommandPalette"
+          HorizontalAlignment="Center"
+          VerticalAlignment="Top"
+          Margin="24,96,24,24"
+          CloseRequested="CommandPalette_OnCloseRequested"
+          DataContext="{Binding Palette}" />
     </Border>
   </Grid>
 </Window>

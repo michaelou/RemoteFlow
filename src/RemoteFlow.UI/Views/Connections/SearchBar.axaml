@@ -1,0 +1,65 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Connections.SearchBar"
+    x:DataType="connectionViewModels:ConnectionsPageViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections">
+  <StackPanel Spacing="8">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBox
+          x:Name="SearchTextBox"
+          PlaceholderText="Search name, host, user, notes, or tags"
+          Text="{Binding SearchText, Mode=TwoWay}" />
+      <Button
+          Grid.Column="1"
+          Margin="8,0,0,0"
+          Click="ClearAll_OnClick"
+          Content="Clear all"
+          IsVisible="{Binding HasActiveFilters}" />
+    </Grid>
+
+    <WrapPanel Orientation="Horizontal">
+      <TextBlock Margin="0,5,8,0" Foreground="{DynamicResource Brush.Text.Secondary}" Text="Protocol" />
+      <ItemsControl ItemsSource="{Binding ProtocolFilters}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="connectionViewModels:ConnectionFilterChipViewModel">
+            <CheckBox Margin="0,0,6,0" Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <TextBlock Margin="10,5,8,0" Foreground="{DynamicResource Brush.Text.Secondary}" Text="Environment" />
+      <ItemsControl ItemsSource="{Binding EnvironmentFilters}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="connectionViewModels:ConnectionFilterChipViewModel">
+            <CheckBox Margin="0,0,6,0" Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <CheckBox Margin="10,0,0,0" Content="Favorites only" IsChecked="{Binding FavoritesOnly, Mode=TwoWay}" />
+    </WrapPanel>
+
+    <ItemsControl ItemsSource="{Binding TagFilters}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="connectionViewModels:ConnectionFilterChipViewModel">
+          <CheckBox Margin="0,0,6,0" Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <TextBlock
+        Foreground="{DynamicResource Brush.Text.Secondary}"
+        IsVisible="{Binding HasActiveFilters}"
+        Text="{Binding ActiveFilterSummary}" />
+  </StackPanel>
+</UserControl>

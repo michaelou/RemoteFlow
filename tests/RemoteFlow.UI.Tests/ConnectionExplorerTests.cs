@@ -19,6 +19,77 @@ namespace RemoteFlow.UI.Tests;
 
 public sealed class ConnectionExplorerTests
 {
+    [Fact]
+    public async Task SearchDebouncesAndAppliesEveryLatestKeystroke()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await ExplorerFixture.CreateAsync(token);
+        var alpha = await fixture.AddConnectionAsync("Alpha", cancellationToken: token);
+        var beta = await fixture.AddConnectionAsync("Beta", cancellationToken: token);
+        using var viewModel = fixture.CreateViewModel();
+        await viewModel.InitializeAsync(token);
+
+        viewModel.SearchText = "alp";
+        Assert.NotNull(FindRealConnection(viewModel, alpha.Id));
+        Assert.NotNull(FindRealConnection(viewModel, beta.Id));
+        viewModel.SearchText = "b";
+        viewModel.SearchText = "be";
+        viewModel.SearchText = "beta";
+        await viewModel.SearchChangesSettled;
+
+        Assert.Equal(beta.Id, Assert.Single(RealConnections(viewModel)).Id);
+        Assert.Equal("Text: beta", viewModel.ActiveFilterSummary);
+    }
+
+    [Fact]
+    public async Task ChipsComposeWithTextAndClearAllResetsEverythingAtOnce()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await ExplorerFixture.CreateAsync(token);
+        var critical = await fixture.AddTagAsync("Critical", token);
+        var match = await fixture.AddConnectionAsync(
+            "Needle production",
+            environment: EnvironmentKind.Production,
+            isFavorite: true,
+            protocol: ProtocolType.Ssh,
+            cancellationToken: token);
+        _ = await fixture.Connections.AddTagAsync(match.Id, critical.Id, token);
+        _ = await fixture.AddConnectionAsync(
+            "Needle staging",
+            environment: EnvironmentKind.Staging,
+            isFavorite: true,
+            protocol: ProtocolType.Ssh,
+            cancellationToken: token);
+        _ = await fixture.AddConnectionAsync(
+            "Other production",
+            environment: EnvironmentKind.Production,
+            isFavorite: true,
+            protocol: ProtocolType.Ssh,
+            cancellationToken: token);
+        using var viewModel = fixture.CreateViewModel();
+        await viewModel.InitializeAsync(token);
+
+        viewModel.SearchText = "Needle";
+        viewModel.ProtocolFilters.Single(chip => chip.Protocol == ProtocolType.Ssh).IsSelected = true;
+        viewModel.EnvironmentFilters.Single(chip => chip.Environment == EnvironmentKind.Production).IsSelected = true;
+        viewModel.TagFilters.Single(chip => chip.TagId == critical.Id).IsSelected = true;
+        viewModel.FavoritesOnly = true;
+        await viewModel.SearchChangesSettled;
+
+        Assert.Equal(match.Id, Assert.Single(RealConnections(viewModel)).Id);
+        Assert.True(viewModel.HasActiveFilters);
+
+        viewModel.ClearAllFilters();
+        await viewModel.SearchChangesSettled;
+
+        Assert.Equal(3, RealConnections(viewModel).Count);
+        Assert.False(viewModel.HasActiveFilters);
+        Assert.True(string.IsNullOrEmpty(viewModel.SearchText));
+        Assert.DoesNotContain(
+            viewModel.ProtocolFilters.Concat(viewModel.EnvironmentFilters).Concat(viewModel.TagFilters),
+            chip => chip.IsSelected);
+    }
+
     [AvaloniaFact]
     public async Task BuildsVirtualRootsAndColorSafeProductionBadgeWithOverride()
     {
@@ -171,6 +242,14 @@ public sealed class ConnectionExplorerTests
             .Single(node => node.Kind == ExplorerNodeKind.Connection && node.Id == id);
     }
 
+    private static IReadOnlyList<ExplorerNodeViewModel> RealConnections(ConnectionsPageViewModel viewModel)
+    {
+        return [.. viewModel.RootNodes
+            .Where(node => !node.IsVirtual)
+            .SelectMany(node => Flatten([node]))
+            .Where(node => node.Kind == ExplorerNodeKind.Connection)];
+    }
+
     private static IEnumerable<ExplorerNodeViewModel> Flatten(IEnumerable<ExplorerNodeViewModel> nodes)
     {
         foreach (var node in nodes)
@@ -197,6 +276,7 @@ public sealed class ConnectionExplorerTests
             Notifier = new ConnectionChangeNotifier();
             Connections = new ConnectionRepository(database.Factory);
             Folders = new FolderRepository(database.Factory);
+            Tags = new TagRepository(database.Factory);
             Recent = new RecentConnectionStore(database.Factory);
             _unitOfWork = new UnitOfWork(database.Factory);
             ConnectionService = new ConnectionService(
@@ -231,6 +311,8 @@ public sealed class ConnectionExplorerTests
 
         public FolderRepository Folders { get; }
 
+        public TagRepository Tags { get; }
+
         public RecentConnectionStore Recent { get; }
 
         public ConnectionService ConnectionService { get; }
@@ -249,6 +331,7 @@ public sealed class ConnectionExplorerTests
             return new ConnectionsPageViewModel(
                 Queries,
                 Folders,
+                Tags,
                 ConnectionService,
                 FolderService,
                 Recent,
@@ -275,9 +358,15 @@ public sealed class ConnectionExplorerTests
             EnvironmentKind environment = EnvironmentKind.Unspecified,
             bool isFavorite = false,
             string? colorOverrideHex = null,
+            ProtocolType protocol = ProtocolType.Ssh,
             CancellationToken cancellationToken = default)
         {
-            var connection = Connection.Create(_guids, name, $"{name.Replace(' ', '-').ToLowerInvariant()}.test", createdUtc: Clock.UtcNow).Value;
+            var connection = Connection.Create(
+                _guids,
+                name,
+                $"{name.Replace(' ', '-').ToLowerInvariant()}.test",
+                protocol,
+                Clock.UtcNow).Value;
             _ = connection.SetDetails(
                 null,
                 AuthMethod.None,
@@ -290,6 +379,13 @@ public sealed class ConnectionExplorerTests
                 .SetFavorite(isFavorite, _guids, Clock.UtcNow);
             await Connections.AddAsync(connection, cancellationToken);
             return connection;
+        }
+
+        public async Task<Tag> AddTagAsync(string name, CancellationToken cancellationToken = default)
+        {
+            var tag = Tag.Create(_guids, name, createdUtc: Clock.UtcNow).Value;
+            await Tags.AddAsync(tag, cancellationToken);
+            return tag;
         }
 
         public ValueTask DisposeAsync()

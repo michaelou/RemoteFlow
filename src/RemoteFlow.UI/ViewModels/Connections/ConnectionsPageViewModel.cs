@@ -27,6 +27,7 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 {
     private readonly IConnectionQueryService _queries;
     private readonly IFolderRepository _folders;
+    private readonly ITagRepository _tags;
     private readonly IConnectionService _connections;
     private readonly IFolderService _folderService;
     private readonly IRecentConnectionStore _recent;
@@ -36,8 +37,11 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     private readonly IGuidProvider _guidProvider;
     private readonly IClock _clock;
     private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private CancellationTokenSource? _filterDebounce;
     private bool _disposed;
     private bool _suppressExpansionEvent;
+    private bool _suppressFilterChanges;
+    private bool _tagsLoaded;
 
     public ConnectionsPageViewModel(
         IConnectionQueryService queries,
@@ -50,10 +54,38 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         IConnectionChangeNotifier changeNotifier,
         IGuidProvider guidProvider,
         IClock clock)
+        : this(
+            queries,
+            folders,
+            EmptyTagRepository.Instance,
+            connections,
+            folderService,
+            recent,
+            settings,
+            sessionOpener,
+            changeNotifier,
+            guidProvider,
+            clock)
+    {
+    }
+
+    public ConnectionsPageViewModel(
+        IConnectionQueryService queries,
+        IFolderRepository folders,
+        ITagRepository tags,
+        IConnectionService connections,
+        IFolderService folderService,
+        IRecentConnectionStore recent,
+        ISettingsStore settings,
+        IConnectionSessionOpener sessionOpener,
+        IConnectionChangeNotifier changeNotifier,
+        IGuidProvider guidProvider,
+        IClock clock)
         : base("Connections")
     {
         _queries = queries;
         _folders = folders;
+        _tags = tags;
         _connections = connections;
         _folderService = folderService;
         _recent = recent;
@@ -63,6 +95,22 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         _guidProvider = guidProvider;
         _clock = clock;
         changeNotifier.ConnectionChanged += OnConnectionChanged;
+        ProtocolFilters =
+        [
+            ConnectionFilterChipViewModel.ForProtocol(ProtocolType.Ssh),
+            ConnectionFilterChipViewModel.ForProtocol(ProtocolType.Sftp),
+            ConnectionFilterChipViewModel.ForProtocol(ProtocolType.Rdp),
+        ];
+        EnvironmentFilters =
+        [
+            ConnectionFilterChipViewModel.ForEnvironment(EnvironmentKind.Development),
+            ConnectionFilterChipViewModel.ForEnvironment(EnvironmentKind.Staging),
+            ConnectionFilterChipViewModel.ForEnvironment(EnvironmentKind.Production),
+        ];
+        foreach (var chip in ProtocolFilters.Concat(EnvironmentFilters))
+        {
+            chip.SelectionChanged += OnFilterChipSelectionChanged;
+        }
     }
 
     public event EventHandler<ExplorerActionRequestedEventArgs>? ActionRequested;
@@ -71,7 +119,33 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
     public ObservableCollection<ExplorerNodeViewModel> SelectedNodes { get; } = [];
 
+    public ObservableCollection<ConnectionFilterChipViewModel> ProtocolFilters { get; }
+
+    public ObservableCollection<ConnectionFilterChipViewModel> EnvironmentFilters { get; }
+
+    public ObservableCollection<ConnectionFilterChipViewModel> TagFilters { get; } = [];
+
     public Task ConnectionChangesSettled { get; private set; } = Task.CompletedTask;
+
+    public Task SearchChangesSettled { get; private set; } = Task.CompletedTask;
+
+    [ObservableProperty]
+    public partial string? SearchText { get; set; }
+
+    [ObservableProperty]
+    public partial bool FavoritesOnly { get; set; }
+
+    [ObservableProperty]
+    public partial bool HasActiveFilters { get; private set; }
+
+    [ObservableProperty]
+    public partial string ActiveFilterSummary { get; private set; } = string.Empty;
+
+    public string EmptyStateTitle => HasActiveFilters ? "No matching connections" : "No connections yet";
+
+    public string EmptyStateMessage => HasActiveFilters
+        ? "Try a different search or clear the active filters."
+        : "Create your first connection to get started.";
 
     [ObservableProperty]
     public partial bool IsEmpty { get; private set; }
@@ -84,6 +158,7 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        await EnsureTagFiltersAsync(cancellationToken).ConfigureAwait(true);
         if (RootNodes.Count == 0)
         {
             await RefreshAsync(cancellationToken).ConfigureAwait(true);
@@ -92,19 +167,21 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
+        await EnsureTagFiltersAsync(cancellationToken).ConfigureAwait(true);
         await _refreshLock.WaitAsync(cancellationToken).ConfigureAwait(true);
         try
         {
             IsLoading = true;
-            var items = await _queries.QueryAsync(new ConnectionFilter
-            {
-                SortBy = ConnectionSortBy.SortOrder,
-            }, cancellationToken).ConfigureAwait(true);
+            var items = await _queries.QueryAsync(BuildFilter(), cancellationToken).ConfigureAwait(true);
             var folders = await _folders.ListAsync(cancellationToken).ConfigureAwait(true);
             var recentLimit = await _settings.Get(SettingKeys.RecentLimit, cancellationToken).ConfigureAwait(true);
             var recent = await _recent.ListAsync(recentLimit, cancellationToken).ConfigureAwait(true);
             RebuildTree(items, folders, recent);
             FeedbackMessage = null;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception exception)
         {
@@ -249,8 +326,123 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         }
 
         _changeNotifier.ConnectionChanged -= OnConnectionChanged;
+        _filterDebounce?.Cancel();
+        _filterDebounce?.Dispose();
+        foreach (var chip in ProtocolFilters.Concat(EnvironmentFilters).Concat(TagFilters))
+        {
+            chip.SelectionChanged -= OnFilterChipSelectionChanged;
+        }
+
         _refreshLock.Dispose();
         _disposed = true;
+    }
+
+    public void ClearAllFilters()
+    {
+        _suppressFilterChanges = true;
+        SearchText = string.Empty;
+        FavoritesOnly = false;
+        foreach (var chip in ProtocolFilters.Concat(EnvironmentFilters).Concat(TagFilters))
+        {
+            chip.IsSelected = false;
+        }
+
+        _suppressFilterChanges = false;
+        ScheduleFilterRefresh();
+    }
+
+    private ConnectionFilter BuildFilter()
+    {
+        return new ConnectionFilter
+        {
+            Text = SearchText,
+            Protocols = [.. ProtocolFilters.Where(chip => chip.IsSelected).Select(chip => chip.Protocol!.Value)],
+            Environments = [.. EnvironmentFilters.Where(chip => chip.IsSelected).Select(chip => chip.Environment!.Value)],
+            Tags = [.. TagFilters.Where(chip => chip.IsSelected).Select(chip => chip.TagId!.Value)],
+            FavoritesOnly = FavoritesOnly,
+            SortBy = ConnectionSortBy.SortOrder,
+        };
+    }
+
+    private async Task EnsureTagFiltersAsync(CancellationToken cancellationToken)
+    {
+        if (_tagsLoaded)
+        {
+            return;
+        }
+
+        var tags = await _tags.ListAsync(cancellationToken).ConfigureAwait(true);
+        foreach (var tag in tags.OrderBy(tag => tag.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            var chip = ConnectionFilterChipViewModel.ForTag(tag.Id, tag.Name);
+            chip.SelectionChanged += OnFilterChipSelectionChanged;
+            TagFilters.Add(chip);
+        }
+
+        _tagsLoaded = true;
+    }
+
+    private void ScheduleFilterRefresh()
+    {
+        UpdateFilterSummary();
+        if (_suppressFilterChanges || _disposed)
+        {
+            return;
+        }
+
+        _filterDebounce?.Cancel();
+        _filterDebounce?.Dispose();
+        _filterDebounce = new CancellationTokenSource();
+        SearchChangesSettled = DebounceAndRefreshAsync(_filterDebounce.Token);
+    }
+
+    private async Task DebounceAndRefreshAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(150), cancellationToken).ConfigureAwait(true);
+            await RefreshAsync(cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private void UpdateFilterSummary()
+    {
+        var active = new List<string>();
+        if (!string.IsNullOrWhiteSpace(SearchText))
+        {
+            active.Add($"Text: {SearchText.Trim()}");
+        }
+
+        active.AddRange(ProtocolFilters.Where(chip => chip.IsSelected).Select(chip => chip.Label));
+        active.AddRange(EnvironmentFilters.Where(chip => chip.IsSelected).Select(chip => chip.Label));
+        active.AddRange(TagFilters.Where(chip => chip.IsSelected).Select(chip => $"Tag: {chip.Label}"));
+        if (FavoritesOnly)
+        {
+            active.Add("Favorites only");
+        }
+
+        HasActiveFilters = active.Count > 0;
+        ActiveFilterSummary = string.Join(" • ", active);
+        OnPropertyChanged(nameof(EmptyStateTitle));
+        OnPropertyChanged(nameof(EmptyStateMessage));
+    }
+
+    private void OnFilterChipSelectionChanged(object? sender, EventArgs e)
+    {
+        ScheduleFilterRefresh();
+    }
+
+    partial void OnSearchTextChanged(string? value)
+    {
+        ScheduleFilterRefresh();
+    }
+
+    partial void OnFavoritesOnlyChanged(bool value)
+    {
+        ScheduleFilterRefresh();
     }
 
     private void RebuildTree(
@@ -464,5 +656,45 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     {
         ConnectionChangesSettled = RefreshAsync();
         await ConnectionChangesSettled.ConfigureAwait(true);
+    }
+
+    private sealed class EmptyTagRepository : ITagRepository
+    {
+        public static EmptyTagRepository Instance { get; } = new();
+
+        public Task<Tag?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<Tag?>(null);
+        }
+
+        public Task<Tag?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<Tag?>(null);
+        }
+
+        public Task<IReadOnlyList<Tag>> ListAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<Tag>>([]);
+        }
+
+        public Task AddAsync(Tag tag, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateAsync(Tag tag, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<int> GetUsageCountAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(0);
+        }
     }
 }

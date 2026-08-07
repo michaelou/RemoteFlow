@@ -1,0 +1,58 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.CommandPalette.CommandPaletteView"
+    x:DataType="palette:CommandPaletteViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:palette="using:RemoteFlow.UI.ViewModels.CommandPalette">
+  <Border
+      Width="680"
+      MaxHeight="520"
+      Padding="16"
+      Background="{DynamicResource Brush.Surface.1}"
+      BorderBrush="{DynamicResource Brush.Border}"
+      BorderThickness="1"
+      CornerRadius="12">
+    <Grid RowDefinitions="Auto,Auto,*">
+      <TextBox
+          x:Name="PaletteSearchBox"
+          KeyDown="PaletteSearchBox_OnKeyDown"
+          PlaceholderText="Quick connect…"
+          Text="{Binding SearchText, Mode=TwoWay}" />
+
+      <TextBlock
+          Grid.Row="1"
+          Margin="2,8"
+          Foreground="{DynamicResource Brush.Warning}"
+          IsVisible="{Binding FeedbackMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+          Text="{Binding FeedbackMessage}" />
+
+      <Grid Grid.Row="2" Margin="0,8,0,0">
+        <ListBox
+            x:Name="PaletteResults"
+            DoubleTapped="PaletteResults_OnDoubleTapped"
+            ItemsSource="{Binding Results}"
+            SelectedItem="{Binding SelectedResult, Mode=TwoWay}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="palette:CommandPaletteResultViewModel">
+              <StackPanel Margin="8,6">
+                <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Description}" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <StackPanel
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            IsVisible="{Binding HasEmptyState}">
+          <TextBlock TextAlignment="Center" Text="{Binding EmptyMessage}" />
+          <TextBlock
+              Margin="0,6,0,0"
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="Esc closes • Enter connects" />
+        </StackPanel>
+      </Grid>
+    </Grid>
+  </Border>
+</UserControl>

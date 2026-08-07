@@ -5,6 +5,7 @@ using RemoteFlow.UI.Navigation;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels;
 using RemoteFlow.UI.ViewModels.Connections;
+using RemoteFlow.UI.ViewModels.CommandPalette;
 using RemoteFlow.UI.Views;
 
 namespace RemoteFlow.UI;
@@ -16,6 +17,7 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton<ConnectionsPageViewModel>();
+        services.TryAddSingleton<CommandPaletteViewModel>();
         services.TryAddSingleton<TerminalsPageViewModel>();
         services.TryAddSingleton<TransfersPageViewModel>();
         services.TryAddSingleton<SettingsPageViewModel>();

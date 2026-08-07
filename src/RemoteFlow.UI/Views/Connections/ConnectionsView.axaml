@@ -4,8 +4,9 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
+    xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
     Loaded="ConnectionsView_OnLoaded">
-  <Grid Margin="24" RowDefinitions="Auto,Auto,*">
+  <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,*">
     <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
       <StackPanel>
         <TextBlock FontSize="28" FontWeight="SemiBold" Text="Connections" />
@@ -14,8 +15,10 @@
       <Button Grid.Column="1" Click="ClearRecent_OnClick" Content="Clear recent" VerticalAlignment="Center" />
     </Grid>
 
+    <connectionViews:SearchBar Grid.Row="1" Margin="0,0,0,12" />
+
     <Border
-        Grid.Row="1"
+        Grid.Row="2"
         Margin="0,0,0,8"
         Padding="10,6"
         Background="{DynamicResource Brush.Surface.2}"
@@ -24,7 +27,7 @@
       <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding FeedbackMessage}" />
     </Border>
 
-    <Grid Grid.Row="2">
+    <Grid Grid.Row="3">
       <TreeView
           x:Name="ConnectionTree"
           DragDrop.AllowDrop="True"
@@ -103,9 +106,18 @@
           CornerRadius="{DynamicResource Radius.Control}"
           IsVisible="{Binding IsEmpty}">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
-          <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="No connections yet" />
-          <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Create your first connection to get started." />
-          <Button Click="CreateFirstConnection_OnClick" Content="Create connection" HorizontalAlignment="Center" />
+          <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="{Binding EmptyStateTitle}" />
+          <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding EmptyStateMessage}" />
+          <Button
+              Click="CreateFirstConnection_OnClick"
+              Content="Create connection"
+              HorizontalAlignment="Center"
+              IsVisible="{Binding !HasActiveFilters}" />
+          <Button
+              Click="ClearFilters_OnClick"
+              Content="Clear filters"
+              HorizontalAlignment="Center"
+              IsVisible="{Binding HasActiveFilters}" />
         </StackPanel>
       </Border>
     </Grid>

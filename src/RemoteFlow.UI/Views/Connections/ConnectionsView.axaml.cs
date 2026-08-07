@@ -163,4 +163,12 @@ public sealed partial class ConnectionsView : UserControl
             viewModel.RequestCreateConnection();
         }
     }
+
+    private void ClearFilters_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ConnectionsPageViewModel viewModel)
+        {
+            viewModel.ClearAllFilters();
+        }
+    }
 }
