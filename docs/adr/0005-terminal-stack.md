@@ -1,6 +1,6 @@
 # ADR-0005: Embedded terminal stack
 
-- Status: Accepted
+- Status: **Provisional - pending the terminal spike (#3)**
 - Date: 2026-08-07
 - Decision owners: RemoteFlow maintainers
 - Related issue: [#3](https://github.com/michaelou/RemoteFlow/issues/3)
@@ -20,11 +20,9 @@ The manual harness is `tools/RemoteFlow.TerminalSpike`. It deliberately contains
 
 ## Decision
 
-**Go for Windows.** The project owner manually reviewed the Windows harness, found its behavior acceptable, and chose to proceed with the SvcSystems.UI.Terminal and Porta.Pty stack.
+**Provisional choice, pending issue #3:** evaluate SvcSystems.UI.Terminal over XTerm.NET with Porta.Pty as the current candidate terminal stack. The Windows harness supplies evidence for the decision; it is not a production abstraction. RemoteFlow must not claim Linux or macOS terminal support unless a separate validation issue produces evidence and this ADR is amended.
 
-RemoteFlow is Windows-only for this decision. Linux and macOS terminal support are out of scope and must not be advertised as supported. Adding either platform later requires a separate validation issue and a new ADR amendment.
-
-The project owner explicitly waived the original issue's native-Linux requirement and detailed evidence requirement. This is a conscious product-scope and risk decision, not a claim that the unexecuted matrix passed. Production terminal work in issues #19 and #20 may proceed.
+If the spike rejects this stack, the pre-approved fallback investigation is xterm.js in a WebView. Vendoring XTerm.NET is a last resort: it would require maintaining a source fork, syncing upstream fixes and security patches, owning Avalonia integration and test coverage, publishing or consuming a private package, and carrying compatibility work for every .NET/Avalonia upgrade. That ongoing maintenance cost is higher than using the package and must be justified by a concrete blocking defect.
 
 ## Results
 
@@ -77,3 +75,7 @@ Future regression evidence belongs under `docs/evidence/terminal/`. Exported met
 ## Other platforms
 
 Linux and macOS are unsupported. Before claiming support for either, open a follow-up validation issue, run the complete platform matrix, and amend this ADR with evidence.
+
+## Consequences
+
+The project can prototype a capable terminal without committing production code to an unvalidated dependency stack. Issue #3 must provide the acceptance evidence needed to accept, amend, or reject this ADR. Until then, downstream terminal work must keep the integration replaceable and must not treat the harness observations as a final platform-support commitment.
