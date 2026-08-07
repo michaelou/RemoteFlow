@@ -13,5 +13,6 @@
     <PackageReference Include="AwesomeAssertions" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="NSubstitute" />
+    <PackageReference Include="Testcontainers" />
   </ItemGroup>
 </Project>

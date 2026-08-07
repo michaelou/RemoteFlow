@@ -11,10 +11,20 @@ dotnet build
 dotnet test
 ```
 
-Integration tests are opt-in and may require local services or credentials. Run them explicitly with:
+SSH integration tests are opt-in and require a running Docker engine (Docker Desktop on Windows). The
+default `dotnet test` run excludes them and does not start or contact Docker. Run the harness explicitly
+from the repository root with:
 
 ```shell
-dotnet test --filter Category=Integration
+pwsh ./scripts/run-integration.ps1
+```
+
+The harness builds a local Ubuntu/OpenSSH image on first use and reuses one container for the test
+collection. Tests use only checked-in fixture credentials and host keys; never reuse them outside tests.
+The equivalent direct command is:
+
+```shell
+dotnet test tests/RemoteFlow.Ssh.IntegrationTests --filter Category=Integration
 ```
 
 ## Migrations

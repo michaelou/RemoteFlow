@@ -25,22 +25,12 @@ public sealed class SshTerminalCycleTests
         await using var viewModel = new TerminalSessionViewModel(shell, new ImmediateDispatcher());
 
         await viewModel.SendInputAsync(Encoding.UTF8.GetBytes("echoed"), token);
-        await WaitUntilAsync(() => viewModel.Model.Search("echoed") == 1, token);
         await ((FakeSshConnection)connected.Value).DisconnectAsync();
         await viewModel.Completion.WaitAsync(TimeSpan.FromSeconds(5), token);
 
         Assert.Equal("echoed", Encoding.UTF8.GetString(Assert.Single(shell.Writes)));
+        Assert.Equal(1, viewModel.Model.Search("echoed"));
         Assert.True(viewModel.IsEnded);
-    }
-
-    private static async Task WaitUntilAsync(Func<bool> predicate, CancellationToken cancellationToken)
-    {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(5));
-        while (!predicate())
-        {
-            await Task.Delay(10, timeout.Token);
-        }
     }
 
     private sealed class ImmediateDispatcher : IUiDispatcher

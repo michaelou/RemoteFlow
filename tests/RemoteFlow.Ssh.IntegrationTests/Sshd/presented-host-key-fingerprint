@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+ssh-keyscan -T 2 -t ed25519 localhost 2>/dev/null \
+    | ssh-keygen -lf - -E sha256 \
+    | awk '{ print $2 }'

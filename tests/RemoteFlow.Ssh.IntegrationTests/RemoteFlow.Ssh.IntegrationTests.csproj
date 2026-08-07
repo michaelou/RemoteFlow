@@ -1,4 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TestingPlatformCommandLineArguments Condition="'$(VSTestTestCaseFilter)' == ''">--filter-query /[category!=Integration] --ignore-exit-code 8</TestingPlatformCommandLineArguments>
+    <TestingPlatformCommandLineArguments Condition="$(VSTestTestCaseFilter.Contains('Category=Integration'))">--filter-query /[category=Integration]</TestingPlatformCommandLineArguments>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="../../src/RemoteFlow.Infrastructure/RemoteFlow.Infrastructure.csproj" />
     <ProjectReference Include="../RemoteFlow.TestSupport/RemoteFlow.TestSupport.csproj" />

@@ -1,0 +1,19 @@
+Port 22
+AddressFamily any
+ListenAddress 0.0.0.0
+ListenAddress ::
+HostKey /etc/ssh/ssh_host_ed25519_key
+PidFile /run/sshd.pid
+UsePAM yes
+PasswordAuthentication yes
+KbdInteractiveAuthentication yes
+PubkeyAuthentication yes
+PermitRootLogin no
+PermitEmptyPasswords no
+StrictModes yes
+Subsystem sftp internal-sftp
+LogLevel VERBOSE
+
+Match User interactive-user
+    PasswordAuthentication no
+    AuthenticationMethods keyboard-interactive:pam
