@@ -34,6 +34,15 @@ public sealed class DependencyDirectionTests
     }
 
     [Fact]
+    public void ApplicationDoesNotReferenceSshImplementations()
+    {
+        AssertDoesNotReference(
+            typeof(Application.AssemblyMarker).Assembly,
+            "Tmds.Ssh",
+            "Renci.SshNet");
+    }
+
+    [Fact]
     public void UiDoesNotReferenceInfrastructureOrPersistence()
     {
         AssertDoesNotReference(
