@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.TryAddSingleton<ConnectionEditorViewModelFactory>();
         services.TryAddSingleton<CommandPaletteViewModel>();
         services.TryAddSingleton<TerminalsPageViewModel>();
+        services.TryAddSingleton<IUiDispatcher, UiDispatcher>();
         services.TryAddSingleton<TransfersPageViewModel>();
         services.TryAddSingleton<SettingsPageViewModel>();
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
