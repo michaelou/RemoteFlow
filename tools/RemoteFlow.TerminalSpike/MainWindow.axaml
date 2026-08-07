@@ -1,0 +1,37 @@
+<Window
+    x:Class="RemoteFlow.TerminalSpike.MainWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:terminal="using:SvcSystems.UI.Terminal"
+    Title="RemoteFlow terminal stack spike"
+    Width="1200"
+    Height="800"
+    MinWidth="720"
+    MinHeight="480">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <Grid Margin="8" ColumnDefinitions="Auto,Auto,16,220,Auto,Auto,16,Auto,Auto,Auto" ColumnSpacing="6">
+      <Button Grid.Column="0" Content="Restart shell" Click="RestartShell_OnClick" />
+      <Button Grid.Column="1" Content="Export evidence" Click="ExportEvidence_OnClick" />
+      <TextBox Grid.Column="3" x:Name="SearchTextBox" PlaceholderText="Search scrollback" />
+      <Button Grid.Column="4" Content="Find" Click="Find_OnClick" />
+      <Button Grid.Column="5" Content="Next" Click="FindNext_OnClick" />
+      <Button Grid.Column="7" Content="Copy" Click="Copy_OnClick" />
+      <Button Grid.Column="8" Content="Paste" Click="Paste_OnClick" />
+      <Button Grid.Column="9" Content="UTF-8 split probe" Click="Utf8Probe_OnClick" />
+    </Grid>
+
+    <Border Grid.Row="1" Margin="8,0" BorderBrush="#505050" BorderThickness="1">
+      <terminal:TerminalControl
+          x:Name="TerminalView"
+          FontFamily="Cascadia Mono, DejaVu Sans Mono, monospace"
+          FontSize="13"
+          RightClickAction="CopyOrPaste" />
+    </Border>
+
+    <Grid Grid.Row="2" Margin="8" RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto">
+      <TextBlock x:Name="SessionText" TextWrapping="Wrap" />
+      <TextBlock Grid.Column="1" x:Name="SearchStatusText" />
+      <TextBlock Grid.Row="1" Grid.ColumnSpan="2" x:Name="MetricsText" TextWrapping="Wrap" />
+    </Grid>
+  </Grid>
+</Window>
