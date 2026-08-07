@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../src/RemoteFlow.Application/RemoteFlow.Application.csproj" />
+    <ProjectReference Include="../../src/RemoteFlow.Domain/RemoteFlow.Domain.csproj" />
+    <ProjectReference Include="../../src/RemoteFlow.Infrastructure/RemoteFlow.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/RemoteFlow.Persistence/RemoteFlow.Persistence.csproj" />
+    <ProjectReference Include="../../src/RemoteFlow.UI/RemoteFlow.UI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+</Project>

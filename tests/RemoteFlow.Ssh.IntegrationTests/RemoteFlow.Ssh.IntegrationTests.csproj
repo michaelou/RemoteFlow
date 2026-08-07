@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../src/RemoteFlow.Infrastructure/RemoteFlow.Infrastructure.csproj" />
+    <ProjectReference Include="../RemoteFlow.TestSupport/RemoteFlow.TestSupport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Testcontainers" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+</Project>

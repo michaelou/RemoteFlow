@@ -1,4 +1,22 @@
 <Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RemoteFlow.Application/RemoteFlow.Application.csproj" />
+    <Project Path="src/RemoteFlow.Desktop/RemoteFlow.Desktop.csproj" />
+    <Project Path="src/RemoteFlow.Domain/RemoteFlow.Domain.csproj" />
+    <Project Path="src/RemoteFlow.Infrastructure/RemoteFlow.Infrastructure.csproj" />
+    <Project Path="src/RemoteFlow.Persistence/RemoteFlow.Persistence.csproj" />
+    <Project Path="src/RemoteFlow.UI/RemoteFlow.UI.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RemoteFlow.Application.Tests/RemoteFlow.Application.Tests.csproj" />
+    <Project Path="tests/RemoteFlow.Architecture.Tests/RemoteFlow.Architecture.Tests.csproj" />
+    <Project Path="tests/RemoteFlow.Domain.Tests/RemoteFlow.Domain.Tests.csproj" />
+    <Project Path="tests/RemoteFlow.Infrastructure.Tests/RemoteFlow.Infrastructure.Tests.csproj" />
+    <Project Path="tests/RemoteFlow.Persistence.Tests/RemoteFlow.Persistence.Tests.csproj" />
+    <Project Path="tests/RemoteFlow.Ssh.IntegrationTests/RemoteFlow.Ssh.IntegrationTests.csproj" />
+    <Project Path="tests/RemoteFlow.TestSupport/RemoteFlow.TestSupport.csproj" />
+    <Project Path="tests/RemoteFlow.UI.Tests/RemoteFlow.UI.Tests.csproj" />
+  </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/RemoteFlow.TerminalSpike/RemoteFlow.TerminalSpike.csproj" />
   </Folder>

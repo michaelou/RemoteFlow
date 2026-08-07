@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../RemoteFlow.Application/RemoteFlow.Application.csproj" />
+    <ProjectReference Include="../RemoteFlow.Domain/RemoteFlow.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Konscious.Security.Cryptography.Argon2" />
+    <PackageReference Include="Porta.Pty" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="SSH.NET" />
+    <PackageReference Include="Tmds.Ssh" />
+  </ItemGroup>
+</Project>

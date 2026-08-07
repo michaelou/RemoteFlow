@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "dependencies": {
     "net10.0": {
       "Avalonia.Desktop": {
@@ -42,16 +42,6 @@
         "dependencies": {
           "Avalonia": "12.1.1",
           "XTerm.NET": "1.0.15"
-        }
-      },
-      "Avalonia": {
-        "type": "Transitive",
-        "resolved": "12.1.1",
-        "contentHash": "o8pZ1oE9AQ6gklpGM0lnOBp/JlVH0J/0mYszBf0GsSAcEnzHNCLM9NnrPZwKu4j2q9oNbVHYzzEPkszQeuqaKw==",
-        "dependencies": {
-          "Avalonia.BuildServices": "11.3.2",
-          "Avalonia.Remote.Protocol": "12.1.1",
-          "MicroCom.Runtime": "0.11.6"
         }
       },
       "Avalonia.Angle.Windows.Natives": {
@@ -239,8 +229,20 @@
         "resolved": "3.0.0",
         "contentHash": "w9m/v7PuW8qhlpFKboa+otS5PdRpCxQ0cCT/qkD+gih0FKtqoZECkgwnRprX6+aA75hz3pXvpPGQByx0wszHyw=="
       },
+      "Avalonia": {
+        "type": "CentralTransitive",
+        "requested": "[12.1.1, )",
+        "resolved": "12.1.1",
+        "contentHash": "o8pZ1oE9AQ6gklpGM0lnOBp/JlVH0J/0mYszBf0GsSAcEnzHNCLM9NnrPZwKu4j2q9oNbVHYzzEPkszQeuqaKw==",
+        "dependencies": {
+          "Avalonia.BuildServices": "11.3.2",
+          "Avalonia.Remote.Protocol": "12.1.1",
+          "MicroCom.Runtime": "0.11.6"
+        }
+      },
       "XTerm.NET": {
-        "type": "Transitive",
+        "type": "CentralTransitive",
+        "requested": "[1.0.15, )",
         "resolved": "1.0.15",
         "contentHash": "hauWTnFFXs0wF3x5SufXzwwprt5AUvywbdHwEYfN09M0/sTfhCJxNpJdGzvtwNK1+tkrhKC82Bt3/0ugFFhHMg==",
         "dependencies": {

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../RemoteFlow.Application/RemoteFlow.Application.csproj" />
+    <ProjectReference Include="../RemoteFlow.Infrastructure/RemoteFlow.Infrastructure.csproj" />
+    <ProjectReference Include="../RemoteFlow.Persistence/RemoteFlow.Persistence.csproj" />
+    <ProjectReference Include="../RemoteFlow.UI/RemoteFlow.UI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" />
+  </ItemGroup>
+</Project>

@@ -5,3 +5,7 @@ obj/
 .appdata/
 .localappdata/
 artifacts/terminal-spike/
+.vs/
+.idea/
+*.user
+*.suo

@@ -11,6 +11,8 @@ namespace RemoteFlow.TerminalSpike;
 
 public partial class MainWindow : Window
 {
+    private static readonly JsonSerializerOptions _jsonSerializerOptions = new() { WriteIndented = true };
+
     private readonly SpikeLaunchOptions _launchOptions;
     private readonly TerminalControlModel _terminalModel = new(new TerminalOptions
     {
@@ -121,9 +123,12 @@ public partial class MainWindow : Window
                     break;
                 }
 
-                Interlocked.Add(ref _bytesRead, read);
+                _ = Interlocked.Add(ref _bytesRead, read);
                 var chunk = buffer.AsSpan(0, read).ToArray();
-                await Dispatcher.UIThread.InvokeAsync(() => FeedAndMeasure(chunk), DispatcherPriority.Background);
+                await Dispatcher.UIThread.InvokeAsync(
+                    () => FeedAndMeasure(chunk),
+                    DispatcherPriority.Background,
+                    cancellationToken);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -171,7 +176,7 @@ public partial class MainWindow : Window
         }
         finally
         {
-            _writerGate.Release();
+            _ = _writerGate.Release();
         }
     }
 
@@ -189,12 +194,13 @@ public partial class MainWindow : Window
 
     private void Pty_OnProcessExited(object? sender, PtyExitedEventArgs e)
     {
-        Dispatcher.UIThread.Post(() =>
-        {
-            _sessionState = $"exited ({e.ExitCode})";
-            _terminalModel.Feed($"\r\n[Shell exited with code {e.ExitCode}]\r\n");
-            UpdateMetricsText();
-        });
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _sessionState = $"exited ({e.ExitCode})";
+                _terminalModel.Feed($"\r\n[Shell exited with code {e.ExitCode}]\r\n");
+                UpdateMetricsText();
+            });
     }
 
     private void StopShell()
@@ -272,9 +278,15 @@ public partial class MainWindow : Window
             $"scrollback={_terminalModel.Terminal.Buffer.Lines.Length} lines | last input bytes={_lastInputBytes}";
     }
 
-    private static double ToMib(long bytes) => bytes / 1024d / 1024d;
+    private static double ToMib(long bytes)
+    {
+        return bytes / 1024d / 1024d;
+    }
 
-    private async void RestartShell_OnClick(object? sender, RoutedEventArgs e) => await StartShellAsync();
+    private async void RestartShell_OnClick(object? sender, RoutedEventArgs e)
+    {
+        await StartShellAsync();
+    }
 
     private async void ExportEvidence_OnClick(object? sender, RoutedEventArgs e)
     {
@@ -284,7 +296,7 @@ public partial class MainWindow : Window
             CapturedAtUtc = DateTimeOffset.UtcNow,
             Platform = Environment.OSVersion.ToString(),
             Runtime = Environment.Version.ToString(),
-            Shell = _launchOptions.Shell,
+            _launchOptions.Shell,
             _launchOptions.Arguments,
             _launchOptions.ColorMode,
             _launchOptions.ReadBufferSize,
@@ -312,9 +324,9 @@ public partial class MainWindow : Window
         };
 
         var directory = Path.Combine(Environment.CurrentDirectory, "artifacts", "terminal-spike");
-        Directory.CreateDirectory(directory);
+        _ = Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, $"metrics-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json");
-        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true }));
+        await File.WriteAllTextAsync(path, JsonSerializer.Serialize(evidence, _jsonSerializerOptions));
         _sessionState = $"evidence exported to {path}";
         UpdateMetricsText();
     }
@@ -331,9 +343,15 @@ public partial class MainWindow : Window
         SearchStatusText.Text = index < 0 ? "No matches" : $"{index + 1} / {_terminalModel.SearchResultCount}";
     }
 
-    private async void Copy_OnClick(object? sender, RoutedEventArgs e) => await TerminalView.CopySelectionAsync();
+    private async void Copy_OnClick(object? sender, RoutedEventArgs e)
+    {
+        await TerminalView.CopySelectionAsync();
+    }
 
-    private async void Paste_OnClick(object? sender, RoutedEventArgs e) => await TerminalView.PasteFromClipboardAsync();
+    private async void Paste_OnClick(object? sender, RoutedEventArgs e)
+    {
+        await TerminalView.PasteFromClipboardAsync();
+    }
 
     private void Utf8Probe_OnClick(object? sender, RoutedEventArgs e)
     {

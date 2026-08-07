@@ -8,13 +8,15 @@ internal static class Program
     public static void Main(string[] args)
     {
         App.LaunchOptions = SpikeLaunchOptions.Parse(args);
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        _ = BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<App>()
+    public static AppBuilder BuildAvaloniaApp()
+    {
+        return AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .LogToTrace();
+    }
 }
 
 internal sealed record SpikeLaunchOptions(
@@ -53,6 +55,8 @@ internal sealed record SpikeLaunchOptions(
                 case "--read-buffer-size" when index + 1 < args.Length && int.TryParse(args[++index], out var size):
                     readBufferSize = Math.Clamp(size, 1, 1024 * 1024);
                     break;
+                default:
+                    break;
             }
         }
 
@@ -70,26 +74,20 @@ internal sealed record SpikeLaunchOptions(
 
     private static string ResolveDefaultShell()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            return FindOnPath("pwsh.exe")
+        return OperatingSystem.IsWindows()
+            ? FindOnPath("pwsh.exe")
                 ?? Environment.GetEnvironmentVariable("ComSpec")
-                ?? Path.Combine(Environment.SystemDirectory, "cmd.exe");
-        }
-
-        return Environment.GetEnvironmentVariable("SHELL")
+                ?? Path.Combine(Environment.SystemDirectory, "cmd.exe")
+            : Environment.GetEnvironmentVariable("SHELL")
             ?? (File.Exists("/bin/bash") ? "/bin/bash" : "/bin/sh");
     }
 
     private static string? FindOnPath(string fileName)
     {
         var path = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return null;
-        }
-
-        return path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        return string.IsNullOrWhiteSpace(path)
+            ? null
+            : path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(directory => Path.Combine(directory, fileName))
             .FirstOrDefault(File.Exists);
     }
