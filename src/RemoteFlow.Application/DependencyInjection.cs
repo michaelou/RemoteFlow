@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Abstractions.Ssh;
 using RemoteFlow.Application.Services;
 using RemoteFlow.Domain.Abstractions;
 
@@ -20,6 +21,8 @@ public static class DependencyInjection
         services.TryAddSingleton<IFolderService, FolderService>();
         services.TryAddSingleton<KeymapService>();
         services.TryAddSingleton<IShellProfileService, ShellProfileService>();
+        services.TryAddSingleton<IHostKeyPrompt, RejectingHostKeyPrompt>();
+        services.TryAddSingleton<IHostKeyVerifier, HostKeyVerifier>();
         return services;
     }
 }

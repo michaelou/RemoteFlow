@@ -27,6 +27,18 @@ public sealed class HostKeyStore : RepositoryBase, IHostKeyStore
             .ToArrayAsync(cancellationToken).ConfigureAwait(false), cancellationToken);
     }
 
+    public Task<IReadOnlyList<HostKey>> ListForHostAsync(
+        string host,
+        int port,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(host);
+        return ReadAsync<IReadOnlyList<HostKey>>(async context => await context.HostKeys.AsNoTracking()
+            .Where(item => item.Host == host && item.Port == port)
+            .OrderBy(item => item.KeyAlgorithm)
+            .ToArrayAsync(cancellationToken).ConfigureAwait(false), cancellationToken);
+    }
+
     public Task AddAsync(HostKey hostKey, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(hostKey);

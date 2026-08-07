@@ -44,6 +44,8 @@ public enum HostKeySource
     UserAccepted = 1,
     ImportedKnownHosts = 2,
     Pinned = 3,
+    AcceptAny = 4,
+    AlgorithmRotation = 5,
 }
 
 public enum CredentialKind

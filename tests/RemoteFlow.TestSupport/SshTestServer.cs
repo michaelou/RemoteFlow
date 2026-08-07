@@ -1,6 +1,8 @@
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Images;
+using RemoteFlow.Application.Abstractions.Ssh;
+using RemoteFlow.Application.Services;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -113,6 +115,25 @@ public sealed class SshTestServer : IAsyncDisposable
         ], cancellationToken).ConfigureAwait(false);
         EnsureSuccess(result, "read the fixture SSH private key");
         return result.Stdout;
+    }
+
+    public async Task<HostKeyInfo> GetPresentedHostKeyAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await ExecAsync(
+        [
+            "ssh-keyscan",
+            "-T",
+            "2",
+            "-t",
+            "ed25519",
+            "localhost",
+        ], cancellationToken).ConfigureAwait(false);
+        EnsureSuccess(result, "read the presented SSH host key");
+        var fields = result.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .First(parts => parts.Length >= 3 && parts[1] == "ssh-ed25519");
+        var publicKey = Convert.FromBase64String(fields[2]);
+        return new HostKeyInfo(fields[1], publicKey, HostKeyFingerprint.FormatSha256(publicKey));
     }
 
     public async ValueTask DisposeAsync()

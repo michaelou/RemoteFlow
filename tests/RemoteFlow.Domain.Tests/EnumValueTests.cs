@@ -38,7 +38,7 @@ public sealed class EnumValueTests
     [Fact]
     public void HostKeySourceValuesAreStable()
     {
-        Assert.Equal([1, 2, 3], Enum.GetValues<HostKeySource>().Select(value => (int)value));
+        Assert.Equal([1, 2, 3, 4, 5], Enum.GetValues<HostKeySource>().Select(value => (int)value));
     }
 
     [Fact]

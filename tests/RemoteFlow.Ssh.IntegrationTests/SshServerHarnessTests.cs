@@ -1,3 +1,6 @@
+using RemoteFlow.Application.Abstractions.Ssh;
+using RemoteFlow.Application.Services;
+using RemoteFlow.Domain.Enums;
 using RemoteFlow.TestSupport;
 using Xunit;
 
@@ -129,6 +132,55 @@ public sealed class SshServerHarnessTests(SshServerFixture fixture)
                 "-rf",
                 testDirectory,
             ], token);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task LiveHostKeySwapIsRejectedAsMismatchByVerifier()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await fixture.Server.UseHostKeyAsync(SshTestHostKey.Primary, token);
+        var store = new InMemoryHostKeyStore();
+        var verifier = new HostKeyVerifier(
+            store,
+            new AcceptingPrompt(),
+            new FakeClock(new DateTimeOffset(2026, 8, 8, 1, 2, 3, TimeSpan.Zero)),
+            new FakeGuidProvider());
+        var primary = await fixture.Server.GetPresentedHostKeyAsync(token);
+        var trusted = await verifier.VerifyAsync(new HostKeyVerificationRequest(
+            fixture.Server.Hostname,
+            fixture.Server.Port,
+            primary,
+            HostKeyPolicy.TrustOnFirstUse), token);
+
+        try
+        {
+            await fixture.Server.UseHostKeyAsync(SshTestHostKey.Alternate, token);
+            var alternate = await fixture.Server.GetPresentedHostKeyAsync(token);
+            var changed = await verifier.VerifyAsync(new HostKeyVerificationRequest(
+                fixture.Server.Hostname,
+                fixture.Server.Port,
+                alternate,
+                HostKeyPolicy.TrustOnFirstUse), token);
+
+            Assert.True(trusted.IsSuccess);
+            Assert.Equal(SshError.HostKeyMismatch, changed.Failure.Error);
+        }
+        finally
+        {
+            await fixture.Server.UseHostKeyAsync(SshTestHostKey.Primary, token);
+        }
+    }
+
+    private sealed class AcceptingPrompt : IHostKeyPrompt
+    {
+        public ValueTask<bool> ConfirmTrustAsync(
+            HostKeyTrustPrompt prompt,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(true);
         }
     }
 }

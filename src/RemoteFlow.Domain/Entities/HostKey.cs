@@ -129,4 +129,31 @@ public sealed class HostKey
         Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
         return this;
     }
+
+    public HostKey UpdatePresentedKey(
+        string publicKeyBase64,
+        string sha256Fingerprint,
+        HostKeySource source,
+        DateTimeOffset seenUtc,
+        string? comment = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(publicKeyBase64);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sha256Fingerprint);
+        if (!sha256Fingerprint.StartsWith("SHA256:", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("The fingerprint must use the SHA256: format.", nameof(sha256Fingerprint));
+        }
+
+        if (!Enum.IsDefined(source))
+        {
+            throw new ArgumentOutOfRangeException(nameof(source));
+        }
+
+        PublicKeyBase64 = publicKeyBase64;
+        Sha256Fingerprint = sha256Fingerprint;
+        TrustState = HostKeyTrust.Trusted;
+        Source = source;
+        Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+        return Observe(seenUtc);
+    }
 }

@@ -12,6 +12,11 @@ public interface IHostKeyStore
 
     Task<IReadOnlyList<HostKey>> ListAsync(CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<HostKey>> ListForHostAsync(
+        string host,
+        int port,
+        CancellationToken cancellationToken = default);
+
     Task AddAsync(HostKey hostKey, CancellationToken cancellationToken = default);
 
     Task UpdateAsync(HostKey hostKey, CancellationToken cancellationToken = default);
