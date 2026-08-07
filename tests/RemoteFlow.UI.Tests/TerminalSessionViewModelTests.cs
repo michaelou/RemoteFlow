@@ -59,6 +59,57 @@ public sealed class TerminalSessionViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task RapidResizeUsesOneTrailingCallWithTheLatestDimensions()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var channel = new FakeTerminalChannel();
+        await using var viewModel = new TerminalSessionViewModel(channel, new ImmediateDispatcher());
+
+        viewModel.RequestResize(80, 24);
+        await Task.Delay(20, token);
+        viewModel.RequestResize(100, 30);
+        await Task.Delay(20, token);
+        viewModel.RequestResize(132, 43);
+
+        await channel.ResizeReceived.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+        await Task.Delay(TerminalSessionViewModel.ResizeDebounce + TimeSpan.FromMilliseconds(30), token);
+
+        Assert.Equal(1, channel.ResizeCallCount);
+        Assert.Equal((132, 43), channel.LastResize);
+    }
+
+    [AvaloniaFact]
+    public async Task SustainedFloodDropsOldestOutputAndMarksTruncation()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var channel = new FakeTerminalChannel();
+        await using var viewModel = new TerminalSessionViewModel(channel, new ImmediateDispatcher());
+        var flood = new byte[TerminalSessionViewModel.MaximumPendingOutputBytes + (512 * 1024)];
+        Array.Fill(flood, (byte)'x');
+
+        await channel.PublishAsync(flood, token);
+        await channel.CompleteAsync(0);
+        await viewModel.Completion.WaitAsync(TimeSpan.FromSeconds(10), token);
+
+        Assert.True(viewModel.DroppedOutputBytes >= 512 * 1024);
+        Assert.Equal(1, viewModel.Model.Search("RemoteFlow: output truncated"));
+    }
+
+    [AvaloniaFact]
+    public async Task TenThousandLineScrollbackStaysWithinInitialMemoryBudget()
+    {
+        var channel = new FakeTerminalChannel();
+        await using var viewModel = new TerminalSessionViewModel(channel, new ImmediateDispatcher());
+        var before = GC.GetTotalMemory(forceFullCollection: true);
+
+        viewModel.Model.Feed(string.Join("\r\n", Enumerable.Range(1, 10_000).Select(index => $"line {index:D5}")));
+        var retained = GC.GetTotalMemory(forceFullCollection: true) - before;
+
+        Assert.True(viewModel.Model.Terminal.Buffer.Lines.Length <= 10_030);
+        Assert.True(retained < 100 * 1024 * 1024, $"10,000-line scrollback retained {retained:N0} bytes.");
+    }
+
+    [AvaloniaFact]
     public async Task DisposingViewModelDisposesPendingChannelWithoutTaskFailure()
     {
         var token = TestContext.Current.CancellationToken;
@@ -152,7 +203,10 @@ public sealed class TerminalSessionViewModelTests
         public Task<int?> Exited => _exited.Task;
         public ArrayBufferWriter<byte> Written { get; } = new();
         public TaskCompletionSource WriteReceived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ResizeReceived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool IsDisposed { get; private set; }
+        public int ResizeCallCount { get; private set; }
+        public (int Columns, int Rows) LastResize { get; private set; }
 
         public event EventHandler<ChannelClosedEventArgs>? Closed;
 
@@ -169,6 +223,9 @@ public sealed class TerminalSessionViewModelTests
         public ValueTask ResizeAsync(int columns, int rows, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            ResizeCallCount++;
+            LastResize = (columns, rows);
+            _ = ResizeReceived.TrySetResult();
             return ValueTask.CompletedTask;
         }
 

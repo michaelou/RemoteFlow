@@ -47,6 +47,10 @@ public sealed partial class PortaPtyServiceTests
             new TerminalKeyStroke(TerminalKey.C, TerminalModifiers.Control),
             OperatingSystem.IsMacOS() ? KeymapPlatform.MacOs : KeymapPlatform.WindowsLinux);
         await session.WriteAsync(interrupt.Bytes, token);
+        // ConPTY delivers the control event asynchronously. Give the foreground process time to
+        // terminate before sending the next shell command so cmd.exe cannot route that command to
+        // the process that is still unwinding.
+        await Task.Delay(250, token);
         await session.WriteAsync(Encoding.UTF8.GetBytes($"echo REMOTEFLOW_INTERRUPTED{NewLine()}"), token);
         var output = await ReadUntilAsync(
             session.Output,

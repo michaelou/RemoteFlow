@@ -89,12 +89,30 @@ The control converts framework key events into terminal byte sequences before ra
 
 ## Resize
 
+RemoteFlow deliberately sets `ReflowOnResize = false`. XTerm.NET's normal-buffer resize reflow can
+corrupt full-screen TUIs; this is the behavior tracked by
+[XTerm.NET issue #12](https://github.com/tomlm/XTerm.NET/issues/12). The tradeoff is limited to
+historical normal-buffer lines: already-rendered long lines keep their old wrapping after a resize.
+New output uses the new cell grid and must remain correct. The terminal control derives columns and
+rows from its active monospace font metrics, while RemoteFlow coalesces resize notifications with a
+100 ms trailing debounce before resizing the PTY.
+
 1. Run `watch -n 0.2 'stty size'` or an equivalent loop.
 2. Resize the window in both dimensions. Confirm the reported rows/columns match the harness status and the TUI redraws cleanly. This demonstrates the control resize event → `IPtyConnection.Resize` → SIGWINCH path.
 3. Produce at least 200 numbered normal-buffer lines, shrink the window, then expand it. Capture the known historical-line reflow gap caused by `ReflowOnResize = false`.
 4. Print another 100 numbered lines after resizing. Confirm only historical layout is affected and all subsequent output is correct.
 
+Capture the result using this framing (replace the image below with the current release candidate's
+screenshot when recording release evidence):
+
+![Expected resize evidence: historical lines retain their wrapping while the post-resize marker and subsequent lines render on the new grid](evidence/terminal/resize-normal-buffer-reference.svg)
+
 ## Performance and memory
+
+Production output is delivered in no more than one UI batch per 16 ms frame and at most 64 KiB per
+frame. Awaiting each UI batch naturally pauses the `PipeReader` when rendering falls behind. If a
+sustained flood grows the pending buffer beyond 4 MiB, RemoteFlow preserves the newest output and
+inserts an explicit `[RemoteFlow: output truncated; ...]` marker; output is never discarded silently.
 
 Run each command separately from a fresh harness process and avoid interacting until output finishes:
 

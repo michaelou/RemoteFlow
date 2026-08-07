@@ -3,11 +3,17 @@ using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
 using SvcSystems.UI.Terminal;
+using System.Diagnostics;
 
 namespace RemoteFlow.UI.ViewModels.Terminal;
 
 public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncDisposable, IDisposable
 {
+    internal static readonly TimeSpan ResizeDebounce = TimeSpan.FromMilliseconds(100);
+    internal static readonly TimeSpan OutputFrameBudget = TimeSpan.FromMilliseconds(16);
+    internal const int MaximumBytesPerFrame = 64 * 1024;
+    internal const int MaximumPendingOutputBytes = 4 * 1024 * 1024;
+
     private readonly ITerminalChannel _channel;
     private readonly IUiDispatcher _dispatcher;
     private readonly CancellationTokenSource _lifetime = new();
@@ -15,6 +21,9 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     private readonly OscTitleParser _titleParser = new();
     private readonly Task _readTask;
     private readonly Task _exitTask;
+    private readonly Lock _resizeSync = new();
+    private CancellationTokenSource? _pendingResize;
+    private long _droppedOutputBytes;
     private int _disposeStarted;
 
     public TerminalSessionViewModel(
@@ -36,6 +45,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
             TermName = "xterm-256color",
         });
         Model.UserInput += OnUserInput;
+        Model.SizeChanged += OnTerminalSizeChanged;
         Title = string.IsNullOrWhiteSpace(initialTitle) ? "Terminal" : initialTitle.Trim();
         Environment = environment;
         AccentColorHex = ResolveAccentColor(environment, colorOverrideHex);
@@ -50,6 +60,8 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     public Task Completion { get; }
 
     public int? ProcessId => (_channel as IPtySession)?.ProcessId;
+
+    public long DroppedOutputBytes => Interlocked.Read(ref _droppedOutputBytes);
 
     public EnvironmentKind Environment { get; }
 
@@ -128,6 +140,25 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         }
     }
 
+    public void RequestResize(int columns, int rows)
+    {
+        if (columns <= 0 || rows <= 0 || Volatile.Read(ref _disposeStarted) != 0)
+        {
+            return;
+        }
+
+        CancellationTokenSource pending;
+        lock (_resizeSync)
+        {
+            _pendingResize?.Cancel();
+            _pendingResize?.Dispose();
+            pending = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+            _pendingResize = pending;
+        }
+
+        _ = DebounceResizeAsync(columns, rows, pending);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
@@ -136,6 +167,13 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         }
 
         Model.UserInput -= OnUserInput;
+        Model.SizeChanged -= OnTerminalSizeChanged;
+        lock (_resizeSync)
+        {
+            _pendingResize?.Cancel();
+            _pendingResize?.Dispose();
+            _pendingResize = null;
+        }
         _lifetime.Cancel();
         await _channel.DisposeAsync().ConfigureAwait(false);
         await Completion.ConfigureAwait(false);
@@ -152,17 +190,41 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     {
         try
         {
+            var lastFrame = Stopwatch.GetTimestamp();
             while (true)
             {
                 var result = await _channel.Output.ReadAsync(cancellationToken).ConfigureAwait(false);
+                var buffer = result.Buffer;
+                var consumed = buffer.Start;
                 try
                 {
-                    var text = _decoder.Decode(result.Buffer, flush: result.IsCompleted);
+                    var droppedThisFrame = 0L;
+                    if (buffer.Length > MaximumPendingOutputBytes)
+                    {
+                        droppedThisFrame = buffer.Length - MaximumPendingOutputBytes;
+                        consumed = buffer.GetPosition(droppedThisFrame);
+                        buffer = buffer.Slice(consumed);
+                        _ = Interlocked.Add(ref _droppedOutputBytes, droppedThisFrame);
+                    }
+
+                    var frameLength = (int)Math.Min(buffer.Length, MaximumBytesPerFrame);
+                    var frame = buffer.Slice(0, frameLength);
+                    consumed = frame.End;
+                    var flush = result.IsCompleted && frameLength == buffer.Length;
+                    var text = _decoder.Decode(frame, flush);
                     if (text.Length > 0)
                     {
                         var reportedTitles = _titleParser.Process(text);
+                        var truncationNotice = droppedThisFrame == 0
+                            ? string.Empty
+                            : $"\r\n[RemoteFlow: output truncated; dropped {droppedThisFrame:N0} bytes]\r\n";
                         await _dispatcher.InvokeAsync(() =>
                         {
+                            if (truncationNotice.Length > 0)
+                            {
+                                Model.Feed(truncationNotice);
+                            }
+
                             Model.Feed(text);
                             if (UserTitleOverride is null && reportedTitles.Count > 0)
                             {
@@ -170,16 +232,31 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
                             }
                         }, cancellationToken).ConfigureAwait(false);
                     }
+                    else if (droppedThisFrame > 0)
+                    {
+                        await _dispatcher.InvokeAsync(
+                            () => Model.Feed($"\r\n[RemoteFlow: output truncated; dropped {droppedThisFrame:N0} bytes]\r\n"),
+                            cancellationToken).ConfigureAwait(false);
+                    }
                 }
                 finally
                 {
-                    _channel.Output.AdvanceTo(result.Buffer.End);
+                    var examined = consumed.Equals(result.Buffer.End) ? result.Buffer.End : consumed;
+                    _channel.Output.AdvanceTo(consumed, examined);
                 }
 
-                if (result.IsCompleted)
+                if (result.IsCompleted && consumed.Equals(result.Buffer.End))
                 {
                     break;
                 }
+
+                var elapsed = Stopwatch.GetElapsedTime(lastFrame);
+                if (elapsed < OutputFrameBudget)
+                {
+                    await Task.Delay(OutputFrameBudget - elapsed, cancellationToken).ConfigureAwait(false);
+                }
+
+                lastFrame = Stopwatch.GetTimestamp();
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -232,6 +309,38 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         }
 
         await SendInputAsync(e.Data, _lifetime.Token).ConfigureAwait(false);
+    }
+
+    private void OnTerminalSizeChanged(object? sender, TerminalSizeChangedEventArgs e)
+    {
+        RequestResize(e.Cols, e.Rows);
+    }
+
+    private async Task DebounceResizeAsync(int columns, int rows, CancellationTokenSource pending)
+    {
+        try
+        {
+            await Task.Delay(ResizeDebounce, pending.Token).ConfigureAwait(false);
+            await _channel.ResizeAsync(columns, rows, pending.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (pending.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            await SetFailedAsync($"Terminal resize failed: {exception.Message}").ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_resizeSync)
+            {
+                if (ReferenceEquals(_pendingResize, pending))
+                {
+                    _pendingResize = null;
+                    pending.Dispose();
+                }
+            }
+        }
     }
 
     private ValueTask SetFailedAsync(string message)
