@@ -9,11 +9,30 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddRemoteFlowPersistence(
         this IServiceCollection services,
+        IAppPaths appPaths)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(appPaths);
+
+        _ = services.AddSingleton<IAppPaths>(appPaths);
+        AddPersistenceServices(services, appPaths.DataDirectory);
+        _ = services.AddSingleton<IDbInitializer, DbInitializer>();
+        return services;
+    }
+
+    public static IServiceCollection AddRemoteFlowPersistence(
+        this IServiceCollection services,
         string dataDirectory)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
 
+        AddPersistenceServices(services, dataDirectory);
+        return services;
+    }
+
+    private static void AddPersistenceServices(IServiceCollection services, string dataDirectory)
+    {
         _ = services.AddSingleton<IDbContextFactory<RemoteFlowDbContext>>(
             _ => new RemoteFlowDbContextFactory(dataDirectory));
         _ = services.AddSingleton<IClock>(SystemClock.Instance);
@@ -39,6 +58,5 @@ public static class DependencyInjection
         _ = services.AddSingleton<IUnitOfWork>(provider => new UnitOfWork(
             provider.GetRequiredService<IDbContextFactory<RemoteFlowDbContext>>(),
             provider.GetRequiredService<DbContextScopeAccessor>()));
-        return services;
     }
 }
