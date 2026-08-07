@@ -1,0 +1,104 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Terminal.TerminalWorkspace"
+    x:DataType="terminalViewModels:TerminalsPageViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:terminal="using:SvcSystems.UI.Terminal"
+    xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal">
+  <Grid Margin="16" RowDefinitions="Auto,Auto,*,Auto">
+    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+      <StackPanel>
+        <TextBlock FontSize="24" FontWeight="SemiBold" Text="Terminal workspace" />
+        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Independent local and remote sessions" />
+      </StackPanel>
+      <Button
+          Grid.Column="1"
+          Click="AddTab_OnClick"
+          Content="+ New terminal"
+          IsEnabled="{Binding !IsStarting}" />
+    </Grid>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+      <ScrollViewer
+          x:Name="TabScroller"
+          HorizontalScrollBarVisibility="Auto"
+          VerticalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding Sessions}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="2" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="terminalViewModels:TerminalSessionViewModel">
+              <Border
+                  Background="{Binding TabBackgroundHex}"
+                  BorderBrush="{Binding AccentColorHex}"
+                  BorderThickness="0,0,0,3"
+                  CornerRadius="6,6,0,0"
+                  Margin="0,0,2,0"
+                  MinWidth="124"
+                  MaxWidth="240"
+                  Padding="10,7"
+                  PointerMoved="Tab_OnPointerMoved"
+                  PointerPressed="Tab_OnPointerPressed"
+                  PointerReleased="Tab_OnPointerReleased">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="7">
+                  <Border
+                      Background="{Binding AccentColorHex}"
+                      CornerRadius="3"
+                      Padding="4,1">
+                    <TextBlock FontSize="10" FontWeight="Bold" Foreground="#0B0F14" Text="{Binding EnvironmentCue}" />
+                  </Border>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5">
+                    <TextBlock
+                        IsVisible="{Binding IsEnded}"
+                        Foreground="{DynamicResource Brush.Warning}"
+                        Text="●" />
+                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                  <Button
+                      Grid.Column="2"
+                      Click="CloseTab_OnClick"
+                      Content="×"
+                      Padding="3,0"
+                      ToolTip.Tip="Close terminal (Ctrl+Shift+W)" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Grid>
+
+    <Border
+        Grid.Row="2"
+        Background="{Binding SelectedSession.ChromeTintHex}"
+        BorderBrush="{Binding SelectedSession.AccentColorHex}"
+        BorderThickness="1"
+        CornerRadius="0,0,6,6"
+        PointerPressed="TerminalBorder_OnPointerPressed">
+      <ContentControl Content="{Binding SelectedSession}">
+        <ContentControl.DataTemplates>
+          <DataTemplate x:DataType="terminalViewModels:TerminalSessionViewModel">
+            <terminal:TerminalControl
+                FontFamily="Cascadia Mono, DejaVu Sans Mono, monospace"
+                FontSize="13"
+                Model="{Binding Model}"
+                RightClickAction="None" />
+          </DataTemplate>
+        </ContentControl.DataTemplates>
+      </ContentControl>
+    </Border>
+
+    <StackPanel Grid.Row="3" Margin="0,8,0,0" Spacing="4">
+      <TextBlock
+          Foreground="{DynamicResource Brush.Warning}"
+          IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+          Text="{Binding ErrorMessage}" />
+      <TextBlock
+          Foreground="{DynamicResource Brush.Text.Secondary}"
+          Text="{Binding SelectedSession.EndedMessage}" />
+    </StackPanel>
+  </Grid>
+</UserControl>

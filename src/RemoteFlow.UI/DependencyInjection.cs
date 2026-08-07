@@ -6,6 +6,7 @@ using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels;
 using RemoteFlow.UI.ViewModels.Connections;
 using RemoteFlow.UI.ViewModels.CommandPalette;
+using RemoteFlow.UI.ViewModels.Terminal;
 using RemoteFlow.UI.Views;
 
 namespace RemoteFlow.UI;

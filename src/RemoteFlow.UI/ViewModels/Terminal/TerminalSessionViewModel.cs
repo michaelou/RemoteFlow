@@ -12,6 +12,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     private readonly IUiDispatcher _dispatcher;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Utf8StreamDecoder _decoder = new();
+    private readonly OscTitleParser _titleParser = new();
     private readonly Task _readTask;
     private readonly Task _exitTask;
     private int _disposeStarted;
@@ -19,7 +20,10 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     public TerminalSessionViewModel(
         ITerminalChannel channel,
         IUiDispatcher dispatcher,
-        TerminalControlModel? model = null)
+        TerminalControlModel? model = null,
+        string initialTitle = "Local shell",
+        EnvironmentKind environment = EnvironmentKind.Unspecified,
+        string? colorOverrideHex = null)
     {
         _channel = channel ?? throw new ArgumentNullException(nameof(channel));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
@@ -32,6 +36,9 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
             TermName = "xterm-256color",
         });
         Model.UserInput += OnUserInput;
+        Title = string.IsNullOrWhiteSpace(initialTitle) ? "Terminal" : initialTitle.Trim();
+        Environment = environment;
+        AccentColorHex = ResolveAccentColor(environment, colorOverrideHex);
         State = SessionState.Connected;
         _readTask = ReadOutputAsync(_lifetime.Token);
         _exitTask = ObserveExitAsync();
@@ -42,11 +49,60 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     public Task Completion { get; }
 
+    public int? ProcessId => (_channel as IPtySession)?.ProcessId;
+
+    public EnvironmentKind Environment { get; }
+
+    public string AccentColorHex { get; }
+
+    public string TabBackgroundHex => IsActive ? $"#33{AccentColorHex[1..]}" : "#121821";
+
+    public string ChromeTintHex => IsActive ? $"#1F{AccentColorHex[1..]}" : "#101418";
+
+    public string EnvironmentCue => Environment switch
+    {
+        EnvironmentKind.Development => "DEV",
+        EnvironmentKind.Staging => "STG",
+        EnvironmentKind.Production => "PROD !",
+        EnvironmentKind.Unspecified => "LOCAL",
+        _ => throw new ArgumentOutOfRangeException(nameof(Environment)),
+    };
+
+    public bool IsProduction => Environment == EnvironmentKind.Production;
+
+    public bool IsLive => State is SessionState.Created or SessionState.Connecting or
+        SessionState.Connected or SessionState.Reconnecting;
+
+    public bool IsEnded => !IsLive;
+
+    [ObservableProperty]
+    public partial string Title { get; private set; }
+
+    [ObservableProperty]
+    public partial string? UserTitleOverride { get; private set; }
+
+    [ObservableProperty]
+    public partial bool IsActive { get; internal set; }
+
     [ObservableProperty]
     public partial SessionState State { get; private set; } = SessionState.Created;
 
     [ObservableProperty]
     public partial string? EndedMessage { get; private set; }
+
+    public void SetTitleOverride(string? title)
+    {
+        UserTitleOverride = string.IsNullOrWhiteSpace(title) ? null : title.Trim();
+        if (UserTitleOverride is not null)
+        {
+            Title = UserTitleOverride;
+        }
+    }
+
+    internal void SetActive(bool isActive)
+    {
+        IsActive = isActive;
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -80,7 +136,15 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
                     var text = _decoder.Decode(result.Buffer, flush: result.IsCompleted);
                     if (text.Length > 0)
                     {
-                        await _dispatcher.InvokeAsync(() => Model.Feed(text), cancellationToken).ConfigureAwait(false);
+                        var reportedTitles = _titleParser.Process(text);
+                        await _dispatcher.InvokeAsync(() =>
+                        {
+                            Model.Feed(text);
+                            if (UserTitleOverride is null && reportedTitles.Count > 0)
+                            {
+                                Title = reportedTitles[^1];
+                            }
+                        }, cancellationToken).ConfigureAwait(false);
                     }
                 }
                 finally
@@ -171,5 +235,32 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         }
 
         return _dispatcher.InvokeAsync(UpdateFailedState);
+    }
+
+    partial void OnStateChanged(SessionState value)
+    {
+        OnPropertyChanged(nameof(IsLive));
+        OnPropertyChanged(nameof(IsEnded));
+    }
+
+    partial void OnIsActiveChanged(bool value)
+    {
+        OnPropertyChanged(nameof(TabBackgroundHex));
+        OnPropertyChanged(nameof(ChromeTintHex));
+    }
+
+    private static string ResolveAccentColor(EnvironmentKind environment, string? colorOverrideHex)
+    {
+        return !string.IsNullOrWhiteSpace(colorOverrideHex) &&
+            System.Text.RegularExpressions.Regex.IsMatch(colorOverrideHex, "^#[0-9A-Fa-f]{6}$")
+            ? colorOverrideHex.ToUpperInvariant()
+            : environment switch
+            {
+                EnvironmentKind.Development => "#5DE28C",
+                EnvironmentKind.Staging => "#FFCA58",
+                EnvironmentKind.Production => "#FF7B72",
+                EnvironmentKind.Unspecified => "#7E8998",
+                _ => throw new ArgumentOutOfRangeException(nameof(environment)),
+            };
     }
 }

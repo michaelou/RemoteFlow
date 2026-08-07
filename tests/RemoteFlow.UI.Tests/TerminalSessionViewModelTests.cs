@@ -5,7 +5,6 @@ using Avalonia.Headless.XUnit;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
-using RemoteFlow.UI.ViewModels;
 using RemoteFlow.UI.ViewModels.Terminal;
 using Xunit;
 

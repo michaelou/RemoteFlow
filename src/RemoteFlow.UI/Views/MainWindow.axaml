@@ -7,6 +7,7 @@
     xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
     xmlns:paletteViews="using:RemoteFlow.UI.Views.CommandPalette"
     xmlns:terminalViews="using:RemoteFlow.UI.Views.Terminal"
+    xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels"
     Title="RemoteFlow"
     Width="1200"
@@ -18,8 +19,8 @@
     <DataTemplate DataType="{x:Type connectionViewModels:ConnectionsPageViewModel}" x:DataType="connectionViewModels:ConnectionsPageViewModel">
       <connectionViews:ConnectionsView />
     </DataTemplate>
-    <DataTemplate DataType="{x:Type viewModels:TerminalsPageViewModel}" x:DataType="viewModels:TerminalsPageViewModel">
-      <terminalViews:TerminalView />
+    <DataTemplate DataType="{x:Type terminalViewModels:TerminalsPageViewModel}" x:DataType="terminalViewModels:TerminalsPageViewModel">
+      <terminalViews:TerminalWorkspace />
     </DataTemplate>
     <DataTemplate DataType="{x:Type viewModels:PageViewModel}" x:DataType="viewModels:PageViewModel">
       <Grid Margin="32" RowDefinitions="Auto,Auto,*">

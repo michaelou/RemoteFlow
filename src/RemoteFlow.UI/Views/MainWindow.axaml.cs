@@ -17,6 +17,8 @@ public sealed partial class MainWindow : Window
     private readonly WindowGeometryService _geometryService;
     private WindowGeometry _normalGeometry = WindowGeometry.Default;
     private bool _initialized;
+    private bool _terminalCloseApproved;
+    private bool _terminalCloseCheckRunning;
     private bool _restoringNavigationSelection;
     private IInputElement? _focusBeforePalette;
 
@@ -36,6 +38,7 @@ public sealed partial class MainWindow : Window
         PositionChanged += OnPositionChanged;
         Resized += OnResized;
         Closed += OnClosed;
+        Closing += OnClosing;
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
     }
 
@@ -84,6 +87,35 @@ public sealed partial class MainWindow : Window
 
         var geometry = _normalGeometry with { IsMaximized = WindowState == WindowState.Maximized };
         _geometryService.SaveAsync(geometry).GetAwaiter().GetResult();
+    }
+
+    private async void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (_terminalCloseApproved || _viewModel.Terminals is null)
+        {
+            return;
+        }
+
+        if (_terminalCloseCheckRunning)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        e.Cancel = true;
+        _terminalCloseCheckRunning = true;
+        try
+        {
+            if (await _viewModel.Terminals.RequestCloseAllAsync().ConfigureAwait(true))
+            {
+                _terminalCloseApproved = true;
+                Close();
+            }
+        }
+        finally
+        {
+            _terminalCloseCheckRunning = false;
+        }
     }
 
     private async void NavigationList_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
