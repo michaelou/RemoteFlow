@@ -6,6 +6,7 @@
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
     xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
     xmlns:paletteViews="using:RemoteFlow.UI.Views.CommandPalette"
+    xmlns:settingsViews="using:RemoteFlow.UI.Views.Settings"
     xmlns:terminalViews="using:RemoteFlow.UI.Views.Terminal"
     xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels"
@@ -21,6 +22,9 @@
     </DataTemplate>
     <DataTemplate DataType="{x:Type terminalViewModels:TerminalsPageViewModel}" x:DataType="terminalViewModels:TerminalsPageViewModel">
       <terminalViews:TerminalWorkspace />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type viewModels:SettingsPageViewModel}" x:DataType="viewModels:SettingsPageViewModel">
+      <settingsViews:TerminalSettings DataContext="{Binding Terminal}" />
     </DataTemplate>
     <DataTemplate DataType="{x:Type viewModels:PageViewModel}" x:DataType="viewModels:PageViewModel">
       <Grid Margin="32" RowDefinitions="Auto,Auto,*">

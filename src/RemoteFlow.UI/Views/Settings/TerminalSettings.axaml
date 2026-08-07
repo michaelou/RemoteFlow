@@ -1,0 +1,83 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Settings.TerminalSettings"
+    x:DataType="settingsViewModels:TerminalSettingsViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings"
+    xmlns:terminal="using:SvcSystems.UI.Terminal">
+  <ScrollViewer>
+    <Grid Margin="28" RowDefinitions="Auto,Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
+      <StackPanel Spacing="5">
+        <TextBlock FontSize="28" FontWeight="SemiBold" Text="Terminal appearance" />
+        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Configure every embedded terminal with a live preview." />
+      </StackPanel>
+
+      <Grid Grid.Row="1" Margin="0,24,0,0" ColumnDefinitions="360,24,600" RowDefinitions="Auto">
+        <StackPanel Spacing="14">
+          <StackPanel Spacing="5">
+            <TextBlock FontWeight="SemiBold" Text="Monospace font" />
+            <ComboBox ItemsSource="{Binding FontFamilies}" SelectedItem="{Binding SelectedFontFamily}" />
+          </StackPanel>
+
+          <Grid ColumnDefinitions="*,16,*">
+            <StackPanel Spacing="5">
+              <TextBlock FontWeight="SemiBold" Text="Font size" />
+              <NumericUpDown Minimum="6" Maximum="72" Value="{Binding FontSize}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="5">
+              <TextBlock FontWeight="SemiBold" Text="Scrollback lines" />
+              <NumericUpDown Minimum="0" Maximum="100000" Increment="1000" Value="{Binding Scrollback}" />
+            </StackPanel>
+          </Grid>
+
+          <StackPanel Spacing="5">
+            <TextBlock FontWeight="SemiBold" Text="Colour scheme" />
+            <ComboBox ItemsSource="{Binding ColorSchemes}" SelectedItem="{Binding SelectedColorScheme}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="settingsViewModels:TerminalColorScheme">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Border Width="18" Height="18" CornerRadius="3" Background="{Binding Background}" BorderBrush="{Binding Foreground}" BorderThickness="1" />
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </StackPanel>
+
+          <Grid ColumnDefinitions="*,16,*">
+            <StackPanel Spacing="5">
+              <TextBlock FontWeight="SemiBold" Text="Cursor style" />
+              <ComboBox ItemsSource="{Binding CursorStyles}" SelectedItem="{Binding CursorStyle}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="5">
+              <TextBlock FontWeight="SemiBold" Text="Bell" />
+              <ComboBox ItemsSource="{Binding BellModes}" SelectedItem="{Binding BellMode}" />
+            </StackPanel>
+          </Grid>
+
+          <CheckBox Content="Blink cursor" IsChecked="{Binding CursorBlink}" />
+          <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding ApplyNote}" TextWrapping="Wrap" />
+          <TextBlock Foreground="{DynamicResource Brush.Danger}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Spacing="8">
+          <TextBlock FontWeight="SemiBold" Text="Live preview" />
+          <Border
+              Background="{Binding PreviewBackground}"
+              BorderBrush="{DynamicResource Brush.Border}"
+              BorderThickness="1"
+              CornerRadius="8"
+              Height="330"
+              Padding="8">
+            <terminal:TerminalControl
+                Background="{Binding PreviewBackground}"
+                FontFamily="{Binding SelectedFontFamily}"
+                FontSize="{Binding FontSize}"
+                IsHitTestVisible="False"
+                Model="{Binding PreviewModel}" />
+          </Border>
+        </StackPanel>
+      </Grid>
+    </Grid>
+  </ScrollViewer>
+</UserControl>

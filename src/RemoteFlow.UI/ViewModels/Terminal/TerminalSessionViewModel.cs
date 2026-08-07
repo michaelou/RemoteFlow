@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
+using RemoteFlow.UI.ViewModels.Settings;
 using SvcSystems.UI.Terminal;
 using System.Diagnostics;
 
@@ -62,6 +63,18 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     public int? ProcessId => (_channel as IPtySession)?.ProcessId;
 
     public long DroppedOutputBytes => Interlocked.Read(ref _droppedOutputBytes);
+
+    [ObservableProperty]
+    public partial string FontFamilyName { get; private set; } = OperatingSystem.IsWindows() ? "Cascadia Mono" : "DejaVu Sans Mono";
+
+    [ObservableProperty]
+    public partial double TerminalFontSize { get; private set; } = 13;
+
+    [ObservableProperty]
+    public partial string TerminalBackground { get; private set; } = TerminalColorSchemes.Dark.Background;
+
+    [ObservableProperty]
+    public partial string TerminalForeground { get; private set; } = TerminalColorSchemes.Dark.Foreground;
 
     public EnvironmentKind Environment { get; }
 
@@ -159,6 +172,33 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         _ = DebounceResizeAsync(columns, rows, pending);
     }
 
+    public void ApplyAppearance(TerminalAppearanceSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        FontFamilyName = settings.FontFamily;
+        TerminalFontSize = settings.FontSize;
+        TerminalBackground = settings.ColorScheme.Background;
+        TerminalForeground = settings.ColorScheme.Foreground;
+
+        var terminal = Model.Terminal;
+        terminal.Options.Scrollback = settings.Scrollback;
+        var engine = terminal.Engine;
+        engine.Options.FontFamily = settings.FontFamily;
+        engine.Options.FontSize = settings.FontSize;
+        engine.Options.Scrollback = settings.Scrollback;
+        engine.Options.Theme = settings.ColorScheme.ToThemeOptions();
+        engine.Options.BellStyle = settings.BellMode switch
+        {
+            TerminalBellMode.None => XTerm.Options.BellStyle.None,
+            TerminalBellMode.Audible => XTerm.Options.BellStyle.Sound,
+            TerminalBellMode.Visual => XTerm.Options.BellStyle.Visual,
+            _ => throw new ArgumentOutOfRangeException(nameof(settings)),
+        };
+        terminal.Buffer.Lines.Resize(Math.Max(terminal.Rows, terminal.Rows + settings.Scrollback));
+        engine.SetCursorStyle(TerminalSettingsViewModel.ToXTermCursorStyle(settings.CursorStyle), settings.CursorBlink);
+        Model.FullBufferUpdate();
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
@@ -201,7 +241,10 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
                     var droppedThisFrame = 0L;
                     if (buffer.Length > MaximumPendingOutputBytes)
                     {
-                        droppedThisFrame = buffer.Length - MaximumPendingOutputBytes;
+                        // Once the bounded backlog is exceeded, keeping the full cap would still
+                        // force dozens of expensive terminal parses. Preserve only the newest UI
+                        // frame so input and Ctrl+C remain responsive during an unbounded producer.
+                        droppedThisFrame = buffer.Length - MaximumBytesPerFrame;
                         consumed = buffer.GetPosition(droppedThisFrame);
                         buffer = buffer.Slice(consumed);
                         _ = Interlocked.Add(ref _droppedOutputBytes, droppedThisFrame);

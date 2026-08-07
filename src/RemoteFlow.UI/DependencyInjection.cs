@@ -7,6 +7,7 @@ using RemoteFlow.UI.ViewModels;
 using RemoteFlow.UI.ViewModels.Connections;
 using RemoteFlow.UI.ViewModels.CommandPalette;
 using RemoteFlow.UI.ViewModels.Terminal;
+using RemoteFlow.UI.ViewModels.Settings;
 using RemoteFlow.UI.Views;
 
 namespace RemoteFlow.UI;
@@ -23,6 +24,7 @@ public static class DependencyInjection
         services.TryAddSingleton<TerminalsPageViewModel>();
         services.TryAddSingleton<IUiDispatcher, UiDispatcher>();
         services.TryAddSingleton<TransfersPageViewModel>();
+        services.TryAddSingleton<TerminalSettingsViewModel>();
         services.TryAddSingleton<SettingsPageViewModel>();
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "connections",

@@ -1,6 +1,7 @@
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Services;
 using RemoteFlow.UI.Services;
+using RemoteFlow.UI.ViewModels.Settings;
 
 namespace RemoteFlow.UI.ViewModels.Terminal;
 
@@ -32,6 +33,18 @@ public sealed class TerminalsPageViewModel : TerminalWorkspaceViewModel
         KeymapService keymap,
         TerminalClipboardController clipboardController)
         : base(ptyService, dispatcher, settings, confirmation, keymap, clipboardController)
+    {
+    }
+
+    public TerminalsPageViewModel(
+        IPtyService ptyService,
+        IUiDispatcher dispatcher,
+        ISettingsStore settings,
+        IConfirmationDialogService confirmation,
+        KeymapService keymap,
+        TerminalClipboardController clipboardController,
+        TerminalSettingsViewModel terminalSettings)
+        : base(ptyService, dispatcher, settings, confirmation, keymap, clipboardController, terminalSettings)
     {
     }
 }

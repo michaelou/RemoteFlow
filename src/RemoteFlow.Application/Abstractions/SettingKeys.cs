@@ -79,6 +79,7 @@ public static class SettingKeys
     public static SettingKey<int> TerminalScrollback { get; } = new("TerminalScrollback", 10_000);
     public static SettingKey<string?> TerminalColorScheme { get; } = new("TerminalColorScheme", null);
     public static SettingKey<TerminalCursorStyle> CursorStyle { get; } = new("CursorStyle", TerminalCursorStyle.Block);
+    public static SettingKey<bool> CursorBlink { get; } = new("CursorBlink", true);
     public static SettingKey<TerminalBellMode> BellMode { get; } = new("BellMode", TerminalBellMode.None);
     public static SettingKey<bool> ReflowOnResize { get; } = new("ReflowOnResize", false);
     public static SettingKey<bool> CopyOnSelect { get; } = new("CopyOnSelect", false);
@@ -112,6 +113,7 @@ public static class SettingKeys
         TerminalScrollback,
         TerminalColorScheme,
         CursorStyle,
+        CursorBlink,
         BellMode,
         ReflowOnResize,
         CopyOnSelect,

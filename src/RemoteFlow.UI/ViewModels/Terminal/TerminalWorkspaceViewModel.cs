@@ -3,6 +3,7 @@ using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Services;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
+using RemoteFlow.UI.ViewModels.Settings;
 
 namespace RemoteFlow.UI.ViewModels.Terminal;
 
@@ -12,6 +13,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     private readonly IUiDispatcher? _dispatcher;
     private readonly ISettingsStore? _settings;
     private readonly IConfirmationDialogService? _confirmation;
+    private readonly TerminalSettingsViewModel? _terminalSettings;
     private int _startingCount;
     private int _disposeStarted;
 
@@ -32,6 +34,18 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         IConfirmationDialogService? confirmation,
         KeymapService? keymap,
         TerminalClipboardController? clipboardController)
+        : this(ptyService, dispatcher, settings, confirmation, keymap, clipboardController, null)
+    {
+    }
+
+    public TerminalWorkspaceViewModel(
+        IPtyService ptyService,
+        IUiDispatcher dispatcher,
+        ISettingsStore? settings,
+        IConfirmationDialogService? confirmation,
+        KeymapService? keymap,
+        TerminalClipboardController? clipboardController,
+        TerminalSettingsViewModel? terminalSettings)
         : base("Terminals")
     {
         _ptyService = ptyService ?? throw new ArgumentNullException(nameof(ptyService));
@@ -40,6 +54,11 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         _confirmation = confirmation;
         Keymap = keymap ?? new KeymapService();
         ClipboardController = clipboardController;
+        _terminalSettings = terminalSettings;
+        if (_terminalSettings is { } activeSettings)
+        {
+            activeSettings.SettingsChanged += OnTerminalSettingsChanged;
+        }
     }
 
     public ObservableCollection<TerminalSessionViewModel> Sessions { get; } = [];
@@ -94,6 +113,11 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         SetError(null);
         try
         {
+            if (_terminalSettings is not null)
+            {
+                await _terminalSettings.InitializeAsync(cancellationToken).ConfigureAwait(true);
+            }
+
             var channel = await _ptyService.SpawnAsync(options, cancellationToken).ConfigureAwait(true);
             var session = new TerminalSessionViewModel(
                 channel,
@@ -101,6 +125,10 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
                 initialTitle: title,
                 environment: environment,
                 colorOverrideHex: colorOverrideHex);
+            if (_terminalSettings is not null)
+            {
+                session.ApplyAppearance(_terminalSettings.Current);
+            }
             Sessions.Add(session);
             ClipboardController?.Attach(session, SetError);
             SelectSession(session);
@@ -245,6 +273,10 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         }
 
         await DisposeSessionsAsync().ConfigureAwait(false);
+        if (_terminalSettings is { } terminalSettings)
+        {
+            terminalSettings.SettingsChanged -= OnTerminalSettingsChanged;
+        }
         GC.SuppressFinalize(this);
     }
 
@@ -321,5 +353,18 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     private static void SetActive(TerminalSessionViewModel? session, bool isActive)
     {
         session?.SetActive(isActive);
+    }
+
+    private void OnTerminalSettingsChanged(object? sender, EventArgs e)
+    {
+        if (_terminalSettings is null)
+        {
+            return;
+        }
+
+        foreach (var session in Sessions)
+        {
+            session.ApplyAppearance(_terminalSettings.Current);
+        }
     }
 }

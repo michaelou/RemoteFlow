@@ -12,4 +12,7 @@ public partial class PageViewModel(string title) : ObservableObject
 
 public sealed class TransfersPageViewModel() : PageViewModel("Transfers");
 
-public sealed class SettingsPageViewModel() : PageViewModel("Settings");
+public sealed class SettingsPageViewModel(Settings.TerminalSettingsViewModel? terminal = null) : PageViewModel("Settings")
+{
+    public Settings.TerminalSettingsViewModel? Terminal { get; } = terminal;
+}

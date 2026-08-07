@@ -82,8 +82,9 @@
         <ContentControl.DataTemplates>
           <DataTemplate x:DataType="terminalViewModels:TerminalSessionViewModel">
             <terminal:TerminalControl
-                FontFamily="Cascadia Mono, DejaVu Sans Mono, monospace"
-                FontSize="13"
+                Background="{Binding TerminalBackground}"
+                FontFamily="{Binding FontFamilyName}"
+                FontSize="{Binding TerminalFontSize}"
                 Model="{Binding Model}"
                 RightClickAction="None" />
           </DataTemplate>
