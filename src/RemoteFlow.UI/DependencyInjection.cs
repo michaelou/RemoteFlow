@@ -47,6 +47,9 @@ public static class DependencyInjection
         services.TryAddSingleton<WindowGeometryService>();
         services.TryAddSingleton<MainWindow>();
         services.TryAddSingleton<IErrorDialogService, ErrorDialogService>();
+        services.TryAddSingleton<IClipboardService, AvaloniaClipboardService>();
+        services.TryAddSingleton<IPasteWarningService, PasteWarningDialogService>();
+        services.TryAddSingleton<TerminalClipboardController>();
         services.TryAddSingleton<IConfirmationDialogService, ConfirmationDialogService>();
         services.TryAddSingleton<IConnectionSessionOpener, DeferredConnectionSessionOpener>();
         services.TryAddSingleton<IThemeService>(provider => new ThemeService(

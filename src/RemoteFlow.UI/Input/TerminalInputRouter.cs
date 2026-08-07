@@ -17,10 +17,13 @@ public sealed class TerminalInputRouter(KeymapService keymap)
         ArgumentNullException.ThrowIfNull(toggleFullscreen);
         var stroke = TerminalKeyEventAdapter.FromAvalonia(args);
         var selected = workspace.SelectedSession;
+        var ctrlCPolicy = await workspace.GetCtrlCPolicyAsync(cancellationToken).ConfigureAwait(true);
         var result = keymap.Resolve(
             stroke,
             OperatingSystem.IsMacOS() ? KeymapPlatform.MacOs : KeymapPlatform.WindowsLinux,
-            selected?.ApplicationCursorKeys ?? false);
+            selected?.ApplicationCursorKeys ?? false,
+            ctrlCPolicy,
+            selected?.Model.HasSelection ?? false);
         if (result.Kind == KeymapResultKind.PtyBytes)
         {
             if (selected is not null)
@@ -69,8 +72,26 @@ public sealed class TerminalInputRouter(KeymapService keymap)
                 toggleFullscreen();
                 break;
             case KeymapCommand.Copy:
+                if (selected is not null && workspace.ClipboardController is { } copyController)
+                {
+                    var copyResult = await copyController.CopyAsync(
+                        selected,
+                        clearSelection: true,
+                        cancellationToken).ConfigureAwait(true);
+                    workspace.ReportError(copyResult.ErrorMessage);
+                }
+
+                break;
             case KeymapCommand.Paste:
+                if (selected is not null && workspace.ClipboardController is { } pasteController)
+                {
+                    var pasteResult = await pasteController.PasteAsync(selected, cancellationToken).ConfigureAwait(true);
+                    workspace.ReportError(pasteResult.ErrorMessage);
+                }
+
+                break;
             case KeymapCommand.SelectAll:
+                selected?.Model.SelectAll();
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(args));

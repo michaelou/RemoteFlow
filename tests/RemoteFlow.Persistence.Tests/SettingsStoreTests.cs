@@ -26,7 +26,8 @@ public sealed class SettingsStoreTests
 
         Assert.Equal("registered default", await store.Get(unknown, cancellationToken));
         Assert.Equal(AppTheme.Dark, await store.Get(SettingKeys.Theme, cancellationToken));
-        Assert.Equal(25, SettingKeys.All.Count);
+        Assert.False(await store.Get(SettingKeys.SuppressPasteWarning, cancellationToken));
+        Assert.Equal(26, SettingKeys.All.Count);
         await using var context = await database.Factory.CreateDbContextAsync(cancellationToken);
         Assert.Equal(SettingKeys.All.Count, await context.Settings.CountAsync(cancellationToken));
     }

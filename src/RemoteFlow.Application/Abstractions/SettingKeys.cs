@@ -82,6 +82,7 @@ public static class SettingKeys
     public static SettingKey<TerminalBellMode> BellMode { get; } = new("BellMode", TerminalBellMode.None);
     public static SettingKey<bool> ReflowOnResize { get; } = new("ReflowOnResize", false);
     public static SettingKey<bool> CopyOnSelect { get; } = new("CopyOnSelect", false);
+    public static SettingKey<bool> SuppressPasteWarning { get; } = new("SuppressPasteWarning", false);
     public static SettingKey<CtrlCPolicy> CtrlCPolicy { get; } =
         new("CtrlCPolicy", global::RemoteFlow.Application.Abstractions.CtrlCPolicy.SigintAlways);
     public static SettingKey<string> KeymapProfile { get; } = new("KeymapProfile", "auto");
@@ -114,6 +115,7 @@ public static class SettingKeys
         BellMode,
         ReflowOnResize,
         CopyOnSelect,
+        SuppressPasteWarning,
         CtrlCPolicy,
         KeymapProfile,
         ConfirmCloseActiveSession,

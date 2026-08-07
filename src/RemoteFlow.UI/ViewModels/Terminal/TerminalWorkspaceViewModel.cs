@@ -21,7 +21,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     }
 
     public TerminalWorkspaceViewModel(IPtyService ptyService, IUiDispatcher dispatcher)
-        : this(ptyService, dispatcher, null, null, null)
+        : this(ptyService, dispatcher, null, null, null, null)
     {
     }
 
@@ -30,7 +30,8 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         IUiDispatcher dispatcher,
         ISettingsStore? settings,
         IConfirmationDialogService? confirmation,
-        KeymapService? keymap)
+        KeymapService? keymap,
+        TerminalClipboardController? clipboardController)
         : base("Terminals")
     {
         _ptyService = ptyService ?? throw new ArgumentNullException(nameof(ptyService));
@@ -38,11 +39,14 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         _settings = settings;
         _confirmation = confirmation;
         Keymap = keymap ?? new KeymapService();
+        ClipboardController = clipboardController;
     }
 
     public ObservableCollection<TerminalSessionViewModel> Sessions { get; } = [];
 
     public KeymapService Keymap { get; } = new();
+
+    public TerminalClipboardController? ClipboardController { get; }
 
     public TerminalSessionViewModel? SelectedSession { get; private set; }
 
@@ -98,6 +102,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
                 environment: environment,
                 colorOverrideHex: colorOverrideHex);
             Sessions.Add(session);
+            ClipboardController?.Attach(session, SetError);
             SelectSession(session);
             return session;
         }
@@ -201,6 +206,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         }
 
         var wasSelected = ReferenceEquals(SelectedSession, session);
+        ClipboardController?.Detach(session);
         Sessions.RemoveAt(index);
         if (wasSelected)
         {
@@ -280,6 +286,11 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     private async Task DisposeSessionsAsync()
     {
         var sessions = Sessions.ToArray();
+        foreach (var session in sessions)
+        {
+            ClipboardController?.Detach(session);
+        }
+
         Sessions.Clear();
         SelectSession(null);
         await Task.WhenAll(sessions.Select(session => session.DisposeAsync().AsTask())).ConfigureAwait(false);
@@ -294,6 +305,17 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
 
         ErrorMessage = message;
         OnPropertyChanged(nameof(ErrorMessage));
+    }
+
+    public void ReportError(string? message)
+    {
+        SetError(message);
+    }
+
+    public Task<CtrlCPolicy> GetCtrlCPolicyAsync(CancellationToken cancellationToken = default)
+    {
+        return _settings?.Get(SettingKeys.CtrlCPolicy, cancellationToken) ??
+            Task.FromResult(CtrlCPolicy.SigintAlways);
     }
 
     private static void SetActive(TerminalSessionViewModel? session, bool isActive)

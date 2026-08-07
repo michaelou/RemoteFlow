@@ -20,7 +20,7 @@ public sealed class TerminalsPageViewModel : TerminalWorkspaceViewModel
         IUiDispatcher dispatcher,
         ISettingsStore settings,
         IConfirmationDialogService confirmation)
-        : base(ptyService, dispatcher, settings, confirmation, null)
+        : base(ptyService, dispatcher, settings, confirmation, null, null)
     {
     }
 
@@ -29,8 +29,9 @@ public sealed class TerminalsPageViewModel : TerminalWorkspaceViewModel
         IUiDispatcher dispatcher,
         ISettingsStore settings,
         IConfirmationDialogService confirmation,
-        KeymapService keymap)
-        : base(ptyService, dispatcher, settings, confirmation, keymap)
+        KeymapService keymap,
+        TerminalClipboardController clipboardController)
+        : base(ptyService, dispatcher, settings, confirmation, keymap, clipboardController)
     {
     }
 }
