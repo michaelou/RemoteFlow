@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Services;
 using RemoteFlow.Domain.Abstractions;
 
 namespace RemoteFlow.Application;
@@ -12,6 +13,8 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton<IClock>(SystemClock.Instance);
         services.TryAddSingleton<IGuidProvider>(SystemGuidProvider.Instance);
+        services.TryAddSingleton<IConnectionService, ConnectionService>();
+        services.TryAddSingleton<ITagService, TagService>();
         return services;
     }
 }

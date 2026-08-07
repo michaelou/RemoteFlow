@@ -8,6 +8,16 @@ public sealed record RemoteFlowError(RemoteFlowErrorKind Kind, string Code, stri
     {
         return new(RemoteFlowErrorKind.Validation, code, message);
     }
+
+    public static RemoteFlowError NotFound(string code, string message)
+    {
+        return new(RemoteFlowErrorKind.NotFound, code, message);
+    }
+
+    public static RemoteFlowError Unavailable(string code, string message)
+    {
+        return new(RemoteFlowErrorKind.Unavailable, code, message);
+    }
 }
 
 public sealed class Result<T>

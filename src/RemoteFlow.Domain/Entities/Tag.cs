@@ -41,4 +41,28 @@ public sealed class Tag
                 CreatedUtc = DomainValidation.Utc(createdUtc ?? DateTimeOffset.UtcNow),
             });
     }
+
+    public Result<Tag> Rename(string? name)
+    {
+        var normalizedName = DomainValidation.Required(name, 100, "tag.name", out var error);
+        if (error is not null)
+        {
+            return Result<Tag>.Failure(error);
+        }
+
+        Name = normalizedName!;
+        return Result<Tag>.Success(this);
+    }
+
+    public Result<Tag> SetColor(string? colorHex)
+    {
+        var normalizedColor = DomainValidation.ColorHex(colorHex, "tag.color", out var error);
+        if (error is not null)
+        {
+            return Result<Tag>.Failure(error);
+        }
+
+        ColorHex = normalizedColor;
+        return Result<Tag>.Success(this);
+    }
 }
