@@ -11,7 +11,8 @@ public sealed class ConnectionEditorViewModelFactory(
     IFolderRepository folders,
     ITagRepository tags,
     ITagService tagService,
-    IRecentConnectionStore recent)
+    IRecentConnectionStore recent,
+    ISystemTerminalLauncher? systemTerminalLauncher = null)
 {
     public async Task<ConnectionEditorViewModel> CreateEditorAsync(
         Guid? connectionId,
@@ -57,6 +58,9 @@ public sealed class ConnectionEditorViewModelFactory(
             open,
             edit,
             duplicate,
-            delete);
+            delete,
+            systemTerminalLauncher is null
+                ? null
+                : () => systemTerminalLauncher.OpenSshAsync(connection));
     }
 }

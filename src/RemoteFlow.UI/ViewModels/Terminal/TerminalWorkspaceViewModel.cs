@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Services;
 using RemoteFlow.Domain.Enums;
@@ -14,6 +15,8 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     private readonly ISettingsStore? _settings;
     private readonly IConfirmationDialogService? _confirmation;
     private readonly TerminalSettingsViewModel? _terminalSettings;
+    private readonly IShellProfileService? _shellProfileService;
+    private readonly ISystemTerminalLauncher? _systemTerminalLauncher;
     private int _startingCount;
     private int _disposeStarted;
 
@@ -46,6 +49,29 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         KeymapService? keymap,
         TerminalClipboardController? clipboardController,
         TerminalSettingsViewModel? terminalSettings)
+        : this(
+            ptyService,
+            dispatcher,
+            settings,
+            confirmation,
+            keymap,
+            clipboardController,
+            terminalSettings,
+            null,
+            null)
+    {
+    }
+
+    public TerminalWorkspaceViewModel(
+        IPtyService ptyService,
+        IUiDispatcher dispatcher,
+        ISettingsStore? settings,
+        IConfirmationDialogService? confirmation,
+        KeymapService? keymap,
+        TerminalClipboardController? clipboardController,
+        TerminalSettingsViewModel? terminalSettings,
+        IShellProfileService? shellProfileService,
+        ISystemTerminalLauncher? systemTerminalLauncher)
         : base("Terminals")
     {
         _ptyService = ptyService ?? throw new ArgumentNullException(nameof(ptyService));
@@ -55,6 +81,12 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         Keymap = keymap ?? new KeymapService();
         ClipboardController = clipboardController;
         _terminalSettings = terminalSettings;
+        _shellProfileService = shellProfileService;
+        _systemTerminalLauncher = systemTerminalLauncher;
+        if (_shellProfileService is { } activeProfileService)
+        {
+            activeProfileService.ProfilesChanged += OnShellProfilesChanged;
+        }
         if (_terminalSettings is { } activeSettings)
         {
             activeSettings.SettingsChanged += OnTerminalSettingsChanged;
@@ -62,6 +94,8 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     }
 
     public ObservableCollection<TerminalSessionViewModel> Sessions { get; } = [];
+
+    public ObservableCollection<ShellProfileMenuItemViewModel> ShellProfiles { get; } = [];
 
     public KeymapService Keymap { get; } = new();
 
@@ -77,6 +111,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        await LoadShellProfilesAsync(cancellationToken).ConfigureAwait(true);
         if (Sessions.Count == 0)
         {
             _ = await AddLocalSessionAsync(cancellationToken).ConfigureAwait(true);
@@ -86,12 +121,46 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     public async Task<TerminalSessionViewModel?> AddLocalSessionAsync(
         CancellationToken cancellationToken = default)
     {
+        if (_shellProfileService is not null)
+        {
+            var profile = await _shellProfileService.GetDefaultProfileAsync(cancellationToken).ConfigureAwait(true);
+            return await AddProfileSessionAsync(profile, cancellationToken).ConfigureAwait(true);
+        }
+
         return await AddSessionAsync(
             CreateDefaultShellOptions(),
             "Local shell",
             EnvironmentKind.Unspecified,
             colorOverrideHex: null,
-            cancellationToken).ConfigureAwait(true);
+            cancellationToken: cancellationToken).ConfigureAwait(true);
+    }
+
+    public Task<TerminalSessionViewModel?> AddProfileSessionAsync(
+        ShellProfile profile,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        try
+        {
+            var options = _shellProfileService?.CreateSpawnOptions(profile) ?? new PtySpawnOptions
+            {
+                ShellPath = profile.ShellPath,
+                Arguments = profile.Arguments,
+                WorkingDirectory = profile.WorkingDirectory,
+                EnvironmentVariables = profile.EnvironmentVariables,
+            };
+            return AddSessionAsync(
+                options,
+                profile.DisplayName,
+                EnvironmentKind.Unspecified,
+                colorOverrideHex: null,
+                profile,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            return Task.FromResult<TerminalSessionViewModel?>(AddFailedSession(profile, exception.Message));
+        }
     }
 
     public async Task<TerminalSessionViewModel?> AddSessionAsync(
@@ -99,6 +168,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         string title,
         EnvironmentKind environment,
         string? colorOverrideHex,
+        ShellProfile? shellProfile = null,
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposeStarted) != 0, this);
@@ -124,7 +194,8 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
                 _dispatcher,
                 initialTitle: title,
                 environment: environment,
-                colorOverrideHex: colorOverrideHex);
+                colorOverrideHex: colorOverrideHex,
+                shellProfile: shellProfile);
             if (_terminalSettings is not null)
             {
                 session.ApplyAppearance(_terminalSettings.Current);
@@ -140,8 +211,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         }
         catch (Exception exception)
         {
-            SetError($"The local shell could not be started: {exception.Message}");
-            return null;
+            return AddFailedSession(shellProfile, $"The local shell could not be started: {exception.Message}", title);
         }
         finally
         {
@@ -277,6 +347,10 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         {
             terminalSettings.SettingsChanged -= OnTerminalSettingsChanged;
         }
+        if (_shellProfileService is { } profileService)
+        {
+            profileService.ProfilesChanged -= OnShellProfilesChanged;
+        }
         GC.SuppressFinalize(this);
     }
 
@@ -344,6 +418,21 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         SetError(message);
     }
 
+    public async Task OpenInSystemTerminalAsync(
+        TerminalSessionViewModel session,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (_systemTerminalLauncher is null || session.ShellProfile is null)
+        {
+            SetError("This session does not have a local shell profile that can be opened in the system terminal.");
+            return;
+        }
+
+        var result = await _systemTerminalLauncher.OpenLocalAsync(session.ShellProfile, cancellationToken).ConfigureAwait(true);
+        SetError(result.ErrorMessage);
+    }
+
     public Task<CtrlCPolicy> GetCtrlCPolicyAsync(CancellationToken cancellationToken = default)
     {
         return _settings?.Get(SettingKeys.CtrlCPolicy, cancellationToken) ??
@@ -367,4 +456,83 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
             session.ApplyAppearance(_terminalSettings.Current);
         }
     }
+
+    private async Task LoadShellProfilesAsync(CancellationToken cancellationToken, bool force = false)
+    {
+        if (_shellProfileService is null || (!force && ShellProfiles.Count > 0))
+        {
+            return;
+        }
+
+        var profiles = await _shellProfileService.GetProfilesAsync(cancellationToken).ConfigureAwait(false);
+        void UpdateProfiles()
+        {
+            ShellProfiles.Clear();
+            foreach (var profile in profiles)
+            {
+                ShellProfiles.Add(new ShellProfileMenuItemViewModel(
+                    profile,
+                    () => AddProfileSessionAsync(profile, CancellationToken.None)));
+            }
+        }
+
+        if (_dispatcher is null)
+        {
+            UpdateProfiles();
+        }
+        else
+        {
+            await _dispatcher.InvokeAsync(UpdateProfiles, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async void OnShellProfilesChanged(object? sender, EventArgs e)
+    {
+        try
+        {
+            await LoadShellProfilesAsync(CancellationToken.None, force: true).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            SetError($"Shell profiles could not be refreshed: {exception.Message}");
+        }
+    }
+
+    private TerminalSessionViewModel AddFailedSession(
+        ShellProfile? profile,
+        string message,
+        string? title = null)
+    {
+        if (_dispatcher is null)
+        {
+            SetError(message);
+            return null!;
+        }
+
+        var failed = TerminalSessionViewModel.CreateFailed(
+            _dispatcher,
+            title ?? profile?.DisplayName ?? "Shell failed",
+            message,
+            profile);
+        Sessions.Add(failed);
+        SelectSession(failed);
+        SetError(null);
+        return failed;
+    }
+}
+
+public sealed class ShellProfileMenuItemViewModel(
+    ShellProfile profile,
+    Func<Task<TerminalSessionViewModel?>> open)
+{
+    public ShellProfile Profile { get; } = profile;
+
+    public string DisplayName => Profile.DisplayName;
+
+    public string Icon => Profile.Icon;
+
+    public IAsyncRelayCommand OpenCommand { get; } = new AsyncRelayCommand(async () =>
+    {
+        _ = await open().ConfigureAwait(true);
+    });
 }

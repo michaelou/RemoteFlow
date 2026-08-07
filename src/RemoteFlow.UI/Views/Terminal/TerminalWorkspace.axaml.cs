@@ -51,6 +51,15 @@ public sealed partial class TerminalWorkspace : UserControl
         }
     }
 
+    private async void OpenSystemTerminal_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: TerminalSessionViewModel session } &&
+            DataContext is TerminalsPageViewModel viewModel)
+        {
+            await viewModel.OpenInSystemTerminalAsync(session).ConfigureAwait(true);
+        }
+    }
+
     private async void Tab_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Control { DataContext: TerminalSessionViewModel session } control ||

@@ -17,6 +17,24 @@
             Click="AddTab_OnClick"
             Content="+ New terminal"
             IsEnabled="{Binding !IsStarting}" />
+        <Button Content="â–¾" ToolTip.Tip="New terminal with profile">
+          <Button.Flyout>
+            <Flyout Placement="BottomEdgeAlignedRight">
+              <ItemsControl ItemsSource="{Binding ShellProfiles}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="terminalViewModels:ShellProfileMenuItemViewModel">
+                    <Button Command="{Binding OpenCommand}" HorizontalContentAlignment="Left" MinWidth="220">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding Icon}" />
+                        <TextBlock Text="{Binding DisplayName}" />
+                      </StackPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Flyout>
+          </Button.Flyout>
+        </Button>
       </StackPanel>
     </Grid>
 
@@ -45,6 +63,11 @@
                   PointerMoved="Tab_OnPointerMoved"
                   PointerPressed="Tab_OnPointerPressed"
                   PointerReleased="Tab_OnPointerReleased">
+                <Border.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Click="OpenSystemTerminal_OnClick" Header="Open in system terminal" />
+                  </ContextMenu>
+                </Border.ContextMenu>
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="7">
                   <Border
                       Background="{Binding AccentColorHex}"

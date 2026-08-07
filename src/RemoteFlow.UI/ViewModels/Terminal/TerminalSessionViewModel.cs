@@ -1,11 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Services;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels.Settings;
 using SvcSystems.UI.Terminal;
 using System.Diagnostics;
+using System.IO.Pipelines;
 using System.Text.RegularExpressions;
 
 namespace RemoteFlow.UI.ViewModels.Terminal;
@@ -38,7 +40,8 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         TerminalControlModel? model = null,
         string initialTitle = "Local shell",
         EnvironmentKind environment = EnvironmentKind.Unspecified,
-        string? colorOverrideHex = null)
+        string? colorOverrideHex = null,
+        ShellProfile? shellProfile = null)
     {
         _channel = channel ?? throw new ArgumentNullException(nameof(channel));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
@@ -55,6 +58,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         Title = string.IsNullOrWhiteSpace(initialTitle) ? "Terminal" : initialTitle.Trim();
         Environment = environment;
         AccentColorHex = ResolveAccentColor(environment, colorOverrideHex);
+        ShellProfile = shellProfile;
         State = SessionState.Connected;
         _readTask = ReadOutputAsync(_lifetime.Token);
         _exitTask = ObserveExitAsync();
@@ -103,6 +107,8 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     public partial string? SearchError { get; private set; }
 
     public EnvironmentKind Environment { get; }
+
+    public ShellProfile? ShellProfile { get; }
 
     public string AccentColorHex { get; }
 
@@ -223,6 +229,25 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         terminal.Buffer.Lines.Resize(Math.Max(terminal.Rows, terminal.Rows + settings.Scrollback));
         engine.SetCursorStyle(TerminalSettingsViewModel.ToXTermCursorStyle(settings.CursorStyle), settings.CursorBlink);
         Model.FullBufferUpdate();
+    }
+
+    public static TerminalSessionViewModel CreateFailed(
+        IUiDispatcher dispatcher,
+        string title,
+        string message,
+        ShellProfile? shellProfile = null)
+    {
+        var viewModel = new TerminalSessionViewModel(
+            new UnavailableTerminalChannel(),
+            dispatcher,
+            initialTitle: title,
+            shellProfile: shellProfile)
+        {
+            State = SessionState.Failed,
+            EndedMessage = message,
+        };
+        viewModel.Model.Feed($"\r\n[RemoteFlow: {message}]\r\n");
+        return viewModel;
     }
 
     [RelayCommand]
@@ -634,4 +659,41 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     }
 
     private sealed record SearchNavigationMatch(int Line, string Text);
+
+    private sealed class UnavailableTerminalChannel : ITerminalChannel
+    {
+        private readonly Pipe _pipe = new();
+        private readonly TaskCompletionSource<int?> _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _disposed;
+
+        public PipeReader Output => _pipe.Reader;
+
+        public Task<int?> Exited => _exited.Task;
+
+        public event EventHandler<ChannelClosedEventArgs>? Closed;
+
+        public ValueTask WriteAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask ResizeAsync(int columns, int rows, CancellationToken cancellationToken = default)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            await _pipe.Writer.CompleteAsync().ConfigureAwait(false);
+            if (_exited.TrySetResult(null))
+            {
+                Closed?.Invoke(this, new ChannelClosedEventArgs(null, true));
+            }
+        }
+    }
 }

@@ -89,6 +89,8 @@ public static class SettingKeys
     public static SettingKey<string> KeymapProfile { get; } = new("KeymapProfile", "auto");
     public static SettingKey<bool> ConfirmCloseActiveSession { get; } = new("ConfirmCloseActiveSession", true);
     public static SettingKey<string?> DefaultShell { get; } = new("DefaultShell", null);
+    public static SettingKey<global::RemoteFlow.Application.Services.ShellProfile[]> ShellProfiles { get; } = new("ShellProfiles", []);
+    public static SettingKey<string?> DefaultShellProfileId { get; } = new("DefaultShellProfileId", null);
     public static SettingKey<string?> SystemTerminalCommand { get; } = new("SystemTerminalCommand", null);
     public static SettingKey<string?> SftpDownloadDir { get; } = new("SftpDownloadDir", null);
     public static SettingKey<string?> RemoteEditTempDir { get; } = new("RemoteEditTempDir", null);
@@ -122,6 +124,8 @@ public static class SettingKeys
         KeymapProfile,
         ConfirmCloseActiveSession,
         DefaultShell,
+        ShellProfiles,
+        DefaultShellProfileId,
         SystemTerminalCommand,
         SftpDownloadDir,
         RemoteEditTempDir,

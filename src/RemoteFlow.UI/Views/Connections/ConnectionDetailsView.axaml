@@ -12,10 +12,16 @@
           <Button Margin="0,0,8,8" Command="{Binding ConnectCommand}" Content="Connect" />
           <Button Margin="0,0,8,8" Command="{Binding OpenSftpCommand}" Content="Open SFTP" />
           <Button Margin="0,0,8,8" Command="{Binding LaunchRdpCommand}" Content="Launch RDP" />
+          <Button Margin="0,0,8,8" Command="{Binding OpenSystemTerminalCommand}" Content="Open in system terminal" />
           <Button Margin="0,0,8,8" Command="{Binding EditCommand}" Content="Edit" />
           <Button Margin="0,0,8,8" Command="{Binding DuplicateCommand}" Content="Duplicate" />
           <Button Margin="0,0,8,8" Command="{Binding DeleteCommand}" Content="Delete" />
         </WrapPanel>
+        <TextBlock
+            Foreground="{DynamicResource Brush.Warning}"
+            IsVisible="{Binding ExternalLaunchMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+            Text="{Binding ExternalLaunchMessage}"
+            TextWrapping="Wrap" />
         <Grid ColumnDefinitions="140,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
           <TextBlock FontWeight="SemiBold" Text="Host" /><TextBlock Grid.Column="1" Text="{Binding HostAndPort}" />
           <TextBlock Grid.Row="1" FontWeight="SemiBold" Text="Protocol" /><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Protocol}" />

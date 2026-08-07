@@ -19,4 +19,13 @@ public sealed partial class TerminalSettings : UserControl
             await viewModel.InitializeAsync().ConfigureAwait(true);
         }
     }
+
+    private void RemoveShellProfile_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: ShellProfileEditorViewModel profile } &&
+            DataContext is TerminalSettingsViewModel viewModel)
+        {
+            viewModel.RemoveShellProfileCommand.Execute(profile);
+        }
+    }
 }

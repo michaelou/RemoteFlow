@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.TryAddSingleton<ITagService, TagService>();
         services.TryAddSingleton<IFolderService, FolderService>();
         services.TryAddSingleton<KeymapService>();
+        services.TryAddSingleton<IShellProfileService, ShellProfileService>();
         return services;
     }
 }

@@ -1,11 +1,13 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Domain.Entities;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
 
 namespace RemoteFlow.UI.ViewModels.Connections;
 
-public sealed class ConnectionDetailsViewModel(
+public sealed partial class ConnectionDetailsViewModel(
     Connection connection,
     string folderPath,
     IReadOnlyList<string> tags,
@@ -13,7 +15,8 @@ public sealed class ConnectionDetailsViewModel(
     Func<ConnectionOpenMode, Task> open,
     Func<Task> edit,
     Func<Task> duplicate,
-    Func<Task> delete)
+    Func<Task> delete,
+    Func<Task<SystemTerminalLaunchResult>>? openSystemTerminal = null) : ObservableObject
 {
     public Connection Connection { get; } = connection;
 
@@ -51,4 +54,24 @@ public sealed class ConnectionDetailsViewModel(
     public IAsyncRelayCommand DuplicateCommand { get; } = new AsyncRelayCommand(duplicate);
 
     public IAsyncRelayCommand DeleteCommand { get; } = new AsyncRelayCommand(delete);
+
+    [ObservableProperty]
+    public partial string? ExternalLaunchMessage { get; private set; }
+
+    [RelayCommand(CanExecute = nameof(CanOpenSystemTerminal))]
+    private async Task OpenSystemTerminalAsync()
+    {
+        if (openSystemTerminal is null)
+        {
+            return;
+        }
+
+        var result = await openSystemTerminal().ConfigureAwait(true);
+        ExternalLaunchMessage = result.ErrorMessage;
+    }
+
+    private bool CanOpenSystemTerminal()
+    {
+        return openSystemTerminal is not null && Connection.Protocol is ProtocolType.Ssh or ProtocolType.Sftp;
+    }
 }

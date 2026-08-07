@@ -22,6 +22,9 @@ public static class DependencyInjection
         services.TryAddSingleton<IAppPaths>(appPaths);
         services.TryAddSingleton<ISecureRandom, SecureRandom>();
         services.TryAddSingleton<IPtyService, PortaPtyService>();
+        services.TryAddSingleton<ISystemPlatform, SystemPlatform>();
+        services.TryAddSingleton<IProcessRunner, ProcessRunner>();
+        services.TryAddSingleton<ISystemTerminalLauncher, SystemTerminalLauncher>();
         services.TryAddSingleton<ISecretRegistry, SecretRegistry>();
         services.TryAddSingleton<IGlobalExceptionHandler, GlobalExceptionHandler>();
         services.TryAddSingleton<WindowsCredentialProvider>();

@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Reflection;
+using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Infrastructure.Security;
 using Xunit;
 
@@ -17,11 +19,17 @@ public sealed class MacOsKeychainProviderTests
     }
 
     [Fact]
-    public void InfrastructureDoesNotReferenceProcessAssembly()
+    public void ProviderDoesNotDependOnTheExternalProcessRunner()
     {
+        var type = typeof(MacOsKeychainProvider);
         Assert.DoesNotContain(
-            typeof(MacOsKeychainProvider).Assembly.GetReferencedAssemblies(),
-            assembly => string.Equals(assembly.Name, "System.Diagnostics.Process", StringComparison.Ordinal));
+            type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic),
+            field => typeof(IProcessRunner).IsAssignableFrom(field.FieldType));
+        Assert.All(
+            type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic),
+            constructor => Assert.DoesNotContain(
+                constructor.GetParameters(),
+                parameter => typeof(IProcessRunner).IsAssignableFrom(parameter.ParameterType)));
     }
 
     [Fact]
