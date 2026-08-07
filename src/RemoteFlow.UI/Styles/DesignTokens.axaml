@@ -1,0 +1,72 @@
+<ResourceDictionary
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Dark">
+      <Color x:Key="Color.Surface.0">#0B0F14</Color>
+      <Color x:Key="Color.Surface.1">#121821</Color>
+      <Color x:Key="Color.Surface.2">#1A2330</Color>
+      <Color x:Key="Color.Border">#344052</Color>
+      <Color x:Key="Color.Text.Primary">#F2F5F7</Color>
+      <Color x:Key="Color.Text.Secondary">#B8C2CF</Color>
+      <Color x:Key="Color.Text.Disabled">#7E8998</Color>
+      <Color x:Key="Color.Accent">#6CB6FF</Color>
+      <Color x:Key="Color.Success">#5DE28C</Color>
+      <Color x:Key="Color.Warning">#FFCA58</Color>
+      <Color x:Key="Color.Danger">#FF7B72</Color>
+      <Color x:Key="Color.Environment.Dev">#5DE28C</Color>
+      <Color x:Key="Color.Environment.Staging">#FFCA58</Color>
+      <Color x:Key="Color.Environment.Production">#FF7B72</Color>
+      <SolidColorBrush x:Key="Brush.Surface.0" Color="{DynamicResource Color.Surface.0}" />
+      <SolidColorBrush x:Key="Brush.Surface.1" Color="{DynamicResource Color.Surface.1}" />
+      <SolidColorBrush x:Key="Brush.Surface.2" Color="{DynamicResource Color.Surface.2}" />
+      <SolidColorBrush x:Key="Brush.Border" Color="{DynamicResource Color.Border}" />
+      <SolidColorBrush x:Key="Brush.Text.Primary" Color="{DynamicResource Color.Text.Primary}" />
+      <SolidColorBrush x:Key="Brush.Text.Secondary" Color="{DynamicResource Color.Text.Secondary}" />
+      <SolidColorBrush x:Key="Brush.Text.Disabled" Color="{DynamicResource Color.Text.Disabled}" />
+      <SolidColorBrush x:Key="Brush.Accent" Color="{DynamicResource Color.Accent}" />
+      <SolidColorBrush x:Key="Brush.Success" Color="{DynamicResource Color.Success}" />
+      <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />
+      <SolidColorBrush x:Key="Brush.Danger" Color="{DynamicResource Color.Danger}" />
+      <SolidColorBrush x:Key="Brush.Environment.Dev" Color="{DynamicResource Color.Environment.Dev}" />
+      <SolidColorBrush x:Key="Brush.Environment.Staging" Color="{DynamicResource Color.Environment.Staging}" />
+      <SolidColorBrush x:Key="Brush.Environment.Production" Color="{DynamicResource Color.Environment.Production}" />
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Light">
+      <Color x:Key="Color.Surface.0">#F6F8FA</Color>
+      <Color x:Key="Color.Surface.1">#FFFFFF</Color>
+      <Color x:Key="Color.Surface.2">#EAEFF5</Color>
+      <Color x:Key="Color.Border">#C4CCD6</Color>
+      <Color x:Key="Color.Text.Primary">#17202B</Color>
+      <Color x:Key="Color.Text.Secondary">#475569</Color>
+      <Color x:Key="Color.Text.Disabled">#7B8794</Color>
+      <Color x:Key="Color.Accent">#0969DA</Color>
+      <Color x:Key="Color.Success">#137333</Color>
+      <Color x:Key="Color.Warning">#8A5A00</Color>
+      <Color x:Key="Color.Danger">#B42318</Color>
+      <Color x:Key="Color.Environment.Dev">#137333</Color>
+      <Color x:Key="Color.Environment.Staging">#8A5A00</Color>
+      <Color x:Key="Color.Environment.Production">#B42318</Color>
+      <SolidColorBrush x:Key="Brush.Surface.0" Color="{DynamicResource Color.Surface.0}" />
+      <SolidColorBrush x:Key="Brush.Surface.1" Color="{DynamicResource Color.Surface.1}" />
+      <SolidColorBrush x:Key="Brush.Surface.2" Color="{DynamicResource Color.Surface.2}" />
+      <SolidColorBrush x:Key="Brush.Border" Color="{DynamicResource Color.Border}" />
+      <SolidColorBrush x:Key="Brush.Text.Primary" Color="{DynamicResource Color.Text.Primary}" />
+      <SolidColorBrush x:Key="Brush.Text.Secondary" Color="{DynamicResource Color.Text.Secondary}" />
+      <SolidColorBrush x:Key="Brush.Text.Disabled" Color="{DynamicResource Color.Text.Disabled}" />
+      <SolidColorBrush x:Key="Brush.Accent" Color="{DynamicResource Color.Accent}" />
+      <SolidColorBrush x:Key="Brush.Success" Color="{DynamicResource Color.Success}" />
+      <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />
+      <SolidColorBrush x:Key="Brush.Danger" Color="{DynamicResource Color.Danger}" />
+      <SolidColorBrush x:Key="Brush.Environment.Dev" Color="{DynamicResource Color.Environment.Dev}" />
+      <SolidColorBrush x:Key="Brush.Environment.Staging" Color="{DynamicResource Color.Environment.Staging}" />
+      <SolidColorBrush x:Key="Brush.Environment.Production" Color="{DynamicResource Color.Environment.Production}" />
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+  <FontFamily x:Key="Font.Family.Default">fonts:Inter#Inter</FontFamily>
+  <x:Double x:Key="Space.1">4</x:Double>
+  <x:Double x:Key="Space.2">8</x:Double>
+  <x:Double x:Key="Space.3">12</x:Double>
+  <x:Double x:Key="Space.4">16</x:Double>
+  <CornerRadius x:Key="Radius.Control">6</CornerRadius>
+</ResourceDictionary>

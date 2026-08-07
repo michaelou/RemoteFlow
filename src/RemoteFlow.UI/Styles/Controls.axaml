@@ -1,0 +1,23 @@
+<Styles xmlns="https://github.com/avaloniaui">
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Family.Default}" />
+    <Setter Property="Background" Value="{DynamicResource Brush.Surface.0}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+  </Style>
+  <Style Selector="ListBox.navigation">
+    <Setter Property="Background" Value="{DynamicResource Brush.Surface.1}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+    <Setter Property="Padding" Value="8" />
+  </Style>
+  <Style Selector="ListBox.navigation ListBoxItem">
+    <Setter Property="Padding" Value="12,10" />
+    <Setter Property="Margin" Value="0,2" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+  </Style>
+  <Style Selector="ListBox.navigation ListBoxItem:selected">
+    <Setter Property="Background" Value="{DynamicResource Brush.Surface.2}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+  </Style>
+</Styles>

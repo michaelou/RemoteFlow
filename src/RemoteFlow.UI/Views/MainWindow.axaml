@@ -1,0 +1,46 @@
+<Window
+    x:Class="RemoteFlow.UI.Views.MainWindow"
+    x:DataType="viewModels:MainWindowViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels"
+    Title="RemoteFlow"
+    Width="1200"
+    Height="760"
+    MinWidth="640"
+    MinHeight="420"
+    Background="{DynamicResource Brush.Surface.0}">
+  <Window.DataTemplates>
+    <DataTemplate DataType="{x:Type viewModels:PageViewModel}" x:DataType="viewModels:PageViewModel">
+      <Grid Margin="32" RowDefinitions="Auto,Auto,*">
+        <TextBlock FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Text.Primary}" Text="{Binding Title}" />
+        <TextBlock Grid.Row="1" Margin="0,8,0,24" Foreground="{DynamicResource Brush.Text.Secondary}" Text="This page is ready for its feature content." />
+        <TextBox
+            Grid.Row="2"
+            VerticalAlignment="Top"
+            MaxWidth="560"
+            HorizontalAlignment="Left"
+            PlaceholderText="Temporary page state (kept while navigating)"
+            Text="{Binding StateText}" />
+      </Grid>
+    </DataTemplate>
+  </Window.DataTemplates>
+  <Grid ColumnDefinitions="220,*">
+    <ListBox
+        x:Name="NavigationList"
+        Classes="navigation"
+        ItemsSource="{Binding NavigationItems}"
+        KeyDown="NavigationList_OnKeyDown"
+        SelectionChanged="NavigationList_OnSelectionChanged"
+        SelectedIndex="0">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="viewModels:NavigationItemViewModel">
+          <TextBlock Text="{Binding Title}" />
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+    <Border Grid.Column="1" Background="{DynamicResource Brush.Surface.0}">
+      <ContentControl Content="{Binding CurrentPage}" />
+    </Border>
+  </Grid>
+</Window>
