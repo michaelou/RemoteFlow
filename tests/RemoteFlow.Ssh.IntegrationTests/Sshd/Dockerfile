@@ -3,7 +3,7 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
-    && apt-get install --no-install-recommends -y openssh-client openssh-server sshpass \
+    && apt-get install --no-install-recommends -y htop openssh-client openssh-server socat sshpass tmux vim-tiny \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --shell /bin/bash password-user \
     && useradd --create-home --shell /bin/bash key-user \
@@ -31,6 +31,6 @@ RUN install -d -m 0700 -o key-user -g key-user /home/key-user/.ssh \
     && chmod 0755 /usr/local/bin/use-host-key /usr/local/bin/presented-host-key-fingerprint \
     && /usr/local/bin/use-host-key primary --no-reload
 
-EXPOSE 22
+EXPOSE 22 2222
 
-CMD ["/usr/sbin/sshd", "-D", "-e"]
+CMD ["/bin/sh", "-c", "socat TCP-LISTEN:2222,reuseaddr,fork EXEC:'/bin/sleep 60' & exec /usr/sbin/sshd -D -e"]

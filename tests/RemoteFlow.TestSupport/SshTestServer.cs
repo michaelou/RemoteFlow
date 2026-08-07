@@ -23,12 +23,15 @@ public sealed class SshTestServer : IAsyncDisposable
     public const string KeyboardInteractivePassword = "interactive-secret";
 
     private const int _sshPort = 22;
+    private const int _stalledPort = 2222;
     private IFutureDockerImage? _image;
     private IContainer? _container;
 
     public string Hostname => _container?.Hostname ?? throw NotStarted();
 
     public ushort Port => _container?.GetMappedPublicPort(_sshPort) ?? throw NotStarted();
+
+    public ushort StalledPort => _container?.GetMappedPublicPort(_stalledPort) ?? throw NotStarted();
 
     public static string FixtureRoot => "/srv/remoteflow-fixtures";
 
@@ -56,7 +59,10 @@ public sealed class SshTestServer : IAsyncDisposable
 
         _container = new ContainerBuilder(_image)
             .WithPortBinding(_sshPort, assignRandomHostPort: true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilInternalTcpPortIsAvailable(_sshPort))
+            .WithPortBinding(_stalledPort, assignRandomHostPort: true)
+            .WithWaitStrategy(Wait.ForUnixContainer()
+                .UntilInternalTcpPortIsAvailable(_sshPort)
+                .UntilInternalTcpPortIsAvailable(_stalledPort))
             .WithCleanUp(true)
             .Build();
         await _container.StartAsync(cancellationToken).ConfigureAwait(false);
@@ -134,6 +140,29 @@ public sealed class SshTestServer : IAsyncDisposable
             .First(parts => parts.Length >= 3 && parts[1] == "ssh-ed25519");
         var publicKey = Convert.FromBase64String(fields[2]);
         return new HostKeyInfo(fields[1], publicKey, HostKeyFingerprint.FormatSha256(publicKey));
+    }
+
+    public async Task SuspendSshAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await ExecAsync(
+        [
+            "/bin/sh",
+            "-c",
+            "kill -STOP $(cat /run/sshd.pid)",
+        ], cancellationToken).ConfigureAwait(false);
+        EnsureSuccess(result, "suspend the fixture SSH daemon");
+    }
+
+    public async Task ResumeSshAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await ExecAsync(
+        [
+            "/bin/sh",
+            "-c",
+            "kill -CONT $(cat /run/sshd.pid)",
+        ], cancellationToken).ConfigureAwait(false);
+        EnsureSuccess(result, "resume the fixture SSH daemon");
+        await WaitForSshAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()

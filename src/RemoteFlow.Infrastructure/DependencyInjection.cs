@@ -2,10 +2,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Abstractions.Ssh;
 using RemoteFlow.Infrastructure.Diagnostics;
 using RemoteFlow.Infrastructure.Platform;
 using RemoteFlow.Infrastructure.Pty;
 using RemoteFlow.Infrastructure.Security;
+using RemoteFlow.Infrastructure.Ssh;
 using RemoteFlow.Infrastructure.Security.Crypto;
 
 namespace RemoteFlow.Infrastructure;
@@ -25,6 +27,7 @@ public static class DependencyInjection
         services.TryAddSingleton<ISystemPlatform, SystemPlatform>();
         services.TryAddSingleton<IProcessRunner, ProcessRunner>();
         services.TryAddSingleton<ISystemTerminalLauncher, SystemTerminalLauncher>();
+        services.TryAddSingleton<ISshTransport, TmdsSshTransport>();
         services.TryAddSingleton<ISecretRegistry, SecretRegistry>();
         services.TryAddSingleton<IGlobalExceptionHandler, GlobalExceptionHandler>();
         services.TryAddSingleton<WindowsCredentialProvider>();
