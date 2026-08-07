@@ -59,7 +59,9 @@ public sealed class ShellTests
     public void SidebarSupportsArrowKeysAndEnter()
     {
         var navigation = NavigationService.CreateDefault();
-        var window = new MainWindow(new MainWindowViewModel(navigation), new InMemorySettingsStore());
+        var window = new MainWindow(
+            new MainWindowViewModel(navigation),
+            new WindowGeometryService(new InMemorySettingsStore()));
         window.Show();
         var list = window.FindControl<ListBox>("NavigationList");
         Assert.NotNull(list);

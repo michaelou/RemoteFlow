@@ -2,11 +2,15 @@
   <ItemGroup>
     <ProjectReference Include="../../src/RemoteFlow.Infrastructure/RemoteFlow.Infrastructure.csproj" />
     <ProjectReference Include="../../src/RemoteFlow.Persistence/RemoteFlow.Persistence.csproj" />
+    <ProjectReference Include="../../src/RemoteFlow.Desktop/RemoteFlow.Desktop.csproj" />
+    <ProjectReference Include="../../src/RemoteFlow.UI/RemoteFlow.UI.csproj" />
     <ProjectReference Include="../RemoteFlow.TestSupport/RemoteFlow.TestSupport.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Avalonia.Headless.XUnit" />
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
 </Project>

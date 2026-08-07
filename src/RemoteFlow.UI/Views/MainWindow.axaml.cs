@@ -13,34 +13,38 @@ public sealed partial class MainWindow : Window
     private readonly MainWindowViewModel _viewModel;
     private readonly WindowGeometryService _geometryService;
     private WindowGeometry _normalGeometry = WindowGeometry.Default;
+    private bool _initialized;
 
     public MainWindow()
-        : this(new MainWindowViewModel(NavigationService.CreateDefault()), new PreviewSettingsStore())
+        : this(
+            new MainWindowViewModel(NavigationService.CreateDefault()),
+            new WindowGeometryService(new PreviewSettingsStore()))
     {
     }
 
-    public MainWindow(MainWindowViewModel viewModel, ISettingsStore settingsStore)
+    public MainWindow(MainWindowViewModel viewModel, WindowGeometryService geometryService)
     {
         _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-        _geometryService = new WindowGeometryService(settingsStore ?? throw new ArgumentNullException(nameof(settingsStore)));
+        _geometryService = geometryService ?? throw new ArgumentNullException(nameof(geometryService));
         InitializeComponent();
         DataContext = viewModel;
-        Opened += OnOpened;
         PositionChanged += OnPositionChanged;
         Resized += OnResized;
         Closed += OnClosed;
     }
 
-    private async void OnOpened(object? sender, EventArgs e)
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         var geometry = await _geometryService.RestoreAsync(
-            WindowGeometryService.FromScreens(Screens)).ConfigureAwait(true);
+            WindowGeometryService.FromScreens(Screens),
+            cancellationToken).ConfigureAwait(true);
         _normalGeometry = geometry;
         WindowStartupLocation = WindowStartupLocation.Manual;
         Width = geometry.Width;
         Height = geometry.Height;
         Position = new PixelPoint(geometry.X, geometry.Y);
         WindowState = geometry.IsMaximized ? WindowState.Maximized : WindowState.Normal;
+        _initialized = true;
         _ = NavigationList.Focus();
     }
 
@@ -62,6 +66,11 @@ public sealed partial class MainWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        if (!_initialized)
+        {
+            return;
+        }
+
         var geometry = _normalGeometry with { IsMaximized = WindowState == WindowState.Maximized };
         _geometryService.SaveAsync(geometry).GetAwaiter().GetResult();
     }
