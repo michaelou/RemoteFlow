@@ -4,7 +4,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/RemoteFlow.Application/RemoteFlow.Application.csproj" />
+    <ProjectReference Include="../../src/RemoteFlow.Domain/RemoteFlow.Domain.csproj" />
+    <ProjectReference Include="../../src/RemoteFlow.Persistence/RemoteFlow.Persistence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="NSubstitute" />
   </ItemGroup>
 </Project>
