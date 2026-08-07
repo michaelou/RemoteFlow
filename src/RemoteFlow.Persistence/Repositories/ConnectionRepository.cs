@@ -56,13 +56,33 @@ public sealed class ConnectionRepository : RepositoryBase, IConnectionRepository
     public Task UpdateAsync(Connection connection, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(connection);
-        return WriteAsync(
-            context =>
+        return WriteAsync(async context =>
+        {
+            var existing = context.Connections.Local.FirstOrDefault(candidate => candidate.Id == connection.Id)
+                ?? await context.Connections
+                    .Include(candidate => candidate.Tags)
+                    .SingleOrDefaultAsync(candidate => candidate.Id == connection.Id, cancellationToken)
+                    .ConfigureAwait(false)
+                ?? throw new KeyNotFoundException($"Connection '{connection.Id}' was not found.");
+            context.Entry(existing).CurrentValues.SetValues(connection);
+            context.Entry(existing.Credential).CurrentValues.SetValues(connection.Credential);
+            context.Entry(existing.Ssh).CurrentValues.SetValues(connection.Ssh);
+            context.Entry(existing.Sftp).CurrentValues.SetValues(connection.Sftp);
+            context.Entry(existing.Rdp).CurrentValues.SetValues(connection.Rdp);
+
+            foreach (var removedTag in existing.Tags
+                         .Where(item => connection.Tags.All(candidate => candidate.TagId != item.TagId))
+                         .ToArray())
             {
-                _ = context.Connections.Update(connection);
-                return Task.CompletedTask;
-            },
-            cancellationToken);
+                _ = existing.RemoveTag(removedTag.TagId);
+            }
+
+            foreach (var addedTag in connection.Tags.Where(item =>
+                         existing.Tags.All(candidate => candidate.TagId != item.TagId)))
+            {
+                _ = existing.AddTag(addedTag.TagId);
+            }
+        }, cancellationToken);
     }
 
     public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)

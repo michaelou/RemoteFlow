@@ -40,7 +40,15 @@ public sealed class FolderRepository : RepositoryBase, IFolderRepository
     public Task UpdateAsync(Folder folder, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(folder);
-        return WriteAsync(context => { _ = context.Folders.Update(folder); return Task.CompletedTask; }, cancellationToken);
+        return WriteAsync(async context =>
+        {
+            var existing = context.Folders.Local.FirstOrDefault(candidate => candidate.Id == folder.Id)
+                ?? await context.Folders.SingleOrDefaultAsync(
+                    candidate => candidate.Id == folder.Id,
+                    cancellationToken).ConfigureAwait(false)
+                ?? throw new KeyNotFoundException($"Folder '{folder.Id}' was not found.");
+            context.Entry(existing).CurrentValues.SetValues(folder);
+        }, cancellationToken);
     }
 
     public Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
