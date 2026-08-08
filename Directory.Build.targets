@@ -1,4 +1,9 @@
 <Project>
+  <!-- The licence gate, on the project that ships. Its package graph is the superset of every other
+       project's, so checking it once covers the application. -->
+  <Import Project="$(MSBuildThisFileDirectory)build/licenses/PackageLicenses.targets"
+          Condition="'$(VerifyPackageLicenses)' == 'true'" />
+
   <!-- Appends extra Microsoft.Testing.Platform arguments (trx and coverage reports in CI) without
        clobbering the per-project TestingPlatformCommandLineArguments set in test project files.
        Imported after the project body, so the append sees those values. -->

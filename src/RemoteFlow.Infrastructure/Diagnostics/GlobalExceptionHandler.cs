@@ -5,11 +5,17 @@ namespace RemoteFlow.Infrastructure.Diagnostics;
 
 public sealed class GlobalExceptionHandler(
     ILogger<GlobalExceptionHandler> logger,
-    IErrorDialogService errorDialogService) : IGlobalExceptionHandler, IDisposable
+    IErrorDialogService errorDialogService,
+    ILastErrorStore? lastErrorStore = null,
+    IClock? clock = null) : IGlobalExceptionHandler, IDisposable
 {
     private readonly ILogger<GlobalExceptionHandler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IErrorDialogService _errorDialogService =
         errorDialogService ?? throw new ArgumentNullException(nameof(errorDialogService));
+    // Optional: an error handler that cannot be constructed because a diagnostic aid is missing would be
+    // the worst possible failure to introduce here.
+    private readonly ILastErrorStore? _lastErrorStore = lastErrorStore;
+    private readonly IClock _clock = clock ?? SystemClock.Instance;
     private int _installed;
 
     public void Install()
@@ -31,6 +37,11 @@ public sealed class GlobalExceptionHandler(
     {
         ArgumentNullException.ThrowIfNull(exception);
         ArgumentException.ThrowIfNullOrWhiteSpace(context);
+
+        // Recorded before the log write, so the about box can still say what happened when the failure is
+        // the logger itself.
+        _lastErrorStore?.Record(exception, context, _clock.UtcNow);
+
         if (isTerminating && _logger.IsEnabled(LogLevel.Critical))
         {
             _logger.LogCritical(exception, "Unhandled terminating exception in {ExceptionContext}", context);

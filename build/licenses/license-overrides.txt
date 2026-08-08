@@ -1,0 +1,14 @@
+# Packages whose .nuspec carries no SPDX expression, only a bundled licence file or a bare URL. A machine
+# cannot identify those, so a human reads the file once and records the answer here, with the evidence.
+#
+# Format: <PackageId>=<SPDX identifier>[;<copyright>], one per line. Blank lines and lines starting with
+# # are ignored. The identifier must appear in allowed-licenses.txt like any other. Give the copyright
+# only when the .nuspec names the redistributor rather than whoever holds copyright in the code the
+# licence covers; otherwise the .nuspec's own value is used.
+
+# The bundled LICENSE is the ANGLE project's own notice — the three-clause BSD text. The .nuspec credits
+# Avalonia, who repackage the binaries, not ANGLE, who wrote them.
+Avalonia.Angle.Windows.Natives=BSD-3-Clause;Copyright 2018 The ANGLE Project Authors
+
+# LICENSE is the MIT text, copyright 2017 NeoSmart Technologies.
+Unicode.net=MIT

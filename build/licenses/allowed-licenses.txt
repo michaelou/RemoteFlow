@@ -1,0 +1,12 @@
+# SPDX identifiers RemoteFlow is willing to ship inside an MIT-licensed application.
+#
+# Permissive only. A copyleft license reaching this list by accident is the thing the build-time check
+# exists to prevent, so adding a line here is a deliberate act with a reason attached, reviewed like any
+# other change. Every identifier here needs a matching build/licenses/texts/<identifier>.txt, because the
+# notices file reproduces the text of every license it names.
+#
+# Blank lines and lines starting with # are ignored.
+
+MIT
+Apache-2.0
+BSD-3-Clause

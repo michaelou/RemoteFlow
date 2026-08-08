@@ -35,6 +35,8 @@ public static class DependencyInjection
         services.TryAddSingleton<ISystemTerminalLauncher, SystemTerminalLauncher>();
         services.TryAddSingleton<IFileEditorLauncher, FileEditorLauncher>();
         services.TryAddSingleton<IFileRevealService, FileRevealService>();
+        services.TryAddSingleton<IShellOpenService, ShellOpenService>();
+        services.TryAddSingleton<ILastErrorStore, LastErrorStore>();
         services.TryAddSingleton<IWatchedFileMonitor, WatchedFileMonitor>();
         services.TryAddSingleton<TmdsSshTransport>();
         services.TryAddSingleton<SshNetTransport>();

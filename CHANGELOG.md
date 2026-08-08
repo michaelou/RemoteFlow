@@ -20,6 +20,13 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
   launches every zip and installer to confirm it starts and reports the version in the tag, and creates a
   **draft** GitHub release with `checksums.txt` and generated notes. Releases are never published
   automatically, and there is deliberately no auto-update mechanism and no update ping.
+- The About tab now shows the licence and links to the repository, names the log and data folders and
+  opens either one, and lists every third-party package with its licence. When something has gone wrong
+  during the session it says what, and offers the log folder — **on your own machine. RemoteFlow sends
+  nothing anywhere; there is no crash reporting, no telemetry, and no update check.**
+- `THIRD-PARTY-NOTICES.md`, generated from the packages actually resolved for the application, and
+  embedded in the binary so it travels with a portable zip. The build fails if a package arrives under a
+  licence RemoteFlow has not agreed to ship.
 - This changelog.
 
 ### Changed

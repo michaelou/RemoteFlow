@@ -69,6 +69,20 @@ See [docs/packaging-windows.md](docs/packaging-windows.md) for the artefact layo
 configuration, what uninstall does and does not remove, and the SmartScreen behaviour to expect from an
 unsigned build.
 
+## Dependencies and licences
+
+Adding or bumping a package means regenerating the third-party notices in the same pull request:
+
+```shell
+pwsh ./scripts/generate-notices.ps1
+```
+
+Commit `THIRD-PARTY-NOTICES.md` and `build/licenses/package-licenses.txt` with the change. The build fails
+when a resolved package is missing from the manifest or carries a licence not on the allow-list, and CI
+fails when the notices are stale. See
+[docs/third-party-licenses.md](docs/third-party-licenses.md) for what to do when a licence cannot be
+identified — the answer is never to guess.
+
 ## Migrations
 
 Database migrations may be squashed until the `v0.1.0` tag. After `v0.1.0`, migrations are append-only: never edit, remove, reorder, or squash a migration that has been released.
