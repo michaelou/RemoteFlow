@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using RemoteFlow.Application.Services;
 using RemoteFlow.UI.Input;
 using RemoteFlow.UI.ViewModels.Terminal;
 using SvcSystems.UI.Terminal;
@@ -118,7 +119,7 @@ public sealed partial class TerminalWorkspace : UserControl
         FocusTerminal();
     }
 
-    private async void OnPreviewKeyDown(object? sender, KeyEventArgs e)
+    private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
         if (DataContext is not TerminalsPageViewModel viewModel)
         {
@@ -150,18 +151,29 @@ public sealed partial class TerminalWorkspace : UserControl
             return;
         }
 
+        // Everything the keymap does not claim as an application command belongs to the terminal:
+        // TerminalControl encodes it and raises UserInput itself. Marking the event handled must
+        // happen synchronously, before the tunnelled event reaches the control.
         var router = new TerminalInputRouter(viewModel.Keymap);
-        if (await router.RouteAsync(e, viewModel, ToggleFullscreen).ConfigureAwait(true))
+        if (router.Resolve(e, viewModel) is not { } command)
         {
-            e.Handled = true;
-            if (viewModel.SelectedSession?.IsFindOpen == true)
-            {
-                FocusFindBox();
-            }
-            else
-            {
-                FocusTerminal();
-            }
+            return;
+        }
+
+        e.Handled = true;
+        _ = RunCommandAsync(command, viewModel);
+    }
+
+    private async Task RunCommandAsync(KeymapCommand command, TerminalsPageViewModel viewModel)
+    {
+        await TerminalInputRouter.ExecuteAsync(command, viewModel, ToggleFullscreen).ConfigureAwait(true);
+        if (viewModel.SelectedSession?.IsFindOpen == true)
+        {
+            FocusFindBox();
+        }
+        else
+        {
+            FocusTerminal();
         }
     }
 

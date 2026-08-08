@@ -6,11 +6,21 @@ using Renci.SshNet;
 
 namespace RemoteFlow.Infrastructure.Ssh.Auth;
 
-public sealed class SshKeyService(ISecretRegistry? secretRegistry = null) : ISshKeyService
+public sealed class SshKeyService(
+    ISecretRegistry? secretRegistry = null,
+    ISystemPlatform? platform = null) : ISshKeyService
 {
     public const string PuttyConversionInstruction = "Convert it with: puttygen key.ppk -O private-openssh -o key";
 
+    private static readonly string[] _wellKnownNonKeyFiles =
+        ["config", "known_hosts", "known_hosts.old", "authorized_keys", "environment", "rc", "agent.env"];
+
     private readonly ISecretRegistry? _secretRegistry = secretRegistry;
+    private readonly ISystemPlatform? _platform = platform;
+
+    public string DefaultKeyDirectory => Path.Combine(
+        _platform?.HomeDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".ssh");
 
     public async Task<SshKeyInspection> InspectAsync(
         string path,
@@ -121,6 +131,114 @@ public sealed class SshKeyService(ISecretRegistry? secretRegistry = null) : ISsh
             File.SetUnixFileMode(fullPath + ".pub", UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
         return await InspectAsync(fullPath, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<SshKeyInspection>> DiscoverAsync(CancellationToken cancellationToken = default)
+    {
+        var directory = DefaultKeyDirectory;
+        if (!Directory.Exists(directory))
+        {
+            return [];
+        }
+
+        var results = new List<SshKeyInspection>();
+        foreach (var file in Directory.EnumerateFiles(directory).Order(StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var name = Path.GetFileName(file);
+            if (_wellKnownNonKeyFiles.Contains(name, StringComparer.OrdinalIgnoreCase) ||
+                name.EndsWith(".pub", StringComparison.OrdinalIgnoreCase) ||
+                name.EndsWith(".ppk", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            try
+            {
+                // Checking the header first keeps unrelated files in ~/.ssh out of the list without
+                // paying for a full parse of each one.
+                var header = await ReadHeaderAsync(file, cancellationToken).ConfigureAwait(false);
+                if (DetectFormat(header, Path.GetExtension(file)) == SshPrivateKeyFormat.Unknown)
+                {
+                    continue;
+                }
+
+                results.Add(await InspectAsync(file, cancellationToken: cancellationToken).ConfigureAwait(false));
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // One unreadable or malformed file must not hide the rest of the user's keys.
+            }
+        }
+
+        return results;
+    }
+
+    public async Task<SshKeyInspection> ImportAsync(
+        string path,
+        string privateKeyText,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(privateKeyText);
+        var text = privateKeyText.Trim().ReplaceLineEndings("\n") + "\n";
+        var format = DetectFormat(text);
+        if (format == SshPrivateKeyFormat.PuttyPpk)
+        {
+            throw new SshKeyFormatException($"PuTTY .ppk keys are not supported. {PuttyConversionInstruction}");
+        }
+        if (format == SshPrivateKeyFormat.Unknown)
+        {
+            throw new SshKeyFormatException(LooksLikePublicKey(text)
+                ? "That is a public key. Paste the matching private key instead — the file without the .pub suffix, whose text starts with '-----BEGIN'."
+                : "The pasted text is not an OpenSSH, PKCS#8, or PEM private key.");
+        }
+
+        var fullPath = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(fullPath)
+            ?? throw new ArgumentException("The key path must include a directory.", nameof(path));
+        _ = Directory.CreateDirectory(directory);
+        if (File.Exists(fullPath))
+        {
+            throw new IOException($"'{fullPath}' already exists. Choose a different key name.");
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            await File.WriteAllTextAsync(fullPath, text, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            // The file has to be owner-only before any key material reaches the disk, so the mode is
+            // part of the create call rather than a follow-up chmod.
+            var options = new FileStreamOptions
+            {
+                Access = FileAccess.Write,
+                Mode = FileMode.CreateNew,
+                UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+            };
+            await using var stream = new FileStream(fullPath, options);
+            await using var writer = new StreamWriter(stream);
+            await writer.WriteAsync(text.AsMemory(), cancellationToken).ConfigureAwait(false);
+        }
+
+        return await InspectAsync(fullPath, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool LooksLikePublicKey(string text)
+    {
+        return text.StartsWith("ssh-", StringComparison.Ordinal) ||
+            text.StartsWith("ecdsa-", StringComparison.Ordinal) ||
+            text.StartsWith("sk-ssh-", StringComparison.Ordinal) ||
+            text.StartsWith("sk-ecdsa-", StringComparison.Ordinal);
+    }
+
+    private static async Task<string> ReadHeaderAsync(string path, CancellationToken cancellationToken)
+    {
+        var buffer = new char[256];
+        using var reader = new StreamReader(path);
+        var read = await reader.ReadBlockAsync(buffer, cancellationToken).ConfigureAwait(false);
+        return new string(buffer, 0, read);
     }
 
 #pragma warning disable IDE0045, IDE0046 // Sequential signature checks are clearer than nested conditional expressions.

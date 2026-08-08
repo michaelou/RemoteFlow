@@ -4,24 +4,119 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Connections">
-  <StackPanel Spacing="7">
-    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+  <StackPanel Spacing="6">
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
       <ComboBox
-          AutomationProperties.Name="Private key path and recent keys"
-          IsEditable="True"
-          ItemsSource="{Binding RecentKeys}"
-          SelectedItem="{Binding SelectedPath, Mode=TwoWay}"
-          Text="{Binding SelectedPath, Mode=TwoWay}" />
-      <Button Grid.Column="1" Click="Browse_OnClick" Content="Browse…" />
-      <Button Grid.Column="2" Click="Generate_OnClick" Content="Generate Ed25519…" />
+          AutomationProperties.Name="Private key"
+          HorizontalAlignment="Stretch"
+          ItemsSource="{Binding AvailableKeys}"
+          PlaceholderText="Choose a key…"
+          SelectedItem="{Binding SelectedKey, Mode=TwoWay}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="viewModels:SshKeyOption">
+            <StackPanel>
+              <TextBlock Text="{Binding DisplayName}" />
+              <TextBlock
+                  FontSize="11"
+                  Foreground="{DynamicResource Brush.Text.Secondary}"
+                  IsVisible="{Binding Detail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                  Text="{Binding Detail}"
+                  TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+      <Button Grid.Column="1" Click="Refresh_OnClick" Content="↻" ToolTip.Tip="Rescan the SSH key folder" />
     </Grid>
-    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" IsVisible="{Binding Sha256Fingerprint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-      <TextBlock FontWeight="SemiBold" Text="{Binding KeyType}" />
-      <TextBlock Grid.Column="1" FontFamily="Cascadia Mono,Consolas,monospace" Text="{Binding Sha256Fingerprint}" TextWrapping="Wrap" />
-      <Button Grid.Column="2" Click="CopyPublicKey_OnClick" Content="Copy public key" IsEnabled="{Binding CanCopyPublicKey}" />
-    </Grid>
-    <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Comment}" TextWrapping="Wrap" />
-    <CheckBox Content="Store this key's passphrase with the connection" IsChecked="{Binding StorePassphrase}" IsVisible="{Binding IsEncrypted}" />
-    <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
+
+    <TextBlock
+        FontSize="11"
+        Foreground="{DynamicResource Brush.Text.Secondary}"
+        IsVisible="{Binding HasNoDiscoveredKeys}"
+        Text="{Binding NoKeysHint}"
+        TextWrapping="Wrap" />
+
+    <!-- The path stays editable so a key outside the SSH folder can simply be pasted in. -->
+    <TextBox
+        AutomationProperties.Name="Private key path"
+        PlaceholderText="Or type the full path to a private key"
+        LostFocus="Path_OnLostFocus"
+        Text="{Binding SelectedPath, Mode=TwoWay}" />
+
+    <StackPanel Orientation="Horizontal" Spacing="6">
+      <Button Click="Browse_OnClick" Content="Browse…" />
+      <Button Click="Paste_OnClick" Content="Paste a key…" IsVisible="{Binding !IsImportOpen}" />
+      <Button Click="Generate_OnClick" Content="Generate Ed25519…" />
+    </StackPanel>
+
+    <Border
+        Background="{DynamicResource Brush.Surface.2}"
+        CornerRadius="{DynamicResource Radius.Control}"
+        IsVisible="{Binding IsImportOpen}"
+        Padding="10">
+      <StackPanel Spacing="6">
+        <TextBlock Text="Paste the private key (the file without the .pub suffix)" TextWrapping="Wrap" />
+        <TextBox
+            x:Name="ImportTextBox"
+            AcceptsReturn="True"
+            AutomationProperties.Name="Private key text"
+            Height="120"
+            PlaceholderText="-----BEGIN OPENSSH PRIVATE KEY-----"
+            TextWrapping="NoWrap" />
+        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
+          <TextBlock Text="Save as" VerticalAlignment="Center" />
+          <TextBox Grid.Column="1" Text="{Binding ImportFileName, Mode=TwoWay}" />
+        </Grid>
+        <TextBlock
+            FontSize="11"
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="{Binding ImportLocationHint}"
+            TextWrapping="Wrap" />
+        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="6">
+          <Button Click="CancelImport_OnClick" Content="Cancel" />
+          <Button Click="Import_OnClick" Content="Import key" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <Border
+        Background="{DynamicResource Brush.Surface.2}"
+        CornerRadius="{DynamicResource Radius.Control}"
+        IsVisible="{Binding HasKeyDetails}"
+        Padding="10">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <StackPanel Spacing="2">
+          <TextBlock FontWeight="SemiBold" Text="{Binding KeyType}" />
+          <TextBlock
+              FontFamily="Cascadia Mono,Consolas,monospace"
+              FontSize="11"
+              Text="{Binding Sha256Fingerprint}"
+              TextWrapping="Wrap" />
+          <TextBlock
+              FontSize="11"
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              IsVisible="{Binding Comment, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+              Text="{Binding Comment}"
+              TextWrapping="Wrap" />
+        </StackPanel>
+        <Button
+            Grid.Column="1"
+            Click="CopyPublicKey_OnClick"
+            Content="Copy public key"
+            IsEnabled="{Binding CanCopyPublicKey}"
+            ToolTip.Tip="Copy the public key so it can be added to authorized_keys on the server"
+            VerticalAlignment="Top" />
+      </Grid>
+    </Border>
+
+    <CheckBox
+        Content="Store this key's passphrase with the connection"
+        IsChecked="{Binding StorePassphrase}"
+        IsVisible="{Binding IsEncrypted}" />
+    <TextBlock
+        Foreground="{DynamicResource Brush.Warning}"
+        IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+        Text="{Binding StatusMessage}"
+        TextWrapping="Wrap" />
   </StackPanel>
 </UserControl>

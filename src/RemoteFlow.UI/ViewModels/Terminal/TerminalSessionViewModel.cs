@@ -19,6 +19,8 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     internal const int MaximumBytesPerFrame = 64 * 1024;
     internal const int MaximumPendingOutputBytes = 4 * 1024 * 1024;
 
+    private static readonly char[] _pathSeparators = ['\\', '/'];
+
     private readonly ITerminalChannel _channel;
     private readonly IUiDispatcher _dispatcher;
     private readonly Func<CancellationToken, Task>? _retry;
@@ -149,7 +151,13 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     public bool ApplicationCursorKeys { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TabTitle))]
     public partial string Title { get; private set; }
+
+    /// <summary>
+    /// The tab-strip form of <see cref="Title" />.
+    /// </summary>
+    public string TabTitle => CondenseTitle(Title);
 
     [ObservableProperty]
     public partial string? UserTitleOverride { get; private set; }
@@ -162,6 +170,49 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     [ObservableProperty]
     public partial string? EndedMessage { get; private set; }
+
+    /// <summary>
+    /// Reduces a shell-reported window title to something that fits a tab.
+    /// </summary>
+    /// <remarks>
+    /// Shells report their working directory as the title — <c>cmd.exe</c> reports the full path,
+    /// sometimes behind a label such as <c>Administrator: C:\…</c>. Only the leaf segment is useful
+    /// on a tab; the full title stays available as the tab tooltip.
+    /// </remarks>
+    internal static string CondenseTitle(string? title)
+    {
+        var trimmed = title?.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            return "Terminal";
+        }
+
+        var candidate = trimmed;
+        var label = candidate.LastIndexOf(": ", StringComparison.Ordinal);
+        if (label >= 0 && IsRootedPath(candidate[(label + 2)..]))
+        {
+            candidate = candidate[(label + 2)..];
+        }
+
+        if (!IsRootedPath(candidate))
+        {
+            return trimmed;
+        }
+
+        var path = candidate.TrimEnd('\\', '/');
+        var separator = path.LastIndexOfAny(_pathSeparators);
+        var leaf = separator < 0 ? path : path[(separator + 1)..];
+        return leaf.Length == 0 ? candidate : leaf;
+    }
+
+    private static bool IsRootedPath(string value)
+    {
+        return value.Length >= 2 &&
+            ((value.Length >= 3 && char.IsLetter(value[0]) && value[1] == ':' && (value[2] is '\\' or '/')) ||
+                (value[0] == '\\' && value[1] == '\\') ||
+                value[0] == '/' ||
+                (value[0] == '~' && value[1] is '/' or '\\'));
+    }
 
     public void SetTitleOverride(string? title)
     {

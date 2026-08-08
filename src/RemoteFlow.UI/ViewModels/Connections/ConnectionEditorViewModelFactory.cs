@@ -12,7 +12,9 @@ public sealed class ConnectionEditorViewModelFactory(
     ITagRepository tags,
     ITagService tagService,
     IRecentConnectionStore recent,
-    ISystemTerminalLauncher? systemTerminalLauncher = null)
+    ISystemTerminalLauncher? systemTerminalLauncher = null,
+    ISshKeyService? sshKeyService = null,
+    IClipboardService? clipboard = null)
 {
     public async Task<ConnectionEditorViewModel> CreateEditorAsync(
         Guid? connectionId,
@@ -24,7 +26,9 @@ public sealed class ConnectionEditorViewModelFactory(
             credentials,
             folders,
             tags,
-            tagService);
+            tagService,
+            sshKeyService,
+            clipboard);
         await editor.InitializeAsync(connectionId, cancellationToken).ConfigureAwait(true);
         return editor;
     }

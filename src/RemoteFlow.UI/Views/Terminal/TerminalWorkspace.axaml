@@ -55,14 +55,16 @@
                   Background="{Binding TabBackgroundHex}"
                   BorderBrush="{Binding AccentColorHex}"
                   BorderThickness="0,0,0,3"
+                  ClipToBounds="True"
                   CornerRadius="6,6,0,0"
                   Margin="0,0,2,0"
-                  MinWidth="124"
+                  MinWidth="150"
                   MaxWidth="240"
-                  Padding="10,7"
+                  Padding="9,5,5,5"
                   PointerMoved="Tab_OnPointerMoved"
                   PointerPressed="Tab_OnPointerPressed"
-                  PointerReleased="Tab_OnPointerReleased">
+                  PointerReleased="Tab_OnPointerReleased"
+                  ToolTip.Tip="{Binding Title}">
                 <Border.ContextMenu>
                   <ContextMenu>
                     <MenuItem Click="OpenSystemTerminal_OnClick" Header="Open in system terminal" />
@@ -72,21 +74,33 @@
                   <Border
                       Background="{Binding AccentColorHex}"
                       CornerRadius="3"
-                      Padding="4,1">
+                      Padding="4,1"
+                      VerticalAlignment="Center">
                     <TextBlock FontSize="10" FontWeight="Bold" Foreground="#0B0F14" Text="{Binding EnvironmentCue}" />
                   </Border>
-                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="5">
+                  <!-- A star column (not a StackPanel) so the title is measured against the tab
+                       width and actually trims instead of overflowing the close button. -->
+                  <Grid Grid.Column="1" ColumnDefinitions="Auto,*">
                     <TextBlock
                         IsVisible="{Binding IsEnded}"
                         Foreground="{DynamicResource Brush.Warning}"
-                        Text="●" />
-                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                  </StackPanel>
+                        Margin="0,0,5,0"
+                        Text="●"
+                        VerticalAlignment="Center" />
+                    <TextBlock
+                        Grid.Column="1"
+                        Text="{Binding TabTitle}"
+                        TextTrimming="CharacterEllipsis"
+                        VerticalAlignment="Center" />
+                  </Grid>
                   <Button
                       Grid.Column="2"
                       Click="CloseTab_OnClick"
                       Content="×"
-                      Padding="3,0"
+                      FontSize="13"
+                      Padding="6,1"
+                      MinWidth="0"
+                      VerticalAlignment="Center"
                       ToolTip.Tip="Close terminal (Ctrl+Shift+W)" />
                 </Grid>
               </Border>

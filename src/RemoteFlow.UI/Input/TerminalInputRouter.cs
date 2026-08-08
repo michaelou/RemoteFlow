@@ -4,41 +4,48 @@ using RemoteFlow.UI.ViewModels.Terminal;
 
 namespace RemoteFlow.UI.Input;
 
+/// <summary>
+/// Maps key strokes to application-level terminal commands.
+/// </summary>
+/// <remarks>
+/// The router deliberately never writes to the PTY. <c>TerminalControl</c> already translates key
+/// and text input into PTY bytes and raises <c>TerminalControlModel.UserInput</c>; routing the same
+/// stroke here as well would send every keystroke twice.
+/// </remarks>
 public sealed class TerminalInputRouter(KeymapService keymap)
 {
-    public async Task<bool> RouteAsync(
-        KeyEventArgs args,
-        TerminalsPageViewModel workspace,
-        Action toggleFullscreen,
-        CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Resolves the application command for a stroke, or <see langword="null" /> when the stroke
+    /// belongs to the terminal.
+    /// </summary>
+    /// <remarks>
+    /// This is synchronous on purpose: the caller must be able to mark the key event handled before
+    /// the event reaches <c>TerminalControl</c>.
+    /// </remarks>
+    public KeymapCommand? Resolve(KeyEventArgs args, TerminalsPageViewModel workspace)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(workspace);
-        ArgumentNullException.ThrowIfNull(toggleFullscreen);
         var stroke = TerminalKeyEventAdapter.FromAvalonia(args);
         var selected = workspace.SelectedSession;
-        var ctrlCPolicy = await workspace.GetCtrlCPolicyAsync(cancellationToken).ConfigureAwait(true);
         var result = keymap.Resolve(
             stroke,
             OperatingSystem.IsMacOS() ? KeymapPlatform.MacOs : KeymapPlatform.WindowsLinux,
             selected?.ApplicationCursorKeys ?? false,
-            ctrlCPolicy,
+            workspace.CtrlCPolicy,
             selected?.Model.HasSelection ?? false);
-        if (result.Kind == KeymapResultKind.PtyBytes)
-        {
-            if (selected is not null)
-            {
-                await selected.SendInputAsync(result.Bytes, cancellationToken).ConfigureAwait(true);
-            }
+        return result.Kind == KeymapResultKind.ApplicationCommand ? result.Command : null;
+    }
 
-            return true;
-        }
-
-        if (result.Kind != KeymapResultKind.ApplicationCommand || result.Command is not { } command)
-        {
-            return false;
-        }
-
+    public static async Task ExecuteAsync(
+        KeymapCommand command,
+        TerminalsPageViewModel workspace,
+        Action toggleFullscreen,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workspace);
+        ArgumentNullException.ThrowIfNull(toggleFullscreen);
+        var selected = workspace.SelectedSession;
         switch (command)
         {
             case KeymapCommand.NewTerminal:
@@ -97,9 +104,7 @@ public sealed class TerminalInputRouter(KeymapService keymap)
                 selected?.OpenFind();
                 break;
             default:
-                throw new ArgumentOutOfRangeException(nameof(args));
+                throw new ArgumentOutOfRangeException(nameof(command));
         }
-
-        return true;
     }
 }

@@ -120,6 +120,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        _ = await GetCtrlCPolicyAsync(cancellationToken).ConfigureAwait(true);
         await LoadShellProfilesAsync(cancellationToken).ConfigureAwait(true);
         if (Sessions.Count == 0)
         {
@@ -448,10 +449,24 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         SetError(result.ErrorMessage);
     }
 
-    public Task<CtrlCPolicy> GetCtrlCPolicyAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// The Ctrl+C policy last read from settings.
+    /// </summary>
+    /// <remarks>
+    /// Key routing has to decide whether a stroke belongs to the app before the key event reaches
+    /// <c>TerminalControl</c>, so the policy is cached rather than awaited per keystroke.
+    /// </remarks>
+    public CtrlCPolicy CtrlCPolicy { get; private set; } = CtrlCPolicy.SigintAlways;
+
+    public async Task<CtrlCPolicy> GetCtrlCPolicyAsync(CancellationToken cancellationToken = default)
     {
-        return _settings?.Get(SettingKeys.CtrlCPolicy, cancellationToken) ??
-            Task.FromResult(CtrlCPolicy.SigintAlways);
+        if (_settings is null)
+        {
+            return CtrlCPolicy;
+        }
+
+        CtrlCPolicy = await _settings.Get(SettingKeys.CtrlCPolicy, cancellationToken).ConfigureAwait(true);
+        return CtrlCPolicy;
     }
 
     private static void SetActive(TerminalSessionViewModel? session, bool isActive)

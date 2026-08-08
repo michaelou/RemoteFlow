@@ -150,6 +150,10 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsPrivateKeyPassphraseVisible { get; private set; }
 
+    /// <summary>Whether the key picker applies — an SSH-family protocol authenticating with a key.</summary>
+    [ObservableProperty]
+    public partial bool IsPrivateKeySectionVisible { get; private set; }
+
     [ObservableProperty]
     public partial CredentialStorageStatus CredentialStatus { get; private set; }
 
@@ -231,6 +235,11 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
                 SelectedFolder = FolderChoices[0];
                 CredentialStatus = CredentialStorageStatus.NotStored;
                 UpdateCredentialPresentation();
+            }
+
+            if (KeyPicker is not null)
+            {
+                await KeyPicker.RefreshAvailableKeysAsync(cancellationToken).ConfigureAwait(true);
             }
 
             ClearValidationErrors();
@@ -535,6 +544,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         IsSftpSectionVisible = Protocol == ProtocolType.Sftp;
         IsRdpSectionVisible = Protocol == ProtocolType.Rdp;
         IsPrivateKeyPassphraseVisible = AuthMethod == AuthMethod.PrivateKey;
+        IsPrivateKeySectionVisible = IsSshSectionVisible && AuthMethod == AuthMethod.PrivateKey;
     }
 
     private void UpdateEnvironmentPreview()
