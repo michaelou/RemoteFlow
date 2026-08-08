@@ -11,6 +11,9 @@ public sealed class ZipBackupArchiveSerializer : IBackupArchiveSerializer
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
+        // See CredentialEnvelope: indented output would otherwise carry the writing host's line ending
+        // into the archive, and the manifest hash is taken over these bytes.
+        NewLine = "\n",
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
 

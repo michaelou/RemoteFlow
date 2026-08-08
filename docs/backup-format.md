@@ -54,6 +54,10 @@ base64-encoded salt. The encrypted envelope itself is specified with the credent
   manifest is always required, and its counts must agree with the entries that are present.
 - Duplicate known ZIP entries, malformed JSON, invalid ZIP data, and manifest/content count mismatches are
   rejected with a specific error.
+- Writers indent JSON entries with two spaces and end lines with `\n` on every operating system, so the
+  same snapshot produces the same bytes whether it was written on Windows, Linux, or macOS. The manifest
+  hash that authenticates the credential envelope is taken over those bytes; readers must not assume any
+  particular line ending, because a hand-edited archive may carry another.
 
 ## Security boundary
 
