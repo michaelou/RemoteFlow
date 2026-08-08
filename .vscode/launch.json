@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Launch the apphost, not RemoteFlow.Desktop.dll. Debugging the .dll runs it through
+      // `dotnet exec`, so the process image is dotnet.exe and Windows draws the .NET logo on the
+      // taskbar button — the window itself still carries the app icon, which is what makes the
+      // mismatch look like an Avalonia problem when it is really a launch-shape problem.
+      "name": "RemoteFlow Desktop",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/src/RemoteFlow.Desktop/bin/Debug/net10.0/RemoteFlow.Desktop",
+      "windows": {
+        "program": "${workspaceFolder}/src/RemoteFlow.Desktop/bin/Debug/net10.0/RemoteFlow.Desktop.exe"
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}/src/RemoteFlow.Desktop",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}

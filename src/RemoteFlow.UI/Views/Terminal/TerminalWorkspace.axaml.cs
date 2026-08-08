@@ -32,6 +32,20 @@ public sealed partial class TerminalWorkspace : UserControl
         }
     }
 
+    private async void Shortcuts_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not TerminalsPageViewModel viewModel ||
+            TopLevel.GetTopLevel(this) is not Window owner)
+        {
+            return;
+        }
+
+        var dialog = new TerminalShortcutsDialog(
+            new TerminalShortcutsViewModel(viewModel.Keymap, viewModel.CtrlCPolicy));
+        await dialog.ShowDialog(owner).ConfigureAwait(true);
+        FocusTerminal();
+    }
+
     private async void AddTab_OnClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is TerminalsPageViewModel viewModel)

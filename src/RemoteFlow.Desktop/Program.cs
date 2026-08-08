@@ -13,6 +13,9 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Must run before the first window exists, otherwise the taskbar button has already been
+        // grouped under the launching process and keeps showing that process's icon.
+        _ = WindowsShellIdentity.Apply();
         var builder = Host.CreateApplicationBuilder(args);
         _ = DesktopComposition.ConfigureServices(builder, new AppPaths());
         using var host = builder.Build();

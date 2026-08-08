@@ -1,0 +1,72 @@
+<Window
+    x:Class="RemoteFlow.UI.Views.Terminal.TerminalShortcutsDialog"
+    x:DataType="terminalViewModels:TerminalShortcutsViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal"
+    Title="Terminal shortcuts"
+    Width="520"
+    SizeToContent="Height"
+    CanResize="False"
+    WindowStartupLocation="CenterOwner">
+  <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,Auto">
+    <ItemsControl ItemsSource="{Binding Groups}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="terminalViewModels:TerminalShortcutGroupViewModel">
+          <StackPanel Margin="0,0,0,16">
+            <TextBlock
+                Margin="0,0,0,6"
+                FontWeight="SemiBold"
+                Foreground="{DynamicResource Brush.Text.Primary}"
+                Text="{Binding Title}" />
+            <ItemsControl ItemsSource="{Binding Shortcuts}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="terminalViewModels:TerminalShortcutViewModel">
+                  <Grid ColumnDefinitions="180,*" Margin="0,0,0,4">
+                    <TextBlock
+                        FontFamily="Cascadia Mono,Consolas"
+                        Foreground="{DynamicResource Brush.Accent}"
+                        Text="{Binding Gesture}"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        Grid.Column="1"
+                        Foreground="{DynamicResource Brush.Text.Secondary}"
+                        Text="{Binding Action}"
+                        TextWrapping="Wrap" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <Border
+        Grid.Row="1"
+        Padding="10,8"
+        Background="{DynamicResource Brush.Surface.2}"
+        CornerRadius="{DynamicResource Radius.Control}">
+      <TextBlock
+          Foreground="{DynamicResource Brush.Text.Primary}"
+          Text="{Binding CtrlCNote}"
+          TextWrapping="Wrap" />
+    </Border>
+
+    <TextBlock
+        Grid.Row="2"
+        Margin="0,10,0,0"
+        Foreground="{DynamicResource Brush.Text.Secondary}"
+        Text="{Binding Footnote}"
+        TextWrapping="Wrap" />
+
+    <Button
+        Grid.Row="3"
+        Margin="0,18,0,0"
+        HorizontalAlignment="Right"
+        Content="Close"
+        IsCancel="True"
+        IsDefault="True"
+        Click="Close_OnClick" />
+  </Grid>
+</Window>
