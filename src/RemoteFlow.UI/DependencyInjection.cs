@@ -9,6 +9,7 @@ using RemoteFlow.UI.ViewModels;
 using RemoteFlow.UI.ViewModels.Connections;
 using RemoteFlow.UI.ViewModels.CommandPalette;
 using RemoteFlow.UI.ViewModels.Terminal;
+using RemoteFlow.UI.ViewModels.Transfers;
 using RemoteFlow.UI.ViewModels.Settings;
 using RemoteFlow.UI.ViewModels.Security;
 using RemoteFlow.UI.ViewModels.Sftp;

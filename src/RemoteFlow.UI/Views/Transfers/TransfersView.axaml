@@ -1,0 +1,76 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Transfers.TransfersView"
+    x:DataType="viewModels:TransfersPageViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Transfers">
+  <UserControl.Resources>
+    <DataTemplate x:Key="TransferItemTemplate" x:DataType="viewModels:TransferItemViewModel">
+      <Border Margin="0,0,0,8" Padding="12" Background="{DynamicResource Brush.Surface.1}" CornerRadius="6">
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+            <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding DirectionText}" />
+            <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding StatusText}" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+            <Button Content="Cancel" IsVisible="{Binding CanCancel}" Command="{Binding CancelCommand}" />
+            <Button Content="Retry" IsVisible="{Binding CanRetry}" Command="{Binding RetryCommand}" />
+            <Button Content="Reveal" IsVisible="{Binding CanReveal}" Command="{Binding RevealCommand}" />
+          </StackPanel>
+          <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Height="6" Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" />
+          <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="18">
+            <TextBlock Text="{Binding ProgressText}" />
+            <TextBlock Grid.Column="1" Text="{Binding RateText}" />
+            <TextBlock Grid.Column="2" Text="{Binding EtaText}" />
+          </Grid>
+          <TextBlock
+              Grid.Row="3"
+              Grid.ColumnSpan="2"
+              IsVisible="{Binding FailureReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+              Foreground="#D43B3B"
+              Text="{Binding FailureReason}"
+              TextWrapping="Wrap" />
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <ScrollViewer>
+    <Grid Margin="24" RowDefinitions="Auto,Auto" RowSpacing="18">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel>
+          <TextBlock FontSize="28" FontWeight="SemiBold" Text="Transfers" />
+          <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding AggregateStatus}" />
+        </StackPanel>
+        <Button Grid.Column="1" Content="Clear completed" IsEnabled="{Binding HasCompleted}" Command="{Binding ClearCompletedCommand}" />
+      </Grid>
+
+      <StackPanel Grid.Row="1" Spacing="18">
+        <Border IsVisible="{Binding IsEmpty}" Padding="28" Background="{DynamicResource Brush.Surface.1}" CornerRadius="8">
+          <StackPanel HorizontalAlignment="Center" Spacing="6">
+            <TextBlock HorizontalAlignment="Center" FontSize="18" FontWeight="SemiBold" Text="No transfers yet" />
+            <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Uploads and downloads will appear here." />
+          </StackPanel>
+        </Border>
+
+        <StackPanel IsVisible="{Binding HasActive}" Spacing="8">
+          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Active" />
+          <ItemsControl ItemsSource="{Binding ActiveItems}" ItemTemplate="{StaticResource TransferItemTemplate}" />
+        </StackPanel>
+        <StackPanel IsVisible="{Binding HasQueued}" Spacing="8">
+          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Queued" />
+          <ItemsControl ItemsSource="{Binding QueuedItems}" ItemTemplate="{StaticResource TransferItemTemplate}" />
+        </StackPanel>
+        <StackPanel IsVisible="{Binding HasFailed}" Spacing="8">
+          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Failed and cancelled" />
+          <ItemsControl ItemsSource="{Binding FailedItems}" ItemTemplate="{StaticResource TransferItemTemplate}" />
+        </StackPanel>
+        <StackPanel IsVisible="{Binding HasCompleted}" Spacing="8">
+          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Completed" />
+          <ItemsControl ItemsSource="{Binding CompletedItems}" ItemTemplate="{StaticResource TransferItemTemplate}" />
+        </StackPanel>
+      </StackPanel>
+    </Grid>
+  </ScrollViewer>
+</UserControl>

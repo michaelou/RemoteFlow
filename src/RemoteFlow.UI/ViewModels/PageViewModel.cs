@@ -10,8 +10,6 @@ public partial class PageViewModel(string title) : ObservableObject
     public partial string StateText { get; set; } = string.Empty;
 }
 
-public sealed class TransfersPageViewModel() : PageViewModel("Transfers");
-
 public sealed class SettingsPageViewModel(
     Settings.TerminalSettingsViewModel? terminal = null,
     Security.TrustedKeysViewModel? security = null) : PageViewModel("Settings")

@@ -12,6 +12,8 @@
     xmlns:sftpViewModels="using:RemoteFlow.UI.ViewModels.Sftp"
     xmlns:terminalViews="using:RemoteFlow.UI.Views.Terminal"
     xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal"
+    xmlns:transferViews="using:RemoteFlow.UI.Views.Transfers"
+    xmlns:transferViewModels="using:RemoteFlow.UI.ViewModels.Transfers"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels"
     Title="RemoteFlow"
     Width="1200"
@@ -28,6 +30,9 @@
     </DataTemplate>
     <DataTemplate DataType="{x:Type sftpViewModels:SftpWorkspaceViewModel}" x:DataType="sftpViewModels:SftpWorkspaceViewModel">
       <sftpViews:SftpWorkspace />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type transferViewModels:TransfersPageViewModel}" x:DataType="transferViewModels:TransfersPageViewModel">
+      <transferViews:TransfersView />
     </DataTemplate>
     <DataTemplate DataType="{x:Type viewModels:SettingsPageViewModel}" x:DataType="viewModels:SettingsPageViewModel">
       <TabControl>
@@ -55,6 +60,7 @@
   </Window.DataTemplates>
   <Grid>
     <Grid ColumnDefinitions="220,*">
+      <Grid RowDefinitions="*,Auto">
       <ListBox
         x:Name="NavigationList"
         Classes="navigation"
@@ -68,6 +74,12 @@
         </DataTemplate>
       </ListBox.ItemTemplate>
       </ListBox>
+        <Border Grid.Row="1" Padding="12,8" Background="{DynamicResource Brush.Surface.1}">
+          <TextBlock
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="{Binding Transfers.AggregateStatus, FallbackValue=No active transfers}" />
+        </Border>
+      </Grid>
       <Border Grid.Column="1" Background="{DynamicResource Brush.Surface.0}">
         <ContentControl Content="{Binding CurrentPage}" />
       </Border>

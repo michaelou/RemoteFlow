@@ -5,6 +5,7 @@ using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Application.Services;
 using RemoteFlow.UI.Services;
+using RemoteFlow.UI.ViewModels.Transfers;
 
 namespace RemoteFlow.UI.ViewModels.Sftp;
 
@@ -82,7 +83,8 @@ public sealed partial class SftpWorkspaceViewModel(
     IFilePickerService filePicker,
     IConfirmationDialogService confirmation,
     IClipboardService clipboard,
-    IRemoteEditServiceFactory? remoteEditFactory = null) : PageViewModel("SFTP"), IAsyncDisposable
+    IRemoteEditServiceFactory? remoteEditFactory = null,
+    TransfersPageViewModel? transferManager = null) : PageViewModel("SFTP"), IAsyncDisposable
 {
     private readonly List<string> _backHistory = [];
     private readonly List<string> _forwardHistory = [];
@@ -352,17 +354,43 @@ public sealed partial class SftpWorkspaceViewModel(
             return;
         }
         ErrorMessage = null;
-        foreach (var localPath in localPaths)
+        var paths = localPaths.ToArray();
+        if (transferManager is null)
         {
-            var name = Path.GetFileName(localPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            var result = await _transfers.UploadAsync(
-                localPath,
-                SftpPath.Combine(targetDirectory, name),
-                cancellationToken: cancellationToken).ConfigureAwait(true);
-            if (!result.IsSuccess)
+            foreach (var localPath in paths)
             {
-                ErrorMessage = DescribeTransferFailure(result, "upload");
-                break;
+                var name = Path.GetFileName(localPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                var result = await _transfers.UploadAsync(
+                    localPath,
+                    SftpPath.Combine(targetDirectory, name),
+                    cancellationToken: cancellationToken).ConfigureAwait(true);
+                if (!result.IsSuccess)
+                {
+                    ErrorMessage = DescribeTransferFailure(result, "upload");
+                    break;
+                }
+            }
+        }
+        else
+        {
+            var engine = _transfers;
+            var queued = new List<TransferItemViewModel>();
+            foreach (var localPath in paths)
+            {
+                var name = Path.GetFileName(localPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                var destination = SftpPath.Combine(targetDirectory, name);
+                queued.Add(await transferManager.QueueAsync(new TransferQueueRequest(
+                    TransferDirection.Upload,
+                    localPath,
+                    destination,
+                    (progress, token) => engine.UploadAsync(localPath, destination, progress, token)),
+                    cancellationToken).ConfigureAwait(true));
+            }
+            var results = await Task.WhenAll(queued.Select(item => item.Completion)).ConfigureAwait(true);
+            var failed = results.FirstOrDefault(result => !result.IsSuccess);
+            if (failed is not null)
+            {
+                ErrorMessage = DescribeTransferFailure(failed, "upload");
             }
         }
         if (ErrorMessage is null)
@@ -397,20 +425,52 @@ public sealed partial class SftpWorkspaceViewModel(
         {
             return [];
         }
+        var selected = items.ToArray();
         var completed = new List<string>();
-        foreach (var item in items)
+        if (transferManager is null)
         {
-            var localPath = Path.Combine(localDirectory, item.Name);
-            var result = await _transfers.DownloadAsync(
-                item.FullPath,
-                localPath,
-                cancellationToken: cancellationToken).ConfigureAwait(true);
-            if (!result.IsSuccess)
+            foreach (var item in selected)
             {
-                ErrorMessage = DescribeTransferFailure(result, "download");
-                break;
+                var localPath = Path.Combine(localDirectory, item.Name);
+                var result = await _transfers.DownloadAsync(
+                    item.FullPath,
+                    localPath,
+                    cancellationToken: cancellationToken).ConfigureAwait(true);
+                if (!result.IsSuccess)
+                {
+                    ErrorMessage = DescribeTransferFailure(result, "download");
+                    break;
+                }
+                completed.Add(localPath);
             }
-            completed.Add(localPath);
+        }
+        else
+        {
+            var engine = _transfers;
+            var queued = new List<(string Path, TransferItemViewModel Item)>();
+            foreach (var item in selected)
+            {
+                var localPath = Path.Combine(localDirectory, item.Name);
+                var managed = await transferManager.QueueAsync(new TransferQueueRequest(
+                    TransferDirection.Download,
+                    item.FullPath,
+                    localPath,
+                    (progress, token) => engine.DownloadAsync(item.FullPath, localPath, progress, token)),
+                    cancellationToken).ConfigureAwait(true);
+                queued.Add((localPath, managed));
+            }
+            foreach (var queuedItem in queued)
+            {
+                var result = await queuedItem.Item.Completion.ConfigureAwait(true);
+                if (result.IsSuccess)
+                {
+                    completed.Add(queuedItem.Path);
+                }
+                else
+                {
+                    ErrorMessage ??= DescribeTransferFailure(result, "download");
+                }
+            }
         }
         if (completed.Count > 0 && ErrorMessage is null)
         {

@@ -6,6 +6,7 @@ using RemoteFlow.Domain.Entities;
 using RemoteFlow.TestSupport;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels.Sftp;
+using RemoteFlow.UI.ViewModels.Transfers;
 using RemoteFlow.UI.Views.Sftp;
 using Xunit;
 
@@ -113,6 +114,36 @@ public sealed class SftpWorkspaceTests
         finally
         {
             Directory.Delete(staging, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task WorkspaceTransfersFeedTheSharedTransferPanel()
+    {
+        var token = TestContext.Current.CancellationToken;
+        using var transfers = new TransfersPageViewModel(
+            new InlineDispatcher(),
+            new NoOpRevealService());
+        var fixture = CreateFixture(transferManager: transfers);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var localRoot = CreateTempDirectory();
+        try
+        {
+            var first = Path.Combine(localRoot, "first.txt");
+            var second = Path.Combine(localRoot, "second.txt");
+            await File.WriteAllTextAsync(first, "first", token);
+            await File.WriteAllTextAsync(second, "second", token);
+
+            await fixture.ViewModel.UploadAsync([first, second], "/home/test", token);
+
+            Assert.Equal(2, transfers.CompletedCount);
+            Assert.Equal(2, transfers.Items.Count);
+            Assert.All(transfers.Items, item => Assert.Equal(ManagedTransferStatus.Completed, item.Status));
+            Assert.Equal("No active transfers", transfers.AggregateStatus);
+        }
+        finally
+        {
+            Directory.Delete(localRoot, recursive: true);
         }
     }
 
@@ -393,7 +424,10 @@ public sealed class SftpWorkspaceTests
         Assert.NotNull(view);
     }
 
-    private static Fixture CreateFixture(ISftpService? service = null, bool confirmationResult = true)
+    private static Fixture CreateFixture(
+        ISftpService? service = null,
+        bool confirmationResult = true,
+        TransfersPageViewModel? transferManager = null)
     {
         var connection = Connection.Create(SystemGuidProvider.Instance, "Files", "example.test").Value;
         var ssh = new FakeSshConnection();
@@ -405,7 +439,13 @@ public sealed class SftpWorkspaceTests
         return new Fixture(
             connection,
             sftp,
-            new SftpWorkspaceViewModel(factory, new StubFilePicker(), confirmation, clipboard),
+            new SftpWorkspaceViewModel(
+                factory,
+                new StubFilePicker(),
+                confirmation,
+                clipboard,
+                null,
+                transferManager),
             confirmation,
             clipboard);
     }
@@ -512,6 +552,25 @@ public sealed class SftpWorkspaceTests
             cancellationToken.ThrowIfCancellationRequested();
             WrittenText = text;
             return Task.FromResult(ClipboardWriteResult.Success);
+        }
+    }
+
+    private sealed class InlineDispatcher : IUiDispatcher
+    {
+        public ValueTask InvokeAsync(Action action, CancellationToken cancellationToken = default)
+        {
+            action();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class NoOpRevealService : IFileRevealService
+    {
+        public Task<FileRevealResult> RevealAsync(
+            string filePath,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(FileRevealResult.Success);
         }
     }
 

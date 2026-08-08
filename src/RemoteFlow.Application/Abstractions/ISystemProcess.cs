@@ -58,3 +58,20 @@ public interface ISystemTerminalLauncher
         Connection connection,
         CancellationToken cancellationToken = default);
 }
+
+public sealed record FileRevealResult(bool Succeeded, string? ErrorMessage = null)
+{
+    public static FileRevealResult Success { get; } = new(true);
+
+    public static FileRevealResult Failure(string message)
+    {
+        return new(false, message);
+    }
+}
+
+public interface IFileRevealService
+{
+    Task<FileRevealResult> RevealAsync(
+        string filePath,
+        CancellationToken cancellationToken = default);
+}
