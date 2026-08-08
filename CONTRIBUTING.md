@@ -52,7 +52,8 @@ Keep `CHANGELOG.md` current in the same pull request as the change, under `## [U
 `Removed`, `Fixed`, `Security`). Write entries for the person upgrading, not for the person who wrote the
 code: what changed for them, and what they have to do about it. Internal refactoring that no user can
 observe does not need an entry. Releasing means renaming `Unreleased` to the version with a date, opening a
-fresh `Unreleased` section, and tagging that commit — nothing automated does this yet.
+fresh `Unreleased` section, and tagging that commit. Pushing the tag then builds, tests, and drafts the
+release; publishing it stays a manual decision. See [docs/releasing.md](docs/releasing.md).
 
 ## Packaging
 
@@ -80,6 +81,11 @@ covered, so a cross-platform change still has to be exercised locally. The SSH i
 Linux Docker engine and does not run in CI at all; every run writes that into its summary so a green run is
 not read as more than it is. There is no coverage gate — the reviewable rule is that changes to Domain or
 Application come with tests.
+
+`.github/workflows/release.yml` runs on `v*` tags only. It builds each architecture on a runner of that
+architecture, launches every artefact to check it starts and reports the version in the tag, and creates a
+**draft** release with checksums and generated notes. It never publishes. See
+[docs/releasing.md](docs/releasing.md).
 
 CI adds trx and coverage reports by appending platform arguments through
 `-p:ExtraTestingPlatformCommandLineArguments=...`, which `Directory.Build.targets` appends to any

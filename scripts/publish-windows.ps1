@@ -20,6 +20,10 @@ Which architectures to build. Both by default.
 .PARAMETER SkipInstaller
 Produce only the portable zip.
 
+.PARAMETER RequireInstaller
+Turn the missing-Inno-Setup warning into an error. The release workflow passes this: a release that
+quietly ships zips and no installers is worse than a build that fails.
+
 .PARAMETER KeepPublishOutput
 Leave the intermediate publish directories in place for inspection.
 #>
@@ -30,6 +34,7 @@ param(
     [string]$Configuration = 'Release',
     [string]$OutputDirectory,
     [switch]$SkipInstaller,
+    [switch]$RequireInstaller,
     [switch]$KeepPublishOutput,
     [string]$CertificateThumbprint = $env:REMOTEFLOW_SIGN_THUMBPRINT,
     [string]$TimestampUrl = $env:REMOTEFLOW_SIGN_TIMESTAMP_URL
@@ -37,6 +42,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+if ($SkipInstaller -and $RequireInstaller) {
+    throw 'Pass either -SkipInstaller or -RequireInstaller, not both.'
+}
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $project = Join-Path $repositoryRoot 'src/RemoteFlow.Desktop/RemoteFlow.Desktop.csproj'
@@ -224,6 +233,10 @@ foreach ($rid in $Runtime) {
     else {
         $iscc = Resolve-InnoSetupCompiler
         if (-not $iscc) {
+            if ($RequireInstaller) {
+                throw 'Inno Setup 6 was not found and -RequireInstaller was passed. Install it (winget install --id JRSoftware.InnoSetup).'
+            }
+
             Write-Warning 'Inno Setup 6 was not found, so no installer was built. Install it (winget install --id JRSoftware.InnoSetup) or pass -SkipInstaller to silence this.'
         }
         else {
