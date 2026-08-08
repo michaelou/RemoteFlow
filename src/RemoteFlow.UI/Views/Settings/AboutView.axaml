@@ -1,0 +1,39 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Settings.AboutView"
+    x:DataType="settingsViewModels:AboutViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings">
+  <ScrollViewer>
+    <Grid Margin="28" RowDefinitions="Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
+      <StackPanel Spacing="5">
+        <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding ProductName}" />
+        <TextBlock
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="The build on this machine, and the commit it was built from." />
+      </StackPanel>
+
+      <StackPanel Grid.Row="1" Margin="0,24,0,0" Spacing="14">
+        <StackPanel Spacing="5">
+          <TextBlock FontWeight="SemiBold" Text="Version" />
+          <!-- Selectable: this and the commit below are what a bug report needs pasted into it. -->
+          <SelectableTextBlock
+              x:Name="VersionText"
+              FontFamily="Cascadia Mono,Consolas"
+              Foreground="{DynamicResource Brush.Text.Primary}"
+              Text="{Binding Version}" />
+        </StackPanel>
+
+        <StackPanel Spacing="5">
+          <TextBlock FontWeight="SemiBold" Text="Commit" />
+          <SelectableTextBlock
+              x:Name="CommitText"
+              FontFamily="Cascadia Mono,Consolas"
+              Foreground="{DynamicResource Brush.Text.Primary}"
+              Text="{Binding Commit}"
+              TextWrapping="Wrap" />
+        </StackPanel>
+      </StackPanel>
+    </Grid>
+  </ScrollViewer>
+</UserControl>

@@ -5,4 +5,26 @@
   <PropertyGroup Condition="'$(ExtraTestingPlatformCommandLineArguments)' != ''">
     <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) $(ExtraTestingPlatformCommandLineArguments)</TestingPlatformCommandLineArguments>
   </PropertyGroup>
+
+  <!-- MinVer supplies the version; the commit it was built from has to come from somewhere too, so that
+       "RemoteFlow 0.1.0" in a bug report can be traced to one commit. The SDK appends SourceRevisionId to
+       AssemblyInformationalVersion, and nothing else here sets it (there is no SourceLink package). A
+       source tree exported without .git still builds: the version then simply carries no commit. -->
+  <Target Name="SetSourceRevisionIdFromGit"
+          BeforeTargets="AddSourceRevisionToInformationalVersion"
+          Condition="'$(SourceRevisionId)' == '' and '$(IncludeSourceRevisionInInformationalVersion)' != 'false'">
+    <Exec Command="git rev-parse HEAD"
+          WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="low"
+          StandardErrorImportance="low"
+          EchoOff="true"
+          ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_GitHeadSha" />
+      <Output TaskParameter="ExitCode" PropertyName="_GitHeadExitCode" />
+    </Exec>
+    <PropertyGroup Condition="'$(_GitHeadExitCode)' == '0' and '$(_GitHeadSha)' != ''">
+      <SourceRevisionId>$(_GitHeadSha.Trim())</SourceRevisionId>
+    </PropertyGroup>
+  </Target>
 </Project>

@@ -13,6 +13,17 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Answered before anything is composed or shown: --version has to work from a script, on a machine
+        // where the database or the credential store might not be usable at all.
+        if (VersionSwitch.IsRequested(args))
+        {
+            // A WinExe has no console of its own, so borrow the caller's before writing.
+            _ = ParentConsole.TryAttach();
+            Console.Out.WriteLine(VersionSwitch.Format(AssemblyVersionInfo.ForEntryAssembly()));
+            Console.Out.Flush();
+            return;
+        }
+
         // Must run before the first window exists, otherwise the taskbar button has already been
         // grouped under the launching process and keeps showing that process's icon.
         _ = WindowsShellIdentity.Apply();

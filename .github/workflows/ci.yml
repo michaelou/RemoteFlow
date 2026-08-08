@@ -44,6 +44,11 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # MinVer reads tags and commit height, and the default shallow checkout has neither. Without this
+          # a CI build silently reports the wrong version instead of failing, which is the one outcome
+          # tag-driven versioning cannot tolerate.
+          fetch-depth: 0
 
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
