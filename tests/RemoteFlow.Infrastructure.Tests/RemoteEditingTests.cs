@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Microsoft.Extensions.Time.Testing;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Application.Services;
@@ -89,23 +90,37 @@ public sealed class RemoteEditingTests
             var initial = await RemoteEditService.CaptureLocalSnapshotAsync(target, token);
             var calls = 0;
             var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var monitor = new WatchedFileMonitor(TimeSpan.FromMilliseconds(100), TimeSpan.FromSeconds(10));
+            // A frozen clock is what makes this test about debouncing rather than about how fast the
+            // machine happens to be: no timer can elapse while the writes are in flight, so the ten saves
+            // cannot be split across windows by a slow runner.
+            var time = new FakeTimeProvider();
+            var monitor = new WatchedFileMonitor(
+                TimeSpan.FromMilliseconds(100),
+                TimeSpan.FromMilliseconds(500),
+                forcePolling: false,
+                timeProvider: time);
             await using var watch = await monitor.WatchAsync(target, initial.Sha256, (_, _) =>
             {
                 _ = Interlocked.Increment(ref calls);
-                changed.SetResult();
+                _ = changed.TrySetResult();
                 return Task.FromResult(true);
             }, token);
 
             for (var index = 1; index <= 10; index++)
             {
                 await File.WriteAllTextAsync(target, index.ToString(System.Globalization.CultureInfo.InvariantCulture), token);
-                await Task.Delay(10, token);
             }
 
-            await changed.Task.WaitAsync(TimeSpan.FromSeconds(3), token);
-            await Task.Delay(250, token);
+            // Past both the debounce and the polling interval, so detection does not depend on whether the
+            // operating system's file watcher has delivered its events yet.
+            time.Advance(TimeSpan.FromSeconds(1));
+            await changed.Task.WaitAsync(TimeSpan.FromSeconds(10), token);
+
+            // Advancing again proves the quiet period is genuinely quiet: later checks see the same
+            // content and upload nothing.
+            time.Advance(TimeSpan.FromSeconds(5));
             Assert.Equal(1, Volatile.Read(ref calls));
+            Assert.Equal("10", await File.ReadAllTextAsync(target, token));
         }
         finally
         {

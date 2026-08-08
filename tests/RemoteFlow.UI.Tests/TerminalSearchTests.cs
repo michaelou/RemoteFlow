@@ -50,32 +50,77 @@ public sealed class TerminalSearchTests
         Assert.Equal(0, session.SearchMatchCount);
     }
 
+    // These two were one test, and it was flaky for a reason worth recording. The session's read loop
+    // feeds the model and *then* restores the viewport; a wait that only looked for the new text returned
+    // in between, so the test scrolled while the loop was still mid-frame and the loop promptly undid it.
+    // One publish per test, with each wait ending on a state the loop has finished producing, removes the
+    // interleaving instead of papering over it with a sleep.
+
     [AvaloniaFact]
-    public async Task IncomingOutputPreservesScrolledViewportButFollowsWhenAlreadyAtBottom()
+    public async Task IncomingOutputPreservesAScrolledBackViewport()
     {
         var token = TestContext.Current.CancellationToken;
         var channel = new FakeTerminalChannel();
         await using var session = new TerminalSessionViewModel(channel, new ImmediateDispatcher());
-        session.Model.Feed(string.Join("\r\n", Enumerable.Range(1, 200).Select(index => $"history {index}")));
+        await PublishHistoryAsync(channel, session, token);
+
         session.Model.ScrollToYDisp(20);
         var viewport = session.Model.Terminal.Buffer.YDisp;
         Assert.False(session.Model.Terminal.Buffer.IsAtBottom);
 
-        await channel.PublishAsync("\r\nPRESERVE_VIEWPORT\r\n", token);
-        await UntilAsync(
-            () => session.Model.SearchService.GetSnapshot().Text.Contains("PRESERVE_VIEWPORT", StringComparison.Ordinal),
-            token);
+        await PublishFrameAsync(channel, session, "\r\nPRESERVE_VIEWPORT\r\n", token);
 
+        Assert.Contains("PRESERVE_VIEWPORT", session.Model.SearchService.GetSnapshot().Text, StringComparison.Ordinal);
         Assert.Equal(viewport, session.Model.Terminal.Buffer.YDisp);
+        Assert.False(session.Model.Terminal.Buffer.IsAtBottom);
+    }
 
-        session.Model.Terminal.Buffer.ScrollToBottom();
+    [AvaloniaFact]
+    public async Task IncomingOutputFollowsTheBottomWhenTheViewportIsAlreadyThere()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var channel = new FakeTerminalChannel();
+        await using var session = new TerminalSessionViewModel(channel, new ImmediateDispatcher());
+        await PublishHistoryAsync(channel, session, token);
+
         Assert.True(session.Model.Terminal.Buffer.IsAtBottom);
-        await channel.PublishAsync("\r\nFOLLOW_BOTTOM\r\n", token);
-        await UntilAsync(
-            () => session.Model.SearchService.GetSnapshot().Text.Contains("FOLLOW_BOTTOM", StringComparison.Ordinal),
+
+        await PublishFrameAsync(channel, session, "\r\nFOLLOW_BOTTOM\r\n", token);
+
+        Assert.Contains("FOLLOW_BOTTOM", session.Model.SearchService.GetSnapshot().Text, StringComparison.Ordinal);
+        Assert.True(session.Model.Terminal.Buffer.IsAtBottom);
+    }
+
+    /// <summary>Fills the scrollback through the channel rather than by feeding the model directly, so the
+    /// session's read loop stays the only writer to the terminal buffer.</summary>
+    private static Task PublishHistoryAsync(
+        FakeTerminalChannel channel,
+        TerminalSessionViewModel session,
+        CancellationToken token)
+    {
+        return PublishFrameAsync(
+            channel,
+            session,
+            string.Join("\r\n", Enumerable.Range(1, 200).Select(index => $"history {index}")),
             token);
+    }
 
-        Assert.True(session.Model.Terminal.Buffer.IsAtBottom);
+    /// <summary>Publishes output and returns once the read loop has applied the whole frame — text,
+    /// viewport, and title. Waiting for the text alone returns partway through the frame, while the loop
+    /// still has the viewport to settle, and whatever the test does in that window the loop then undoes.
+    /// </summary>
+    private static async Task PublishFrameAsync(
+        FakeTerminalChannel channel,
+        TerminalSessionViewModel session,
+        string text,
+        CancellationToken token)
+    {
+        var framesBefore = session.OutputFramesApplied;
+        await channel.PublishAsync(text, token);
+        await UntilAsync(
+            () => session.OutputFramesApplied > framesBefore,
+            "the session applied the output frame",
+            token);
     }
 
     [AvaloniaFact]
@@ -94,12 +139,14 @@ public sealed class TerminalSearchTests
         Assert.True(elapsed < TimeSpan.FromSeconds(2), $"Scrolling took {elapsed.TotalMilliseconds:F0} ms.");
     }
 
-    private static async Task UntilAsync(Func<bool> condition, CancellationToken cancellationToken)
+    /// <summary>Waits for a condition rather than for a duration. The description is what a failure reads
+    /// like at three in the morning, so it says what was being waited for.</summary>
+    private static async Task UntilAsync(Func<bool> condition, string description, CancellationToken cancellationToken)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        var deadline = DateTime.UtcNow.AddSeconds(10);
         while (!condition())
         {
-            Assert.True(DateTime.UtcNow < deadline, "The output did not reach the terminal within five seconds.");
+            Assert.True(DateTime.UtcNow < deadline, $"Timed out after ten seconds waiting until {description}.");
             await Task.Delay(10, cancellationToken);
         }
     }
