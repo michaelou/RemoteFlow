@@ -7,6 +7,7 @@
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
         <ResourceInclude Source="avares://RemoteFlow.UI/Styles/DesignTokens.axaml" />
+        <ResourceInclude Source="avares://RemoteFlow.UI/Styles/Icons.axaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>

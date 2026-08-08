@@ -13,9 +13,15 @@
           <Button Margin="0,0,8,8" Command="{Binding OpenSftpCommand}" Content="Open SFTP" />
           <Button Margin="0,0,8,8" Command="{Binding LaunchRdpCommand}" Content="Launch RDP" />
           <Button Margin="0,0,8,8" Command="{Binding OpenSystemTerminalCommand}" Content="Open in system terminal" />
-          <Button Margin="0,0,8,8" Command="{Binding EditCommand}" Content="Edit" />
-          <Button Margin="0,0,8,8" Command="{Binding DuplicateCommand}" Content="Duplicate" />
-          <Button Margin="0,0,8,8" Command="{Binding DeleteCommand}" Content="Delete" />
+          <Button Margin="0,0,8,8" Command="{Binding EditCommand}" ToolTip.Tip="Edit">
+            <PathIcon Width="16" Height="16" Data="{DynamicResource Icon.Edit}" />
+          </Button>
+          <Button Margin="0,0,8,8" Command="{Binding DuplicateCommand}" ToolTip.Tip="Duplicate">
+            <PathIcon Width="16" Height="16" Data="{DynamicResource Icon.Duplicate}" />
+          </Button>
+          <Button Margin="0,0,8,8" Command="{Binding DeleteCommand}" ToolTip.Tip="Delete">
+            <PathIcon Width="16" Height="16" Data="{DynamicResource Icon.Delete}" />
+          </Button>
         </WrapPanel>
         <TextBlock
             Foreground="{DynamicResource Brush.Warning}"

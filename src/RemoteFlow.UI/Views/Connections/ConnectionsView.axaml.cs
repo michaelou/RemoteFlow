@@ -164,7 +164,7 @@ public sealed partial class ConnectionsView : UserControl
         }
     }
 
-    private void CreateFirstConnection_OnClick(object? sender, RoutedEventArgs e)
+    private void CreateConnection_OnClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is ConnectionsPageViewModel viewModel)
         {

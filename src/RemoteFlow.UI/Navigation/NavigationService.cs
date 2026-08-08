@@ -2,7 +2,7 @@ using RemoteFlow.UI.ViewModels;
 
 namespace RemoteFlow.UI.Navigation;
 
-public sealed record NavigationPageRegistration(string Key, string Title, Func<PageViewModel> Factory);
+public sealed record NavigationPageRegistration(string Key, string Title, string IconKey, Func<PageViewModel> Factory);
 
 public sealed class NavigationService : INavigationService
 {
@@ -15,7 +15,7 @@ public sealed class NavigationService : INavigationService
         ArgumentException.ThrowIfNullOrWhiteSpace(initialPageKey);
         var registrationArray = registrations.ToArray();
         _registry = registrationArray.ToDictionary(item => item.Key, StringComparer.Ordinal);
-        Items = [.. registrationArray.Select(item => new NavigationItemViewModel(item.Key, item.Title))];
+        Items = [.. registrationArray.Select(item => new NavigationItemViewModel(item.Key, item.Title, item.IconKey))];
         CurrentPage = Resolve(initialPageKey);
         CurrentPageKey = initialPageKey;
     }
@@ -32,10 +32,10 @@ public sealed class NavigationService : INavigationService
     {
         return new NavigationService(
         [
-            new("connections", "Connections", () => new PageViewModel("Connections")),
-            new("terminals", "Terminals", () => new PageViewModel("Terminals")),
-            new("transfers", "Transfers", () => new PageViewModel("Transfers")),
-            new("settings", "Settings", () => new PageViewModel("Settings")),
+            new("connections", "Connections", "Icon.Connections", () => new PageViewModel("Connections")),
+            new("terminals", "Terminals", "Icon.Terminals", () => new PageViewModel("Terminals")),
+            new("transfers", "Transfers", "Icon.Transfers", () => new PageViewModel("Transfers")),
+            new("settings", "Settings", "Icon.Settings", () => new PageViewModel("Settings")),
         ],
         "connections");
     }

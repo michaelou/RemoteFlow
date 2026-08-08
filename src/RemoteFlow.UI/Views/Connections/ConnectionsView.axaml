@@ -22,6 +22,7 @@
         <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Favorites, recent sessions, and all saved connections" />
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Button Classes="accent" Click="CreateConnection_OnClick" Content="New connection" />
         <Button Click="NewFolder_OnClick" Content="New folder" ToolTip.Tip="Create a top-level folder. Right-click a folder to add one inside it." />
         <Button Click="ClearRecent_OnClick" Content="Clear recent" />
       </StackPanel>
@@ -39,7 +40,7 @@
       <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding FeedbackMessage}" />
     </Border>
 
-    <Grid Grid.Row="3" ColumnDefinitions="2*,3*" ColumnSpacing="16">
+    <Grid Grid.Row="3" ColumnDefinitions="*,500" ColumnSpacing="16">
       <TreeView
           x:Name="ConnectionTree"
           DragDrop.AllowDrop="True"
@@ -65,34 +66,37 @@
               DataType="{x:Type connectionViewModels:ExplorerNodeViewModel}"
               ItemsSource="{Binding Children}"
               x:DataType="connectionViewModels:ExplorerNodeViewModel">
-            <Grid ColumnDefinitions="24,Auto,Auto,*" Margin="2" PointerPressed="Node_OnPointerPressed">
+            <Grid ColumnDefinitions="24,Auto,Auto" Margin="2" PointerPressed="Node_OnPointerPressed">
               <TextBlock VerticalAlignment="Center" Text="{Binding Icon}" />
-              <Grid Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" />
-                <TextBox
-                    x:Name="InlineRenameBox"
-                    IsVisible="{Binding IsRenaming}"
-                    KeyDown="InlineRename_OnKeyDown"
-                    MinWidth="140"
-                    Text="{Binding EditName}" />
-              </Grid>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <Grid>
+                  <TextBlock IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" />
+                  <TextBox
+                      x:Name="InlineRenameBox"
+                      IsVisible="{Binding IsRenaming}"
+                      KeyDown="InlineRename_OnKeyDown"
+                      MinWidth="140"
+                      Text="{Binding EditName}" />
+                </Grid>
+                <TextBlock
+                    FontSize="11"
+                    Foreground="{DynamicResource Brush.Text.Muted}"
+                    IsVisible="{Binding SecondaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    Text="{Binding SecondaryText}" />
+              </StackPanel>
               <Border
                   Grid.Column="2"
-                  Margin="8,0"
-                  Padding="6,2"
-                  Background="{Binding Badge.Background}"
-                  CornerRadius="4"
+                  Margin="8,0,0,0"
+                  Padding="5,1"
+                  VerticalAlignment="Center"
+                  Background="{DynamicResource Brush.Badge.Background}"
+                  CornerRadius="3"
                   IsVisible="{Binding Badge, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                  <TextBlock FontWeight="Bold" Text="{Binding Badge.Icon}" />
-                  <TextBlock FontSize="11" FontWeight="Bold" Text="{Binding Badge.Text}" />
+                <StackPanel Orientation="Horizontal" Spacing="3">
+                  <TextBlock FontSize="9" FontWeight="Bold" Foreground="{DynamicResource Brush.Badge.Text}" Text="{Binding Badge.Icon}" />
+                  <TextBlock FontSize="9" FontWeight="Bold" Foreground="{DynamicResource Brush.Badge.Text}" Text="{Binding Badge.Text}" />
                 </StackPanel>
               </Border>
-              <TextBlock
-                  Grid.Column="3"
-                  VerticalAlignment="Center"
-                  Foreground="{DynamicResource Brush.Text.Secondary}"
-                  Text="{Binding SecondaryText}" />
               <Grid.ContextMenu>
                 <ContextMenu>
                   <MenuItem Command="{Binding ConnectCommand}" Header="Connect" />
@@ -122,7 +126,7 @@
           <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="{Binding EmptyStateTitle}" />
           <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding EmptyStateMessage}" />
           <Button
-              Click="CreateFirstConnection_OnClick"
+              Click="CreateConnection_OnClick"
               Content="Create connection"
               HorizontalAlignment="Center"
               IsVisible="{Binding !HasActiveFilters}" />

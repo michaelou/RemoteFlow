@@ -10,6 +10,9 @@
       <Color x:Key="Color.Text.Primary">#F2F5F7</Color>
       <Color x:Key="Color.Text.Secondary">#B8C2CF</Color>
       <Color x:Key="Color.Text.Disabled">#7E8998</Color>
+      <Color x:Key="Color.Text.Muted">#8D97A5</Color>
+      <Color x:Key="Color.Badge.Background">#A6D4F7</Color>
+      <Color x:Key="Color.Badge.Text">#0B2032</Color>
       <Color x:Key="Color.Accent">#6CB6FF</Color>
       <Color x:Key="Color.Success">#5DE28C</Color>
       <Color x:Key="Color.Warning">#FFCA58</Color>
@@ -24,6 +27,9 @@
       <SolidColorBrush x:Key="Brush.Text.Primary" Color="{DynamicResource Color.Text.Primary}" />
       <SolidColorBrush x:Key="Brush.Text.Secondary" Color="{DynamicResource Color.Text.Secondary}" />
       <SolidColorBrush x:Key="Brush.Text.Disabled" Color="{DynamicResource Color.Text.Disabled}" />
+      <SolidColorBrush x:Key="Brush.Text.Muted" Color="{DynamicResource Color.Text.Muted}" />
+      <SolidColorBrush x:Key="Brush.Badge.Background" Color="{DynamicResource Color.Badge.Background}" />
+      <SolidColorBrush x:Key="Brush.Badge.Text" Color="{DynamicResource Color.Badge.Text}" />
       <SolidColorBrush x:Key="Brush.Accent" Color="{DynamicResource Color.Accent}" />
       <SolidColorBrush x:Key="Brush.Success" Color="{DynamicResource Color.Success}" />
       <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />
@@ -40,6 +46,9 @@
       <Color x:Key="Color.Text.Primary">#17202B</Color>
       <Color x:Key="Color.Text.Secondary">#475569</Color>
       <Color x:Key="Color.Text.Disabled">#7B8794</Color>
+      <Color x:Key="Color.Text.Muted">#6B7A8C</Color>
+      <Color x:Key="Color.Badge.Background">#D7EBFB</Color>
+      <Color x:Key="Color.Badge.Text">#134A75</Color>
       <Color x:Key="Color.Accent">#0969DA</Color>
       <Color x:Key="Color.Success">#137333</Color>
       <Color x:Key="Color.Warning">#8A5A00</Color>
@@ -54,6 +63,9 @@
       <SolidColorBrush x:Key="Brush.Text.Primary" Color="{DynamicResource Color.Text.Primary}" />
       <SolidColorBrush x:Key="Brush.Text.Secondary" Color="{DynamicResource Color.Text.Secondary}" />
       <SolidColorBrush x:Key="Brush.Text.Disabled" Color="{DynamicResource Color.Text.Disabled}" />
+      <SolidColorBrush x:Key="Brush.Text.Muted" Color="{DynamicResource Color.Text.Muted}" />
+      <SolidColorBrush x:Key="Brush.Badge.Background" Color="{DynamicResource Color.Badge.Background}" />
+      <SolidColorBrush x:Key="Brush.Badge.Text" Color="{DynamicResource Color.Badge.Text}" />
       <SolidColorBrush x:Key="Brush.Accent" Color="{DynamicResource Color.Accent}" />
       <SolidColorBrush x:Key="Brush.Success" Color="{DynamicResource Color.Success}" />
       <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />

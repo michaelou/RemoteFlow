@@ -21,6 +21,13 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 ### Changed
 
 - The application binary is now `RemoteFlow.exe` rather than `RemoteFlow.Desktop.exe`.
+- The sidebar shows an icon beside every destination, and Connections gained a **New connection** button in
+  its header so creating one no longer depends on the empty state.
+- Connection rows read as a single entry: the host sits under the name in small grey text, and the
+  environment badge is smaller and consistently light blue rather than colour-coded per environment. The
+  badge keeps its ●/◆/⚠ glyph, which is what distinguishes the environments without relying on colour.
+- The connection details panel is a fixed 500px wide, and its Edit, Duplicate, and Delete buttons are now
+  icons with tooltips.
 
 ## [0.0.0] - unreleased
 

@@ -3,6 +3,7 @@
     x:DataType="viewModels:MainWindowViewModel"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="using:RemoteFlow.UI.Converters"
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
     xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
     xmlns:backupViewModels="using:RemoteFlow.UI.ViewModels.Backup"
@@ -86,7 +87,14 @@
         SelectedIndex="0">
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="viewModels:NavigationItemViewModel">
-          <TextBlock Text="{Binding Title}" />
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <PathIcon
+                Width="16"
+                Height="16"
+                VerticalAlignment="Center"
+                Data="{Binding IconKey, Converter={x:Static converters:ResourceKeyConverter.Instance}}" />
+            <TextBlock VerticalAlignment="Center" Text="{Binding Title}" />
+          </StackPanel>
         </DataTemplate>
       </ListBox.ItemTemplate>
       </ListBox>

@@ -44,26 +44,32 @@ public static class DependencyInjection
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "connections",
             "Connections",
+            "Icon.Connections",
             provider.GetRequiredService<ConnectionsPageViewModel>));
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "terminals",
             "Terminals",
+            "Icon.Terminals",
             provider.GetRequiredService<TerminalsPageViewModel>));
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "transfers",
             "Transfers",
+            "Icon.Transfers",
             provider.GetRequiredService<TransfersPageViewModel>));
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "sftp",
             "SFTP",
+            "Icon.Sftp",
             provider.GetRequiredService<SftpWorkspaceViewModel>));
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "backup",
             "Backup",
+            "Icon.Backup",
             provider.GetRequiredService<BackupPageViewModel>));
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "settings",
             "Settings",
+            "Icon.Settings",
             provider.GetRequiredService<SettingsPageViewModel>));
         services.TryAddSingleton<INavigationService>(provider => new NavigationService(
             provider.GetServices<NavigationPageRegistration>(),
