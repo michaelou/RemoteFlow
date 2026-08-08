@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <ApplicationIcon>../RemoteFlow.UI/Assets/remoteflow.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

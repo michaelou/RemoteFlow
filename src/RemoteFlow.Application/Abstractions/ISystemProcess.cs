@@ -31,7 +31,8 @@ public sealed record ProcessLaunchRequest(
     IReadOnlyList<string> Arguments,
     string? WorkingDirectory = null,
     IReadOnlyDictionary<string, string>? EnvironmentVariables = null,
-    bool UseShellExecute = false);
+    bool UseShellExecute = false,
+    string? Verb = null);
 
 public interface IProcessRunner
 {

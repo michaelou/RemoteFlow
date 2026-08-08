@@ -13,6 +13,7 @@ public sealed class ProcessRunner : IProcessRunner
         {
             FileName = request.FileName,
             UseShellExecute = request.UseShellExecute,
+            Verb = request.Verb ?? string.Empty,
             CreateNoWindow = false,
             WorkingDirectory = string.IsNullOrWhiteSpace(request.WorkingDirectory)
                 ? Environment.CurrentDirectory
@@ -31,8 +32,15 @@ public sealed class ProcessRunner : IProcessRunner
             }
         }
 
-        using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException($"'{request.FileName}' did not start a process.");
+        using var process = Process.Start(startInfo);
+        if (process is null && !request.UseShellExecute)
+        {
+            throw new InvalidOperationException($"'{request.FileName}' did not start a process.");
+        }
+
+        // A shell launch reports no process whenever the shell itself served the request: it showed
+        // its "Open with" picker for a file it has no association for, or handed the file to an
+        // already running instance of the associated application. Neither one is a failure.
         return Task.CompletedTask;
     }
 }

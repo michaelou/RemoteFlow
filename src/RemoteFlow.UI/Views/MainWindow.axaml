@@ -16,6 +16,7 @@
     xmlns:transferViewModels="using:RemoteFlow.UI.ViewModels.Transfers"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels"
     Title="RemoteFlow"
+    Icon="/Assets/remoteflow.ico"
     Width="1200"
     Height="760"
     MinWidth="640"
@@ -74,8 +75,16 @@
         </DataTemplate>
       </ListBox.ItemTemplate>
       </ListBox>
-        <Border Grid.Row="1" Padding="12,8" Background="{DynamicResource Brush.Surface.1}">
+        <Border
+            Grid.Row="1"
+            Height="32"
+            Padding="12,0"
+            Background="{DynamicResource Brush.Surface.1}"
+            BorderBrush="{DynamicResource Brush.Border}"
+            BorderThickness="0,1,1,0">
           <TextBlock
+              VerticalAlignment="Center"
+              TextTrimming="CharacterEllipsis"
               Foreground="{DynamicResource Brush.Text.Secondary}"
               Text="{Binding Transfers.AggregateStatus, FallbackValue=No active transfers}" />
         </Border>

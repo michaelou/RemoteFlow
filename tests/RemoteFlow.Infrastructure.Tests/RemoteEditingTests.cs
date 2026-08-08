@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Application.Services;
@@ -206,6 +207,61 @@ public sealed class RemoteEditingTests
         }
     }
 
+    [Fact]
+    public async Task ExtensionlessFileFallsBackToTheWindowsOpenWithPicker()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var path = Path.Combine(directory, "authorized_keys");
+            await File.WriteAllTextAsync(path, "text", TestContext.Current.CancellationToken);
+            var runner = new RecordingRunner
+            {
+                FirstLaunchFailure = new Win32Exception(1155), // ERROR_NO_ASSOCIATION
+            };
+            var launcher = new FileEditorLauncher(new StubPlatform(OperatingSystemFamily.Windows), runner);
+
+            await launcher.OpenAsync(path, TestContext.Current.CancellationToken);
+
+            Assert.Equal(2, runner.Requests.Count);
+            Assert.Null(runner.Requests[0].Verb);
+            Assert.Equal("openas", runner.Requests[1].Verb);
+            Assert.All(runner.Requests, request =>
+            {
+                Assert.Equal(path, request.FileName);
+                Assert.True(request.UseShellExecute);
+            });
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DismissingTheWindowsEditorPickerIsNotReportedAsAFailure()
+    {
+        var directory = CreateTempDirectory();
+        try
+        {
+            var path = Path.Combine(directory, "authorized_keys");
+            await File.WriteAllTextAsync(path, "text", TestContext.Current.CancellationToken);
+            var runner = new RecordingRunner
+            {
+                EveryLaunchFailure = new Win32Exception(1223), // ERROR_CANCELLED
+            };
+            var launcher = new FileEditorLauncher(new StubPlatform(OperatingSystemFamily.Windows), runner);
+
+            await launcher.OpenAsync(path, TestContext.Current.CancellationToken);
+
+            _ = Assert.Single(runner.Requests);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static async Task SeedAsync(
         FakeSftpService sftp,
         string path,
@@ -292,10 +348,15 @@ public sealed class RemoteEditingTests
     {
         public List<ProcessLaunchRequest> Requests { get; } = [];
 
+        public Exception? FirstLaunchFailure { get; init; }
+
+        public Exception? EveryLaunchFailure { get; init; }
+
         public Task RunAsync(ProcessLaunchRequest request, CancellationToken cancellationToken = default)
         {
             Requests.Add(request);
-            return Task.CompletedTask;
+            var failure = EveryLaunchFailure ?? (Requests.Count == 1 ? FirstLaunchFailure : null);
+            return failure is null ? Task.CompletedTask : Task.FromException(failure);
         }
     }
 

@@ -5,7 +5,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Sftp"
     Loaded="Workspace_OnLoaded">
-  <Grid Margin="20" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+  <Grid RowDefinitions="*,Auto">
+  <Grid Margin="20,20,20,10" RowDefinitions="Auto,Auto,Auto,Auto,*">
     <Grid ColumnDefinitions="Auto,*,Auto">
       <StackPanel Orientation="Horizontal" Spacing="6">
         <Button Content="←" IsEnabled="{Binding CanGoBack}" Command="{Binding BackCommand}" ToolTip.Tip="Back" />
@@ -51,9 +52,6 @@
       </StackPanel>
     </Grid>
 
-    <Border Grid.Row="2" IsVisible="{Binding IsLoading}" Padding="10" Background="{DynamicResource Brush.Surface.1}">
-      <StackPanel Orientation="Horizontal" Spacing="8"><ProgressBar Width="120" IsIndeterminate="True" /><TextBlock Text="Loading remote folder…" /></StackPanel>
-    </Border>
     <Border Grid.Row="2" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Padding="10" Background="#33D43B3B">
       <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
     </Border>
@@ -112,15 +110,47 @@
       </ListBox.ItemTemplate>
     </ListBox>
 
-    <Grid Grid.Row="5" Margin="0,8,0,0" ColumnDefinitions="*,Auto">
-      <TextBlock Text="{Binding FeedbackMessage}" Foreground="{DynamicResource Brush.Text.Secondary}" />
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+  </Grid>
+
+    <!-- Status bar: every slot keeps its space whether or not it has content, so the pane above
+         never reflows and the indicators never overlap each other. -->
+    <Border
+        Grid.Row="1"
+        Height="32"
+        Padding="12,0"
+        Background="{DynamicResource Brush.Surface.1}"
+        BorderBrush="{DynamicResource Brush.Border}"
+        BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="150,*,Auto,Auto">
+        <StackPanel
+            Orientation="Horizontal"
+            Spacing="8"
+            VerticalAlignment="Center"
+            IsVisible="{Binding IsBusyIndicatorVisible}">
+          <ProgressBar Width="60" Height="4" MinWidth="60" MinHeight="4" IsIndeterminate="True" VerticalAlignment="Center" />
+          <TextBlock Text="Loading…" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+        </StackPanel>
         <TextBlock
+            Grid.Column="1"
+            Margin="0,0,12,0"
+            VerticalAlignment="Center"
+            TextTrimming="CharacterEllipsis"
+            Text="{Binding FeedbackMessage}"
+            Foreground="{DynamicResource Brush.Text.Secondary}" />
+        <TextBlock
+            Grid.Column="2"
+            Margin="0,0,12,0"
+            VerticalAlignment="Center"
             IsVisible="{Binding HasActiveRemoteEdits}"
             Text="{Binding RemoteEditIndicator}"
             FontWeight="SemiBold" />
-        <TextBlock Text="{Binding DropTargetMessage}" FontWeight="SemiBold" />
-      </StackPanel>
-    </Grid>
+        <TextBlock
+            Grid.Column="3"
+            VerticalAlignment="Center"
+            IsVisible="{Binding DropTargetMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+            Text="{Binding DropTargetMessage}"
+            FontWeight="SemiBold" />
+      </Grid>
+    </Border>
   </Grid>
 </UserControl>

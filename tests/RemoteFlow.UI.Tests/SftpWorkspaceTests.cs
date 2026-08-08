@@ -417,6 +417,47 @@ public sealed class SftpWorkspaceTests
         Assert.Equal(target.Mode, (await inner.StatAsync(target.FullPath, token)).Value!.Mode);
     }
 
+    [Fact]
+    public async Task QuickBrowsingNeverShowsTheProgressIndicatorButASlowLoadDoes()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var inner = new FakeSftpService();
+        await SeedFileAsync(inner, "/home/test/file.txt", [1], token);
+        var recording = new RecordingSftpService(inner);
+        var fixture = CreateFixture(recording);
+        fixture.ViewModel.BusyIndicatorDelay = TimeSpan.FromMilliseconds(200);
+        var appearances = 0;
+        fixture.ViewModel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName == nameof(SftpWorkspaceViewModel.IsBusyIndicatorVisible) &&
+                fixture.ViewModel.IsBusyIndicatorVisible)
+            {
+                _ = Interlocked.Increment(ref appearances);
+            }
+        };
+
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+
+        Assert.Equal(0, Volatile.Read(ref appearances));
+        Assert.False(fixture.ViewModel.IsBusyIndicatorVisible);
+
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        recording.ListGate = gate;
+        var slowLoad = fixture.ViewModel.RefreshAsync(token);
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+        while (!fixture.ViewModel.IsBusyIndicatorVisible && DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(20, token);
+        }
+        var shownWhileLoading = fixture.ViewModel.IsBusyIndicatorVisible;
+        gate.SetResult();
+        await slowLoad;
+
+        Assert.True(shownWhileLoading);
+        Assert.Equal(1, Volatile.Read(ref appearances));
+        Assert.False(fixture.ViewModel.IsBusyIndicatorVisible);
+    }
+
     [AvaloniaFact]
     public void ViewUsesVirtualizingStackPanel()
     {
@@ -601,12 +642,18 @@ public sealed class SftpWorkspaceTests
         public TaskCompletionSource DeleteStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public Task<SftpResult<IReadOnlyList<RemoteFileInfo>>> ListAsync(
+        public TaskCompletionSource? ListGate { get; set; }
+
+        public async Task<SftpResult<IReadOnlyList<RemoteFileInfo>>> ListAsync(
             string path,
             CancellationToken cancellationToken = default)
         {
             ListCalls++;
-            return inner.ListAsync(path, cancellationToken);
+            if (ListGate is { } gate)
+            {
+                await gate.Task.WaitAsync(cancellationToken);
+            }
+            return await inner.ListAsync(path, cancellationToken);
         }
 
         public Task<SftpResult<RemoteFileInfo?>> StatAsync(

@@ -92,6 +92,7 @@ public sealed partial class SftpWorkspaceViewModel(
     private TransferEngine? _transfers;
     private IRemoteEditService? _remoteEdits;
     private CancellationTokenSource? _operationCancellation;
+    private CancellationTokenSource? _busyIndicatorDelay;
 
     public ObservableCollection<SftpItemViewModel> Items { get; } = [];
 
@@ -113,6 +114,15 @@ public sealed partial class SftpWorkspaceViewModel(
 
     [ObservableProperty]
     public partial bool IsLoading { get; private set; }
+
+    /// <summary>
+    /// Gets or sets how long a load must run before the status bar shows its progress indicator.
+    /// Loads that finish sooner never show it, so quick browsing does not flicker.
+    /// </summary>
+    public TimeSpan BusyIndicatorDelay { get; set; } = TimeSpan.FromMilliseconds(250);
+
+    [ObservableProperty]
+    public partial bool IsBusyIndicatorVisible { get; private set; }
 
     [ObservableProperty]
     public partial string? ErrorMessage { get; private set; }
@@ -825,10 +835,53 @@ public sealed partial class SftpWorkspaceViewModel(
         }
     }
 
+    partial void OnIsLoadingChanged(bool value)
+    {
+        CancelBusyIndicatorDelay();
+        if (!value)
+        {
+            IsBusyIndicatorVisible = false;
+            return;
+        }
+        if (BusyIndicatorDelay <= TimeSpan.Zero)
+        {
+            IsBusyIndicatorVisible = true;
+            return;
+        }
+        var pending = new CancellationTokenSource();
+        _busyIndicatorDelay = pending;
+        _ = ShowBusyIndicatorWhenSlowAsync(pending.Token);
+    }
+
     public async ValueTask DisposeAsync()
     {
+        CancelBusyIndicatorDelay();
         _ = await DisposeSessionAsync().ConfigureAwait(false);
         GC.SuppressFinalize(this);
+    }
+
+    private async Task ShowBusyIndicatorWhenSlowAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(BusyIndicatorDelay, cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        if (IsLoading)
+        {
+            IsBusyIndicatorVisible = true;
+        }
+    }
+
+    private void CancelBusyIndicatorDelay()
+    {
+        var pending = _busyIndicatorDelay;
+        _busyIndicatorDelay = null;
+        pending?.Cancel();
+        pending?.Dispose();
     }
 
     private async Task<bool> NavigateCoreAsync(
