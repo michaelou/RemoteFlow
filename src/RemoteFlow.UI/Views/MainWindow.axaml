@@ -7,6 +7,7 @@
     xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
     xmlns:paletteViews="using:RemoteFlow.UI.Views.CommandPalette"
     xmlns:settingsViews="using:RemoteFlow.UI.Views.Settings"
+    xmlns:securityViews="using:RemoteFlow.UI.Views.Security"
     xmlns:terminalViews="using:RemoteFlow.UI.Views.Terminal"
     xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels"
@@ -24,7 +25,14 @@
       <terminalViews:TerminalWorkspace />
     </DataTemplate>
     <DataTemplate DataType="{x:Type viewModels:SettingsPageViewModel}" x:DataType="viewModels:SettingsPageViewModel">
-      <settingsViews:TerminalSettings DataContext="{Binding Terminal}" />
+      <TabControl>
+        <TabItem Header="Terminal">
+          <settingsViews:TerminalSettings DataContext="{Binding Terminal}" />
+        </TabItem>
+        <TabItem Header="Trusted keys">
+          <securityViews:TrustedKeysView DataContext="{Binding Security}" />
+        </TabItem>
+      </TabControl>
     </DataTemplate>
     <DataTemplate DataType="{x:Type viewModels:PageViewModel}" x:DataType="viewModels:PageViewModel">
       <Grid Margin="32" RowDefinitions="Auto,Auto,*">

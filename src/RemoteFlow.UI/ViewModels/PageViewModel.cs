@@ -12,7 +12,11 @@ public partial class PageViewModel(string title) : ObservableObject
 
 public sealed class TransfersPageViewModel() : PageViewModel("Transfers");
 
-public sealed class SettingsPageViewModel(Settings.TerminalSettingsViewModel? terminal = null) : PageViewModel("Settings")
+public sealed class SettingsPageViewModel(
+    Settings.TerminalSettingsViewModel? terminal = null,
+    Security.TrustedKeysViewModel? security = null) : PageViewModel("Settings")
 {
     public Settings.TerminalSettingsViewModel? Terminal { get; } = terminal;
+
+    public Security.TrustedKeysViewModel? Security { get; } = security;
 }

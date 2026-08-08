@@ -1,0 +1,64 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Security.TrustedKeysView"
+    x:DataType="security:TrustedKeysViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:application="using:RemoteFlow.Application.Abstractions"
+    xmlns:security="using:RemoteFlow.UI.ViewModels.Security">
+  <ScrollViewer>
+    <StackPanel Margin="28" MaxWidth="1040" HorizontalAlignment="Left" Spacing="18">
+      <StackPanel Spacing="5">
+        <TextBlock FontSize="28" FontWeight="SemiBold" Text="Trusted SSH keys" />
+        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Search, revoke, delete, or import OpenSSH host identities." />
+      </StackPanel>
+
+      <TextBox
+          AutomationProperties.Name="Search trusted host keys"
+          PlaceholderText="Search by host, algorithm, or fingerprint"
+          Text="{Binding SearchText, Mode=TwoWay}" />
+
+      <ItemsControl ItemsSource="{Binding Keys}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="security:TrustedKeyItemViewModel">
+            <Border Background="{DynamicResource Brush.Surface.1}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,8" Padding="12">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" RowDefinitions="Auto,Auto,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock FontWeight="SemiBold" Text="{Binding DisplayHost}" />
+                  <TextBlock Foreground="{DynamicResource Brush.Warning}" IsVisible="{Binding IsHashed}" Text="Hashed hostname; plaintext is unavailable" />
+                </StackPanel>
+                <Button Grid.Column="1" Command="{Binding $parent[ItemsControl].DataContext.RevokeCommand}" CommandParameter="{Binding}" Content="Revoke" />
+                <Button Grid.Column="2" Command="{Binding $parent[ItemsControl].DataContext.DeleteCommand}" CommandParameter="{Binding}" Content="Delete" />
+                <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Text="{Binding KeyAlgorithm}" />
+                <TextBlock Grid.Row="2" Grid.ColumnSpan="3" FontFamily="Cascadia Mono,Consolas,monospace" Text="{Binding Sha256Fingerprint}" TextWrapping="Wrap" />
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <Border Background="{DynamicResource Brush.Surface.1}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="8" Padding="14">
+        <StackPanel Spacing="10">
+          <TextBlock FontSize="20" FontWeight="SemiBold" Text="Import OpenSSH known_hosts" />
+          <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Preview is read-only. Keys are added only after Apply import; the source file is never written." TextWrapping="Wrap" />
+          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+            <TextBox AutomationProperties.Name="OpenSSH known hosts path" Text="{Binding KnownHostsPath, Mode=TwoWay}" />
+            <Button Grid.Column="1" Command="{Binding PreviewImportCommand}" Content="Preview" />
+            <Button Grid.Column="2" Command="{Binding ApplyImportCommand}" Content="Apply import" IsEnabled="{Binding CanApplyImport}" />
+          </Grid>
+          <ItemsControl ItemsSource="{Binding ImportPreview}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="application:KnownHostImportEntry">
+                <Grid ColumnDefinitions="220,160,*" ColumnSpacing="8">
+                  <TextBlock Text="{Binding DisplayHost}" TextWrapping="Wrap" />
+                  <TextBlock Grid.Column="1" Text="{Binding KeyAlgorithm}" />
+                  <TextBlock Grid.Column="2" FontFamily="Cascadia Mono,Consolas,monospace" Text="{Binding Sha256Fingerprint}" TextWrapping="Wrap" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

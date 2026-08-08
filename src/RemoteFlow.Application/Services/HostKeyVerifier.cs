@@ -62,6 +62,10 @@ public sealed class HostKeyVerifier(
             request.Port,
             request.HostKey.Algorithm,
             cancellationToken).ConfigureAwait(false);
+        known ??= (await _store.ListAsync(cancellationToken).ConfigureAwait(false)).FirstOrDefault(item =>
+            string.Equals(item.KeyAlgorithm, request.HostKey.Algorithm, StringComparison.Ordinal) &&
+            item.Host.StartsWith("|1|", StringComparison.Ordinal) &&
+            KnownHostsHash.Matches(item.Host, request.Host, request.Port));
 
         if (known is not null)
         {
@@ -81,9 +85,33 @@ public sealed class HostKeyVerifier(
 
             if (request.Policy != HostKeyPolicy.AcceptAny)
             {
-                return SshResult<HostKeyVerificationResult>.Fail(
-                    SshError.HostKeyMismatch,
-                    $"The {known.KeyAlgorithm} key for {request.Host}:{request.Port} changed.");
+                var mismatchDecision = await _prompt.PromptAsync(new HostKeyTrustPrompt(
+                    request.Host,
+                    request.Port,
+                    request.HostKey.Algorithm,
+                    fingerprint,
+                    known.Sha256Fingerprint,
+                    HostKeyRandomArt.Create(request.HostKey.PublicKey)), cancellationToken).ConfigureAwait(false);
+                if (mismatchDecision == HostKeyPromptDecision.Reject)
+                {
+                    return SshResult<HostKeyVerificationResult>.Fail(
+                        SshError.HostKeyMismatch,
+                        $"The {known.KeyAlgorithm} key for {request.Host}:{request.Port} changed.");
+                }
+
+                if (mismatchDecision == HostKeyPromptDecision.AcceptOnce)
+                {
+                    return Accepted(fingerprint, isFlagged: true);
+                }
+
+                _ = known.UpdatePresentedKey(
+                    publicKeyBase64,
+                    fingerprint,
+                    HostKeySource.UserAccepted,
+                    _clock.UtcNow,
+                    "A changed host key was explicitly accepted after a security warning.");
+                await _store.UpdateAsync(known, cancellationToken).ConfigureAwait(false);
+                return Accepted(fingerprint, isFlagged: true);
             }
 
             _ = known.UpdatePresentedKey(
@@ -114,16 +142,22 @@ public sealed class HostKeyVerifier(
 
             if (request.Policy == HostKeyPolicy.TrustOnFirstUse)
             {
-                var accepted = await _prompt.ConfirmTrustAsync(new HostKeyTrustPrompt(
+                var decision = await _prompt.PromptAsync(new HostKeyTrustPrompt(
                     request.Host,
                     request.Port,
                     request.HostKey.Algorithm,
-                    fingerprint), cancellationToken).ConfigureAwait(false);
-                if (!accepted)
+                    fingerprint,
+                    RandomArt: HostKeyRandomArt.Create(request.HostKey.PublicKey)), cancellationToken).ConfigureAwait(false);
+                if (decision == HostKeyPromptDecision.Reject)
                 {
                     return SshResult<HostKeyVerificationResult>.Fail(
                         SshError.HostKeyUnknown,
                         $"The host key for {request.Host}:{request.Port} was not trusted.");
+                }
+
+                if (decision == HostKeyPromptDecision.AcceptOnce)
+                {
+                    return Accepted(fingerprint, isFlagged: false);
                 }
 
                 source = HostKeySource.UserAccepted;
@@ -190,6 +224,52 @@ public sealed class HostKeyVerifier(
         {
             throw new ArgumentOutOfRangeException(nameof(request), "The host-key policy is invalid.");
         }
+    }
+}
+
+public static class HostKeyRandomArt
+{
+    private const int _width = 17;
+    private const int _height = 9;
+    private const string _symbols = " .o+=*BOX@%&#/^";
+
+    public static string Create(ReadOnlySpan<byte> publicKeyBlob)
+    {
+        Span<byte> digest = stackalloc byte[SHA256.HashSizeInBytes];
+        _ = SHA256.HashData(publicKeyBlob, digest);
+        var board = new int[_width * _height];
+        var x = _width / 2;
+        var y = _height / 2;
+        var start = (y * _width) + x;
+        foreach (var value in digest)
+        {
+            var remaining = value;
+            for (var step = 0; step < 4; step++)
+            {
+                x = Math.Clamp(x + ((remaining & 1) == 0 ? -1 : 1), 0, _width - 1);
+                y = Math.Clamp(y + ((remaining & 2) == 0 ? -1 : 1), 0, _height - 1);
+                board[(y * _width) + x]++;
+                remaining >>= 2;
+            }
+        }
+
+        var end = (y * _width) + x;
+        var result = new System.Text.StringBuilder();
+        _ = result.Append('+').Append('-', _width).AppendLine("+");
+        for (var row = 0; row < _height; row++)
+        {
+            _ = result.Append('|');
+            for (var column = 0; column < _width; column++)
+            {
+                var index = (row * _width) + column;
+                var symbol = index == start
+                    ? 'S'
+                    : (index == end ? 'E' : _symbols[Math.Min(board[index], _symbols.Length - 1)]);
+                _ = result.Append(symbol);
+            }
+            _ = result.AppendLine("|");
+        }
+        return result.Append('+').Append('-', _width).Append('+').ToString();
     }
 }
 

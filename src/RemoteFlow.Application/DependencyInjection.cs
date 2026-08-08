@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IShellProfileService, ShellProfileService>();
         services.TryAddSingleton<IHostKeyPrompt, RejectingHostKeyPrompt>();
         services.TryAddSingleton<IHostKeyVerifier, HostKeyVerifier>();
+        services.TryAddSingleton<IKnownHostsImportService, KnownHostsImportService>();
         return services;
     }
 }

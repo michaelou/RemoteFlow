@@ -59,7 +59,7 @@ public sealed class HostKeyVerifierTests
     {
         var token = TestContext.Current.CancellationToken;
         var store = await StoreWithAsync(Key(1), cancellationToken: token);
-        var verifier = CreateVerifier(store, new RecordingPrompt(true));
+        var verifier = CreateVerifier(store, new RecordingPrompt(false));
 
         var result = await verifier.VerifyAsync(Request(Key(2), policy), token);
 

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Abstractions.Ssh;
 using RemoteFlow.UI.Navigation;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels;
@@ -8,6 +9,7 @@ using RemoteFlow.UI.ViewModels.Connections;
 using RemoteFlow.UI.ViewModels.CommandPalette;
 using RemoteFlow.UI.ViewModels.Terminal;
 using RemoteFlow.UI.ViewModels.Settings;
+using RemoteFlow.UI.ViewModels.Security;
 using RemoteFlow.UI.Views;
 
 namespace RemoteFlow.UI;
@@ -26,6 +28,7 @@ public static class DependencyInjection
         services.TryAddSingleton<TransfersPageViewModel>();
         services.TryAddSingleton<TerminalSettingsViewModel>();
         services.TryAddSingleton<SettingsPageViewModel>();
+        services.TryAddSingleton<TrustedKeysViewModel>();
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "connections",
             "Connections",
@@ -53,6 +56,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IPasteWarningService, PasteWarningDialogService>();
         services.TryAddSingleton<TerminalClipboardController>();
         services.TryAddSingleton<IConfirmationDialogService, ConfirmationDialogService>();
+        _ = services.Replace(ServiceDescriptor.Singleton<IHostKeyPrompt, HostKeyPromptService>());
         services.TryAddSingleton<IConnectionSessionOpener, DeferredConnectionSessionOpener>();
         services.TryAddSingleton<IThemeService>(provider => new ThemeService(
             provider.GetRequiredService<App>(),
