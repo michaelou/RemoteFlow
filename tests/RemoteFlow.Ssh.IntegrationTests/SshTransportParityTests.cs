@@ -161,22 +161,22 @@ public sealed class SshTransportParityTests(SshServerFixture fixture)
         var original = $"{directory}/original.txt";
         var moved = $"{directory}/moved.txt";
 
-        await sftp.CreateDirectoryAsync(directory, token);
-        await using (var stream = await sftp.OpenWriteAsync(original, overwrite: true, token))
+        Assert.True((await sftp.CreateDirectoryAsync(directory, token)).IsSuccess);
+        await using (var stream = (await sftp.OpenWriteAsync(original, token)).Value)
         {
             await stream.WriteAsync("sftp-ok"u8.ToArray(), token);
         }
 
-        await using (var stream = await sftp.OpenReadAsync(original, token))
+        await using (var stream = (await sftp.OpenReadAsync(original, token)).Value)
         using (var reader = new StreamReader(stream, Encoding.UTF8))
         {
             Assert.Equal("sftp-ok", await reader.ReadToEndAsync(token));
         }
 
-        Assert.Contains(await sftp.ListDirectoryAsync(directory, token), entry => entry.Name == "original.txt");
-        await sftp.MoveAsync(original, moved, token);
-        await sftp.DeleteAsync(moved, token);
-        await sftp.DeleteAsync(directory, token);
+        Assert.Contains((await sftp.ListAsync(directory, token)).Value, entry => entry.Name == "original.txt");
+        Assert.True((await sftp.RenameAsync(original, moved, token)).IsSuccess);
+        Assert.True((await sftp.DeleteAsync(moved, recursive: false, token)).IsSuccess);
+        Assert.True((await sftp.DeleteAsync(directory, recursive: false, token)).IsSuccess);
     }
 
     private static async Task<ISshConnection> ConnectAsync(

@@ -1,4 +1,5 @@
 using RemoteFlow.Domain.Enums;
+using RemoteFlow.Application.Abstractions.Sftp;
 
 namespace RemoteFlow.Application.Abstractions.Ssh;
 
@@ -154,33 +155,6 @@ public sealed class SshDisconnectedEventArgs(SshError? error, string? message) :
     public SshError? Error { get; } = error;
 
     public string? Message { get; } = message;
-}
-
-public sealed record SftpEntry(
-    string Name,
-    string FullPath,
-    bool IsDirectory,
-    long Length,
-    DateTimeOffset LastWriteTimeUtc);
-
-public interface ISftpService : IAsyncDisposable
-{
-    Task<IReadOnlyList<SftpEntry>> ListDirectoryAsync(
-        string path,
-        CancellationToken cancellationToken = default);
-
-    Task<Stream> OpenReadAsync(string path, CancellationToken cancellationToken = default);
-
-    Task<Stream> OpenWriteAsync(
-        string path,
-        bool overwrite,
-        CancellationToken cancellationToken = default);
-
-    Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default);
-
-    Task DeleteAsync(string path, CancellationToken cancellationToken = default);
-
-    Task MoveAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken = default);
 }
 
 public interface ISshShell : ITerminalChannel;

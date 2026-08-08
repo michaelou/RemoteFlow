@@ -28,7 +28,7 @@ Known adapter deltas are explicit:
 - SSH.NET has no public cross-platform ssh-agent authentication adapter. Agent material is skipped when another configured method exists; an agent-only request fails authentication. Tmds.Ssh retains native agent support.
 - SSH.NET raises keyboard-interactive and host-key callbacks synchronously. The adapter bridges those callbacks to the application async contracts without changing prompt or trust behavior.
 - `ShellStream` does not expose an interactive shell's remote exit status. An orderly EOF is reported as zero and a locally terminated/error path as unknown; exec channels return the real status on both transports.
-- SSH.NET SFTP uses a separately authenticated SSH connection and verifies that connection through the same host-key verifier. The Tmds.Ssh SFTP adapter remains deferred to issue #37 and currently reports that operation as unsupported.
+- SSH.NET SFTP uses a separately authenticated SSH connection and verifies that connection through the same host-key verifier. Tmds.Ssh reuses the existing authenticated connection for SFTP and is the preferred implementation.
 
 ## Security advisory history
 

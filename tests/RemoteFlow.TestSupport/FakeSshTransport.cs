@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Application.Abstractions.Ssh;
 
 namespace RemoteFlow.TestSupport;
@@ -202,72 +203,169 @@ public sealed class FakeSftpService : ISftpService
 {
     private readonly ConcurrentDictionary<string, byte[]> _files = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, byte> _directories = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, UnixFileMode> _modes = new(StringComparer.Ordinal);
 
-    public Task<IReadOnlyList<SftpEntry>> ListDirectoryAsync(
+    public Task<SftpResult<IReadOnlyList<RemoteFileInfo>>> ListAsync(
         string path,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var prefix = path.TrimEnd('/') + "/";
-        var entries = _files
+        var normalized = SftpPath.Normalize(path);
+        var prefix = normalized.TrimEnd('/') + "/";
+        var files = _files
             .Where(item => item.Key.StartsWith(prefix, StringComparison.Ordinal))
-            .Select(item => new SftpEntry(
-                item.Key[prefix.Length..],
+            .Where(item => !item.Key[prefix.Length..].Contains('/', StringComparison.Ordinal))
+            .Select(item => new RemoteFileInfo(
+                SftpPath.GetName(item.Key),
                 item.Key,
-                false,
                 item.Value.LongLength,
-                DateTimeOffset.UnixEpoch))
-            .ToArray();
-        return Task.FromResult<IReadOnlyList<SftpEntry>>(entries);
+                DateTimeOffset.UnixEpoch,
+                _modes.GetValueOrDefault(item.Key, UnixFileMode.UserRead | UnixFileMode.UserWrite),
+                "1000",
+                "1000",
+                false,
+                false,
+                null));
+        var directories = _directories.Keys
+            .Where(item => item.StartsWith(prefix, StringComparison.Ordinal))
+            .Where(item => !item[prefix.Length..].Contains('/', StringComparison.Ordinal))
+            .Select(item => new RemoteFileInfo(
+                SftpPath.GetName(item),
+                item,
+                0,
+                DateTimeOffset.UnixEpoch,
+                _modes.GetValueOrDefault(item, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute),
+                "1000",
+                "1000",
+                true,
+                false,
+                null));
+        IReadOnlyList<RemoteFileInfo> entries = [.. files, .. directories];
+        return Task.FromResult(SftpResult<IReadOnlyList<RemoteFileInfo>>.Success(entries));
     }
 
-    public Task<Stream> OpenReadAsync(string path, CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return _files.TryGetValue(path, out var contents)
-            ? Task.FromResult<Stream>(new MemoryStream(contents, writable: false))
-            : throw new FileNotFoundException("The scripted remote file does not exist.", path);
-    }
-
-    public Task<Stream> OpenWriteAsync(
+    public Task<SftpResult<RemoteFileInfo?>> StatAsync(
         string path,
-        bool overwrite,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return overwrite || !_files.ContainsKey(path)
-            ? Task.FromResult<Stream>(new CapturingWriteStream(bytes => _files[path] = bytes))
-            : throw new IOException("The scripted remote file already exists.");
+        var normalized = SftpPath.Normalize(path);
+        RemoteFileInfo? info = _files.TryGetValue(normalized, out var contents)
+            ? new(
+                SftpPath.GetName(normalized), normalized, contents.LongLength, DateTimeOffset.UnixEpoch,
+                _modes.GetValueOrDefault(normalized, UnixFileMode.UserRead | UnixFileMode.UserWrite),
+                "1000", "1000", false, false, null)
+            : _directories.ContainsKey(normalized)
+                ? new(
+                    SftpPath.GetName(normalized), normalized, 0, DateTimeOffset.UnixEpoch,
+                    _modes.GetValueOrDefault(normalized, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute),
+                    "1000", "1000", true, false, null)
+                : null;
+        return Task.FromResult(SftpResult<RemoteFileInfo?>.Success(info));
     }
 
-    public Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
+    public Task<SftpResult<Stream>> OpenReadAsync(string path, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _directories[path] = 0;
-        return Task.CompletedTask;
+        var normalized = SftpPath.Normalize(path);
+        return Task.FromResult(_files.TryGetValue(normalized, out var contents)
+            ? SftpResult<Stream>.Success(new MemoryStream(contents, writable: false))
+            : SftpResult<Stream>.Fail(SftpError.NotFound, "The scripted remote file does not exist."));
     }
 
-    public Task DeleteAsync(string path, CancellationToken cancellationToken = default)
+    public Task<SftpResult<Stream>> OpenWriteAsync(string path, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _ = _files.TryRemove(path, out _);
-        _ = _directories.TryRemove(path, out _);
-        return Task.CompletedTask;
+        var normalized = SftpPath.Normalize(path);
+        return Task.FromResult(SftpResult<Stream>.Success(
+            new CapturingWriteStream(bytes => _files[normalized] = bytes)));
     }
 
-    public Task MoveAsync(
+    public Task<SftpResult> CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var normalized = SftpPath.Normalize(path);
+        return Task.FromResult(_directories.TryAdd(normalized, 0)
+            ? SftpResult.Success()
+            : SftpResult.Fail(SftpError.AlreadyExists, "The scripted directory already exists."));
+    }
+
+    public Task<SftpResult> RenameAsync(
         string sourcePath,
         string destinationPath,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!_files.TryRemove(sourcePath, out var contents))
+        var source = SftpPath.Normalize(sourcePath);
+        var destination = SftpPath.Normalize(destinationPath);
+        if (_files.TryRemove(source, out var contents))
         {
-            throw new FileNotFoundException("The scripted remote file does not exist.", sourcePath);
+            _files[destination] = contents;
+            return Task.FromResult(SftpResult.Success());
         }
 
-        _files[destinationPath] = contents;
-        return Task.CompletedTask;
+        if (_directories.TryRemove(source, out _))
+        {
+            _directories[destination] = 0;
+            return Task.FromResult(SftpResult.Success());
+        }
+
+        return Task.FromResult(SftpResult.Fail(SftpError.NotFound, "The scripted remote path does not exist."));
+    }
+
+    public Task<SftpResult> DeleteAsync(
+        string path,
+        bool recursive,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var normalized = SftpPath.Normalize(path);
+        var prefix = normalized.TrimEnd('/') + "/";
+        if (recursive)
+        {
+            foreach (var child in _files.Keys.Where(item => item.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                _ = _files.TryRemove(child, out _);
+            }
+
+            foreach (var child in _directories.Keys.Where(item => item.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                _ = _directories.TryRemove(child, out _);
+            }
+        }
+
+        var removed = _files.TryRemove(normalized, out _) | _directories.TryRemove(normalized, out _);
+        return Task.FromResult(removed
+            ? SftpResult.Success()
+            : SftpResult.Fail(SftpError.NotFound, "The scripted remote path does not exist."));
+    }
+
+    public Task<SftpResult> SetPermissionsAsync(
+        string path,
+        UnixFileMode mode,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var normalized = SftpPath.Normalize(path);
+        if (!_files.ContainsKey(normalized) && !_directories.ContainsKey(normalized))
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.NotFound, "The scripted remote path does not exist."));
+        }
+
+        _modes[normalized] = mode;
+        return Task.FromResult(SftpResult.Success());
+    }
+
+    public Task<SftpResult<string>> GetRealPathAsync(
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var normalized = SftpPath.Normalize(path);
+        var resolved = normalized == "~" ? "/home/test" :
+            normalized.StartsWith("~/", StringComparison.Ordinal) ? "/home/test/" + normalized[2..] :
+            normalized[0] == '/' ? normalized : "/home/test/" + normalized;
+        return Task.FromResult(SftpResult<string>.Success(SftpPath.Normalize(resolved)));
     }
 
     public ValueTask DisposeAsync()

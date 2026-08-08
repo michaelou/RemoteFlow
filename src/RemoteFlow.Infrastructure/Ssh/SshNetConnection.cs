@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Application.Abstractions.Ssh;
 using Renci.SshNet;
 

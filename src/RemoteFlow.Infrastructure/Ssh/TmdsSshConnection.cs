@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Application.Abstractions.Ssh;
+using RemoteFlow.Infrastructure.Sftp;
 using Tmds.Ssh;
 
 namespace RemoteFlow.Infrastructure.Ssh;
@@ -96,7 +98,8 @@ internal sealed class TmdsSshConnection : ISshConnection
 
     public ISftpService OpenSftp()
     {
-        return new DeferredTmdsSftpService();
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        return new TmdsSftpService(_client);
     }
 
     public async ValueTask DisposeAsync()
@@ -141,54 +144,4 @@ internal sealed class TmdsSshConnection : ISshConnection
         ArgumentOutOfRangeException.ThrowIfLessThan(terminal.Rows, 1);
     }
 
-    private sealed class DeferredTmdsSftpService : ISftpService
-    {
-        private static NotSupportedException OutOfScope()
-        {
-            return new NotSupportedException("SFTP operations are implemented by issue #37.");
-        }
-
-        public Task<IReadOnlyList<SftpEntry>> ListDirectoryAsync(
-            string path,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromException<IReadOnlyList<SftpEntry>>(OutOfScope());
-        }
-
-        public Task<Stream> OpenReadAsync(string path, CancellationToken cancellationToken = default)
-        {
-            return Task.FromException<Stream>(OutOfScope());
-        }
-
-        public Task<Stream> OpenWriteAsync(
-            string path,
-            bool overwrite,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromException<Stream>(OutOfScope());
-        }
-
-        public Task CreateDirectoryAsync(string path, CancellationToken cancellationToken = default)
-        {
-            return Task.FromException(OutOfScope());
-        }
-
-        public Task DeleteAsync(string path, CancellationToken cancellationToken = default)
-        {
-            return Task.FromException(OutOfScope());
-        }
-
-        public Task MoveAsync(
-            string sourcePath,
-            string destinationPath,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromException(OutOfScope());
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            return ValueTask.CompletedTask;
-        }
-    }
 }
