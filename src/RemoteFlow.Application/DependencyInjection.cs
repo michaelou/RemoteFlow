@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IHostKeyPrompt, RejectingHostKeyPrompt>();
         services.TryAddSingleton<IHostKeyVerifier, HostKeyVerifier>();
         services.TryAddSingleton<IKnownHostsImportService, KnownHostsImportService>();
+        services.TryAddSingleton<ISessionManager, SessionManager>();
         return services;
     }
 }

@@ -160,6 +160,11 @@
       <TextBlock
           Foreground="{DynamicResource Brush.Text.Secondary}"
           Text="{Binding SelectedSession.EndedMessage}" />
+      <Button
+          HorizontalAlignment="Left"
+          Command="{Binding SelectedSession.RetryCommand}"
+          Content="Retry"
+          IsVisible="{Binding SelectedSession.IsEnded}" />
     </StackPanel>
   </Grid>
 </UserControl>

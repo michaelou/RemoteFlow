@@ -17,6 +17,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     private readonly TerminalSettingsViewModel? _terminalSettings;
     private readonly IShellProfileService? _shellProfileService;
     private readonly ISystemTerminalLauncher? _systemTerminalLauncher;
+    private readonly ISessionManager? _sessionManager;
     private int _startingCount;
     private int _disposeStarted;
 
@@ -71,7 +72,8 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         TerminalClipboardController? clipboardController,
         TerminalSettingsViewModel? terminalSettings,
         IShellProfileService? shellProfileService,
-        ISystemTerminalLauncher? systemTerminalLauncher)
+        ISystemTerminalLauncher? systemTerminalLauncher,
+        ISessionManager? sessionManager = null)
         : base("Terminals")
     {
         _ptyService = ptyService ?? throw new ArgumentNullException(nameof(ptyService));
@@ -83,6 +85,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         _terminalSettings = terminalSettings;
         _shellProfileService = shellProfileService;
         _systemTerminalLauncher = systemTerminalLauncher;
+        _sessionManager = sessionManager;
         if (_shellProfileService is { } activeProfileService)
         {
             activeProfileService.ProfilesChanged += OnShellProfilesChanged;
@@ -90,6 +93,12 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         if (_terminalSettings is { } activeSettings)
         {
             activeSettings.SettingsChanged += OnTerminalSettingsChanged;
+        }
+        if (_sessionManager is { } activeSessionManager)
+        {
+            activeSessionManager.SessionAdded += OnManagedSessionAdded;
+            activeSessionManager.SessionChanged += OnManagedSessionChanged;
+            activeSessionManager.SessionRemoved += OnManagedSessionRemoved;
         }
     }
 
@@ -351,6 +360,12 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         {
             profileService.ProfilesChanged -= OnShellProfilesChanged;
         }
+        if (_sessionManager is { } sessionManager)
+        {
+            sessionManager.SessionAdded -= OnManagedSessionAdded;
+            sessionManager.SessionChanged -= OnManagedSessionChanged;
+            sessionManager.SessionRemoved -= OnManagedSessionRemoved;
+        }
         GC.SuppressFinalize(this);
     }
 
@@ -518,6 +533,91 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         SelectSession(failed);
         SetError(null);
         return failed;
+    }
+
+    private void OnManagedSessionAdded(object? sender, ManagedSshSession session)
+    {
+        _ = AddManagedSessionAsync(session);
+    }
+
+    private async Task AddManagedSessionAsync(ManagedSshSession managed)
+    {
+        if (_dispatcher is null)
+        {
+            return;
+        }
+        await _dispatcher.InvokeAsync(() =>
+        {
+            if (Sessions.Any(item => item.ManagedSessionId == managed.SessionId))
+            {
+                return;
+            }
+            var session = new TerminalSessionViewModel(
+                managed.Channel,
+                _dispatcher,
+                initialTitle: managed.Title,
+                environment: managed.Environment,
+                colorOverrideHex: managed.ColorOverrideHex,
+                managedSessionId: managed.SessionId,
+                initialState: managed.State,
+                retry: token => _sessionManager!.RetryAsync(managed.SessionId, token),
+                close: token => _sessionManager!.CloseAsync(managed.SessionId, token));
+            session.ApplyManagedState(managed.State, managed.FailureReason);
+            if (_terminalSettings is not null)
+            {
+                session.ApplyAppearance(_terminalSettings.Current);
+            }
+            Sessions.Add(session);
+            ClipboardController?.Attach(session, SetError);
+            SelectSession(session);
+        }).ConfigureAwait(false);
+    }
+
+    private void OnManagedSessionChanged(object? sender, SessionTransitionEventArgs e)
+    {
+        _ = ApplyManagedSessionChangeAsync(e);
+    }
+
+    private async Task ApplyManagedSessionChangeAsync(SessionTransitionEventArgs e)
+    {
+        if (_dispatcher is null)
+        {
+            return;
+        }
+        await _dispatcher.InvokeAsync(() =>
+        {
+            var session = Sessions.FirstOrDefault(item => item.ManagedSessionId == e.Session.SessionId);
+            session?.ApplyManagedState(e.CurrentState, e.Session.FailureReason);
+        }).ConfigureAwait(false);
+    }
+
+    private void OnManagedSessionRemoved(object? sender, ManagedSshSession session)
+    {
+        _ = RemoveManagedSessionAsync(session.SessionId);
+    }
+
+    private async Task RemoveManagedSessionAsync(Guid sessionId)
+    {
+        if (_dispatcher is null)
+        {
+            return;
+        }
+        await _dispatcher.InvokeAsync(() =>
+        {
+            var session = Sessions.FirstOrDefault(item => item.ManagedSessionId == sessionId);
+            if (session is null)
+            {
+                return;
+            }
+            var index = Sessions.IndexOf(session);
+            var wasSelected = ReferenceEquals(SelectedSession, session);
+            ClipboardController?.Detach(session);
+            _ = Sessions.Remove(session);
+            if (wasSelected)
+            {
+                SelectSession(Sessions.Count == 0 ? null : Sessions[Math.Min(index, Sessions.Count - 1)]);
+            }
+        }).ConfigureAwait(false);
     }
 }
 

@@ -60,6 +60,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IKeyboardInteractivePrompt, KeyboardInteractivePromptService>();
         services.TryAddSingleton<ISshCredentialPrompt, SshCredentialPromptService>();
         services.TryAddSingleton<IConnectionSessionOpener, DeferredConnectionSessionOpener>();
+        _ = services.Replace(ServiceDescriptor.Singleton<IConnectionSessionOpener, SshConnectionSessionOpener>());
         services.TryAddSingleton<IThemeService>(provider => new ThemeService(
             provider.GetRequiredService<App>(),
             provider.GetRequiredService<ISettingsStore>()));

@@ -21,6 +21,8 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     private readonly ITerminalChannel _channel;
     private readonly IUiDispatcher _dispatcher;
+    private readonly Func<CancellationToken, Task>? _retry;
+    private readonly Func<CancellationToken, Task>? _close;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Utf8StreamDecoder _decoder = new();
     private readonly OscTitleParser _titleParser = new();
@@ -41,7 +43,11 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         string initialTitle = "Local shell",
         EnvironmentKind environment = EnvironmentKind.Unspecified,
         string? colorOverrideHex = null,
-        ShellProfile? shellProfile = null)
+        ShellProfile? shellProfile = null,
+        Guid? managedSessionId = null,
+        SessionState initialState = SessionState.Connected,
+        Func<CancellationToken, Task>? retry = null,
+        Func<CancellationToken, Task>? close = null)
     {
         _channel = channel ?? throw new ArgumentNullException(nameof(channel));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
@@ -56,10 +62,14 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         Model.UserInput += OnUserInput;
         Model.SizeChanged += OnTerminalSizeChanged;
         Title = string.IsNullOrWhiteSpace(initialTitle) ? "Terminal" : initialTitle.Trim();
+        UserTitleOverride = managedSessionId is null ? null : Title;
         Environment = environment;
         AccentColorHex = ResolveAccentColor(environment, colorOverrideHex);
         ShellProfile = shellProfile;
-        State = SessionState.Connected;
+        ManagedSessionId = managedSessionId;
+        _retry = retry;
+        _close = close;
+        State = initialState;
         _readTask = ReadOutputAsync(_lifetime.Token);
         _exitTask = ObserveExitAsync();
         Completion = ObserveCompletionAsync();
@@ -110,6 +120,8 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     public ShellProfile? ShellProfile { get; }
 
+    public Guid? ManagedSessionId { get; }
+
     public string AccentColorHex { get; }
 
     public string TabBackgroundHex => IsActive ? $"#33{AccentColorHex[1..]}" : "#121821";
@@ -156,6 +168,27 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         {
             Title = UserTitleOverride;
         }
+    }
+
+    public void ApplyManagedState(SessionState state, string? message)
+    {
+        State = state;
+        EndedMessage = message;
+        RetryCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRetry))]
+    private async Task RetryAsync(CancellationToken cancellationToken)
+    {
+        if (_retry is not null)
+        {
+            await _retry(cancellationToken).ConfigureAwait(true);
+        }
+    }
+
+    private bool CanRetry()
+    {
+        return _retry is not null && State is SessionState.Failed or SessionState.Disconnected;
     }
 
     internal void SetActive(bool isActive)
@@ -297,6 +330,10 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
             _pendingResize = null;
         }
         _lifetime.Cancel();
+        if (_close is not null)
+        {
+            await _close(CancellationToken.None).ConfigureAwait(false);
+        }
         await _channel.DisposeAsync().ConfigureAwait(false);
         await Completion.ConfigureAwait(false);
         await _channel.Output.CompleteAsync().ConfigureAwait(false);
@@ -507,6 +544,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     {
         OnPropertyChanged(nameof(IsLive));
         OnPropertyChanged(nameof(IsEnded));
+        RetryCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsActiveChanged(bool value)

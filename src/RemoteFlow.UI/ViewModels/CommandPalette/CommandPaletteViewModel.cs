@@ -10,8 +10,6 @@ public sealed partial class CommandPaletteViewModel : ObservableObject, IDisposa
 {
     private readonly IConnectionQueryService? _queries;
     private readonly IConnectionSessionOpener? _sessionOpener;
-    private readonly IRecentConnectionStore? _recent;
-    private readonly IClock? _clock;
     private CancellationTokenSource? _searchCancellation;
     private bool _disposed;
 
@@ -27,8 +25,8 @@ public sealed partial class CommandPaletteViewModel : ObservableObject, IDisposa
     {
         _queries = queries ?? throw new ArgumentNullException(nameof(queries));
         _sessionOpener = sessionOpener ?? throw new ArgumentNullException(nameof(sessionOpener));
-        _recent = recent ?? throw new ArgumentNullException(nameof(recent));
-        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        ArgumentNullException.ThrowIfNull(recent);
+        ArgumentNullException.ThrowIfNull(clock);
     }
 
     public ObservableCollection<CommandPaletteResultViewModel> Results { get; } = [];
@@ -87,11 +85,6 @@ public sealed partial class CommandPaletteViewModel : ObservableObject, IDisposa
         {
             FeedbackMessage = $"{SelectedResult.Name} could not be opened.";
             return false;
-        }
-
-        if (_recent is not null && _clock is not null)
-        {
-            await _recent.RecordOpenedAsync(SelectedResult.Id, _clock.UtcNow, cancellationToken).ConfigureAwait(true);
         }
 
         Close();

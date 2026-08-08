@@ -70,4 +70,29 @@ public sealed class TerminalsPageViewModel : TerminalWorkspaceViewModel
             systemTerminalLauncher)
     {
     }
+
+    public TerminalsPageViewModel(
+        IPtyService ptyService,
+        IUiDispatcher dispatcher,
+        ISettingsStore settings,
+        IConfirmationDialogService confirmation,
+        KeymapService keymap,
+        TerminalClipboardController clipboardController,
+        TerminalSettingsViewModel terminalSettings,
+        IShellProfileService shellProfileService,
+        ISystemTerminalLauncher systemTerminalLauncher,
+        ISessionManager sessionManager)
+        : base(
+            ptyService,
+            dispatcher,
+            settings,
+            confirmation,
+            keymap,
+            clipboardController,
+            terminalSettings,
+            shellProfileService,
+            systemTerminalLauncher,
+            sessionManager)
+    {
+    }
 }

@@ -11,6 +11,8 @@ public sealed class FakeSshTransport : ISshTransport
 
     public List<SshConnectRequest> ConnectRequests { get; } = [];
 
+    public List<FakeSshConnection> Connections { get; } = [];
+
     public FakeSshConnection? LastConnection { get; private set; }
 
     public void FailNextConnect(SshError error, string? message = null)
@@ -32,6 +34,7 @@ public sealed class FakeSshTransport : ISshTransport
         }
 
         LastConnection = new FakeSshConnection();
+        Connections.Add(LastConnection);
         return Task.FromResult(SshResult<ISshConnection>.Success(LastConnection));
     }
 }
@@ -41,6 +44,8 @@ public sealed class FakeSshConnection : ISshConnection
     private readonly ConcurrentQueue<SshFailure> _shellFailures = new();
     private readonly ConcurrentQueue<SshFailure> _execFailures = new();
     private int _disconnected;
+
+    public bool IsDisconnected => Volatile.Read(ref _disconnected) != 0;
 
     public FakeSshShell? LastShell { get; private set; }
 

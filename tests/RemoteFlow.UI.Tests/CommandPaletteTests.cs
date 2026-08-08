@@ -25,9 +25,9 @@ public sealed class CommandPaletteTests
         var first = Item(Guid.NewGuid(), "Web", "web-one.test", "/Prod/EU");
         var second = Item(Guid.NewGuid(), "Web", "web-two.test", "/Staging");
         var queries = new StubQueries([first, second]);
-        var opener = new RecordingOpener();
         var recent = new RecordingRecentStore();
         var clock = new FakeClock(new DateTimeOffset(2026, 8, 7, 12, 0, 0, TimeSpan.Zero));
+        var opener = new RecordingOpener(recent, clock);
         using var viewModel = new CommandPaletteViewModel(queries, opener, recent, clock);
         viewModel.Open();
 
@@ -134,18 +134,24 @@ public sealed class CommandPaletteTests
         }
     }
 
-    private sealed class RecordingOpener : IConnectionSessionOpener
+    private sealed class RecordingOpener(
+        IRecentConnectionStore? recent = null,
+        IClock? clock = null) : IConnectionSessionOpener
     {
         public Guid? ConnectionId { get; private set; }
 
-        public Task<bool> OpenAsync(
+        public async Task<bool> OpenAsync(
             Guid connectionId,
             ConnectionOpenMode mode,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             ConnectionId = connectionId;
-            return Task.FromResult(true);
+            if (recent is not null && clock is not null)
+            {
+                await recent.RecordOpenedAsync(connectionId, clock.UtcNow, cancellationToken);
+            }
+            return true;
         }
     }
 

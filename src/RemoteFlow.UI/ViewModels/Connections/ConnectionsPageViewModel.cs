@@ -673,7 +673,6 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
                 var opened = await _sessionOpener.OpenAsync(node.Id!.Value, mode).ConfigureAwait(true);
                 if (opened)
                 {
-                    await _recent.RecordOpenedAsync(node.Id.Value, _clock.UtcNow).ConfigureAwait(true);
                     await RefreshAsync().ConfigureAwait(true);
                 }
                 else
@@ -812,7 +811,6 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     {
         if (await _sessionOpener.OpenAsync(connectionId, mode).ConfigureAwait(true))
         {
-            await _recent.RecordOpenedAsync(connectionId, _clock.UtcNow).ConfigureAwait(true);
             await ShowDetailsAsync(connectionId).ConfigureAwait(true);
             await RefreshAsync().ConfigureAwait(true);
         }

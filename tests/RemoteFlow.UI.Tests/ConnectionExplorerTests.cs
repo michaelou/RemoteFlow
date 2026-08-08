@@ -272,12 +272,13 @@ public sealed class ConnectionExplorerTests
             Database = database;
             Clock = new FakeClock(new DateTimeOffset(2026, 8, 7, 12, 0, 0, TimeSpan.Zero));
             Settings = new InMemorySettingsStore();
-            SessionOpener = new QueueSessionOpener();
             Notifier = new ConnectionChangeNotifier();
             Connections = new ConnectionRepository(database.Factory);
             Folders = new FolderRepository(database.Factory);
             Tags = new TagRepository(database.Factory);
             Recent = new RecentConnectionStore(database.Factory);
+            SessionOpener = new QueueSessionOpener((id, token) =>
+                Recent.RecordOpenedAsync(id, Clock.UtcNow, token));
             _unitOfWork = new UnitOfWork(database.Factory);
             ConnectionService = new ConnectionService(
                 Connections,
@@ -394,17 +395,23 @@ public sealed class ConnectionExplorerTests
         }
     }
 
-    private sealed class QueueSessionOpener : IConnectionSessionOpener
+    private sealed class QueueSessionOpener(
+        Func<Guid, CancellationToken, Task>? recordSuccess = null) : IConnectionSessionOpener
     {
         public Queue<bool> Results { get; } = [];
 
-        public Task<bool> OpenAsync(
+        public async Task<bool> OpenAsync(
             Guid connectionId,
             ConnectionOpenMode mode,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(Results.Dequeue());
+            var result = Results.Dequeue();
+            if (result && recordSuccess is not null)
+            {
+                await recordSuccess(connectionId, cancellationToken);
+            }
+            return result;
         }
     }
 }
