@@ -150,6 +150,10 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
     public event EventHandler<ExplorerActionRequestedEventArgs>? ActionRequested;
 
+    /// <summary>Raised when a node enters inline rename on the view model's initiative, so the view can
+    /// move focus into the editor the same way it does for F2.</summary>
+    public event EventHandler<ExplorerNodeViewModel>? RenameStarted;
+
     public ObservableCollection<ExplorerNodeViewModel> RootNodes { get; } = [];
 
     public ObservableCollection<ExplorerNodeViewModel> SelectedNodes { get; } = [];
@@ -361,6 +365,41 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         }
 
         await RefreshAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>Creates a folder under <paramref name="parentId"/> (top level when null) and drops it
+    /// straight into inline rename, so naming it is part of creating it.</summary>
+    public async Task<Guid?> CreateFolderAsync(
+        Guid? parentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await _folders.ListAsync(cancellationToken).ConfigureAwait(true);
+        var created = await _folderService
+            .CreateAsync(NextFolderName(existing, parentId), parentId, cancellationToken)
+            .ConfigureAwait(true);
+        if (created.IsFailure)
+        {
+            FeedbackMessage = created.Error.Message;
+            return null;
+        }
+
+        await RefreshAsync(cancellationToken).ConfigureAwait(true);
+        var node = FindFolderNode(RootNodes, created.Value.Id);
+        if (node is null)
+        {
+            return created.Value.Id;
+        }
+
+        _ = ExpandAncestors(RootNodes, node);
+        SelectNode(node, additive: false);
+        node.BeginRenameCommand.Execute(null);
+        RenameStarted?.Invoke(this, node);
+        return created.Value.Id;
+    }
+
+    public void RequestCreateFolder(Guid? parentId = null)
+    {
+        WorkspaceChangesSettled = CreateFolderAsync(parentId);
     }
 
     public void RequestCreateConnection()
@@ -605,7 +644,71 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
             }
         }
 
-        IsEmpty = items.Count == 0;
+        // Folders on their own keep the tree on screen: the empty state covers it, and a user who has
+        // built a folder layout before adding connections still needs to reach it.
+        IsEmpty = items.Count == 0 && (HasActiveFilters || folders.Count == 0);
+    }
+
+    private static string NextFolderName(IEnumerable<Folder> folders, Guid? parentId)
+    {
+        const string baseName = "New folder";
+        var siblings = folders
+            .Where(folder => folder.ParentId == parentId)
+            .Select(folder => folder.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!siblings.Contains(baseName))
+        {
+            return baseName;
+        }
+
+        var suffix = 2;
+        while (siblings.Contains($"{baseName} {suffix}"))
+        {
+            suffix++;
+        }
+
+        return $"{baseName} {suffix}";
+    }
+
+    private static ExplorerNodeViewModel? FindFolderNode(
+        IEnumerable<ExplorerNodeViewModel> nodes,
+        Guid id)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.Kind == ExplorerNodeKind.Folder && node.Id == id)
+            {
+                return node;
+            }
+
+            if (FindFolderNode(node.Children, id) is { } match)
+            {
+                return match;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool ExpandAncestors(
+        IEnumerable<ExplorerNodeViewModel> nodes,
+        ExplorerNodeViewModel target)
+    {
+        foreach (var node in nodes)
+        {
+            if (ReferenceEquals(node, target))
+            {
+                return true;
+            }
+
+            if (ExpandAncestors(node.Children, target))
+            {
+                node.IsExpanded = true;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private ExplorerNodeViewModel CreateFolderNode(Folder folder)
@@ -686,17 +789,24 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
                 await RefreshAsync().ConfigureAwait(true);
                 break;
             case ExplorerAction.Delete:
+                var isFolder = node.Kind == ExplorerNodeKind.Folder;
                 if (_confirmation is not null && !await _confirmation.ConfirmAsync(
-                        "Delete connection?",
-                        $"Delete '{node.Name}'? This action cannot be undone.",
+                        isFolder ? "Delete folder?" : "Delete connection?",
+                        isFolder
+                            ? $"Delete '{node.Name}'? Its connections and subfolders move up to the parent folder."
+                            : $"Delete '{node.Name}'? This action cannot be undone.",
                         "Delete").ConfigureAwait(true))
                 {
                     break;
                 }
 
-                if (node.Kind == ExplorerNodeKind.Folder)
+                if (isFolder)
                 {
-                    _ = await _folderService.DeleteAsync(node.Id!.Value).ConfigureAwait(true);
+                    var deletedFolder = await _folderService.DeleteAsync(node.Id!.Value).ConfigureAwait(true);
+                    if (deletedFolder.IsFailure)
+                    {
+                        FeedbackMessage = deletedFolder.Error.Message;
+                    }
                 }
                 else
                 {
@@ -705,9 +815,12 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
                 await RefreshAsync().ConfigureAwait(true);
                 break;
-            case ExplorerAction.Edit:
             case ExplorerAction.NewFolder:
-                if (action == ExplorerAction.Edit && _editorFactory is not null)
+                _ = await CreateFolderAsync(node.Kind == ExplorerNodeKind.Folder ? node.Id : null)
+                    .ConfigureAwait(true);
+                break;
+            case ExplorerAction.Edit:
+                if (_editorFactory is not null)
                 {
                     await OpenEditorAsync(node.Id).ConfigureAwait(true);
                 }

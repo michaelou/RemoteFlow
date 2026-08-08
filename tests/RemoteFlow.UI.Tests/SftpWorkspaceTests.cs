@@ -1,4 +1,9 @@
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Domain.Abstractions;
@@ -463,6 +468,38 @@ public sealed class SftpWorkspaceTests
     {
         var view = new SftpWorkspace();
         Assert.NotNull(view);
+    }
+
+    [AvaloniaFact]
+    public async Task RightClickHitsTheWholeRowNotJustTheFileName()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = CreateFixture();
+        await SeedFileAsync(fixture.Sftp, "/home/test/app.conf", [1], token);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var window = new Window
+        {
+            Width = 1000,
+            Height = 600,
+            Content = new SftpWorkspace { DataContext = fixture.ViewModel },
+        };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var row = window.GetVisualDescendants()
+            .OfType<Grid>()
+            .First(grid => grid.DataContext is SftpItemViewModel && grid.ContextFlyout is not null);
+        // Far right of the row, past the last column's text: before the row itself was hit-testable
+        // this landed on the list box and the flyout never opened.
+        Assert.True(row.Bounds.Width > 100, $"row was not laid out: {row.Bounds}");
+        var edge = row.TranslatePoint(new Point(row.Bounds.Width - 2, row.Bounds.Height / 2), window);
+        Assert.True(edge.HasValue);
+
+        var hit = Assert.IsAssignableFrom<Control>(window.InputHitTest(edge!.Value));
+
+        Assert.Same(fixture.ViewModel.Items[0], hit.DataContext);
+        window.Close();
     }
 
     [Fact]

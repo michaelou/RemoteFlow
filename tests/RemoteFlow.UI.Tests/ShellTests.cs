@@ -84,6 +84,25 @@ public sealed class ShellTests
         window.Close();
     }
 
+    [AvaloniaFact]
+    public void SidebarHighlightFollowsNavigationStartedOutsideTheSidebar()
+    {
+        var navigation = NavigationService.CreateDefault();
+        var window = new MainWindow(
+            new MainWindowViewModel(navigation),
+            new WindowGeometryService(new InMemorySettingsStore()));
+        window.Show();
+        var list = window.FindControl<ListBox>("NavigationList");
+        Assert.NotNull(list);
+        Assert.Equal("connections", Assert.IsType<NavigationItemViewModel>(list.SelectedItem).Key);
+
+        navigation.Navigate("terminals");
+
+        Assert.Equal("terminals", Assert.IsType<NavigationItemViewModel>(list.SelectedItem).Key);
+        Assert.Equal("Terminals", navigation.CurrentPage.Title);
+        window.Close();
+    }
+
     [Fact]
     public void OffScreenGeometryIsClampedToThePrimaryMonitor()
     {

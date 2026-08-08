@@ -204,7 +204,35 @@
 
           <StackPanel>
             <TextBlock Classes="label" Text="Environment colour override" />
-            <TextBox TabIndex="12" PlaceholderText="#RRGGBB" Text="{Binding ColorOverrideHex, Mode=TwoWay}" />
+            <ComboBox
+                TabIndex="12"
+                HorizontalAlignment="Stretch"
+                ItemsSource="{x:Static connectionViewModels:ConnectionEditorViewModel.ColorOverrideChoices}"
+                SelectedItem="{Binding SelectedColorOverride, Mode=TwoWay}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="connectionViewModels:ColorOverrideChoiceViewModel">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Border
+                        Width="14"
+                        Height="14"
+                        VerticalAlignment="Center"
+                        Background="{Binding Swatch}"
+                        CornerRadius="3"
+                        IsVisible="{Binding HasSwatch}" />
+                    <TextBlock VerticalAlignment="Center" Text="{Binding Label}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBox
+                Margin="0,6,0,0"
+                IsVisible="{Binding IsCustomColorVisible}"
+                PlaceholderText="#RRGGBB"
+                Text="{Binding ColorOverrideHex, Mode=TwoWay}" />
+            <TextBlock
+                Classes="error"
+                IsVisible="{Binding ColorOverrideError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                Text="{Binding ColorOverrideError}" />
           </StackPanel>
 
           <StackPanel>

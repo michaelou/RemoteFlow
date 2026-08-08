@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -35,6 +36,8 @@ public sealed partial class MainWindow : Window
         _geometryService = geometryService ?? throw new ArgumentNullException(nameof(geometryService));
         InitializeComponent();
         DataContext = viewModel;
+        viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        NavigationList.Loaded += (_, _) => SyncNavigationSelection();
         PositionChanged += OnPositionChanged;
         Resized += OnResized;
         Closed += OnClosed;
@@ -59,7 +62,32 @@ public sealed partial class MainWindow : Window
         Position = new PixelPoint(geometry.X, geometry.Y);
         WindowState = geometry.IsMaximized ? WindowState.Maximized : WindowState.Normal;
         _initialized = true;
+        SyncNavigationSelection();
         _ = NavigationList.Focus();
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(MainWindowViewModel.CurrentNavigationItem))
+        {
+            SyncNavigationSelection();
+        }
+    }
+
+    /// <summary>Moves the sidebar highlight onto the page that is actually on screen. Opening a
+    /// terminal or SFTP session navigates from the explorer, not from the sidebar, so without this
+    /// the highlight would stay on Connections.</summary>
+    private void SyncNavigationSelection()
+    {
+        if (_viewModel.CurrentNavigationItem is not { } item ||
+            ReferenceEquals(NavigationList.SelectedItem, item))
+        {
+            return;
+        }
+
+        _restoringNavigationSelection = true;
+        NavigationList.SelectedItem = item;
+        _restoringNavigationSelection = false;
     }
 
     private void OnPositionChanged(object? sender, PixelPointEventArgs e)
@@ -80,6 +108,7 @@ public sealed partial class MainWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         if (!_initialized)
         {
             return;
@@ -130,8 +159,7 @@ public sealed partial class MainWindow : Window
             !await connections.CanNavigateAwayAsync().ConfigureAwait(true))
         {
             _restoringNavigationSelection = true;
-            list.SelectedItem = _viewModel.NavigationItems.First(candidate =>
-                string.Equals(candidate.Title, _viewModel.CurrentPage.Title, StringComparison.Ordinal));
+            list.SelectedItem = _viewModel.CurrentNavigationItem;
             _restoringNavigationSelection = false;
             return;
         }

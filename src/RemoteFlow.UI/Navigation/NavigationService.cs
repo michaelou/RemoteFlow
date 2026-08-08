@@ -17,11 +17,14 @@ public sealed class NavigationService : INavigationService
         _registry = registrationArray.ToDictionary(item => item.Key, StringComparer.Ordinal);
         Items = [.. registrationArray.Select(item => new NavigationItemViewModel(item.Key, item.Title))];
         CurrentPage = Resolve(initialPageKey);
+        CurrentPageKey = initialPageKey;
     }
 
     public event EventHandler? CurrentPageChanged;
 
     public PageViewModel CurrentPage { get; private set; }
+
+    public string CurrentPageKey { get; private set; }
 
     public IReadOnlyList<NavigationItemViewModel> Items { get; }
 
@@ -47,6 +50,7 @@ public sealed class NavigationService : INavigationService
         }
 
         CurrentPage = page;
+        CurrentPageKey = pageKey;
         CurrentPageChanged?.Invoke(this, EventArgs.Empty);
     }
 

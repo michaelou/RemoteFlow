@@ -5,7 +5,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
     xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
-    Loaded="ConnectionsView_OnLoaded">
+    Loaded="ConnectionsView_OnLoaded"
+    Unloaded="ConnectionsView_OnUnloaded">
   <UserControl.DataTemplates>
     <DataTemplate DataType="{x:Type connectionViewModels:ConnectionEditorViewModel}" x:DataType="connectionViewModels:ConnectionEditorViewModel">
       <connectionViews:ConnectionEditorView />
@@ -20,7 +21,10 @@
         <TextBlock FontSize="28" FontWeight="SemiBold" Text="Connections" />
         <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Favorites, recent sessions, and all saved connections" />
       </StackPanel>
-      <Button Grid.Column="1" Click="ClearRecent_OnClick" Content="Clear recent" VerticalAlignment="Center" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Button Click="NewFolder_OnClick" Content="New folder" ToolTip.Tip="Create a top-level folder. Right-click a folder to add one inside it." />
+        <Button Click="ClearRecent_OnClick" Content="Clear recent" />
+      </StackPanel>
     </Grid>
 
     <connectionViews:SearchBar Grid.Row="1" Margin="0,0,0,12" />
@@ -99,7 +103,7 @@
                   <MenuItem Command="{Binding DuplicateCommand}" Header="Duplicate" />
                   <MenuItem Command="{Binding DeleteCommand}" Header="Delete" />
                   <Separator />
-                  <MenuItem Command="{Binding NewFolderCommand}" Header="New Folder" />
+                  <MenuItem Command="{Binding NewFolderCommand}" Header="New subfolder" />
                   <MenuItem Command="{Binding BeginRenameCommand}" Header="Rename (F2)" />
                 </ContextMenu>
               </Grid.ContextMenu>

@@ -78,12 +78,19 @@
         DragDrop.DragOver="FileList_OnDragOver"
         DragDrop.DragLeave="FileList_OnDragLeave"
         DragDrop.Drop="FileList_OnDrop">
+      <ListBox.Styles>
+        <Style Selector="ListBoxItem">
+          <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+      </ListBox.Styles>
       <ListBox.ItemsPanel>
         <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
       </ListBox.ItemsPanel>
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="viewModels:SftpItemViewModel">
-          <Grid ColumnDefinitions="3*,110,180,120,160" MinHeight="30">
+          <!-- The transparent background is what makes the gaps between the columns hit-testable, so
+               the context menu opens anywhere on the row rather than only over the file name. -->
+          <Grid ColumnDefinitions="3*,110,180,120,160" MinHeight="30" Background="Transparent">
             <Grid>
               <TextBlock VerticalAlignment="Center" IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
               <TextBox IsVisible="{Binding IsRenaming}" Text="{Binding RenameText}" KeyDown="RenameEditor_OnKeyDown" />

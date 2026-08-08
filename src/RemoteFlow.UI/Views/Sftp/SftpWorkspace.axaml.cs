@@ -111,8 +111,25 @@ public sealed partial class SftpWorkspace : UserControl
 
     private async void FileList_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed ||
-            DataContext is not SftpWorkspaceViewModel viewModel)
+        if (DataContext is not SftpWorkspaceViewModel viewModel)
+        {
+            return;
+        }
+
+        var point = e.GetCurrentPoint(this).Properties;
+        if (point.IsRightButtonPressed)
+        {
+            // Right-clicking outside the current selection targets just that row, so the menu always
+            // acts on what was clicked; right-clicking inside it keeps the multi-selection intact.
+            if (FindItem(e.Source) is { } clicked && !viewModel.SelectedItems.Contains(clicked))
+            {
+                FileList.SelectedItem = clicked;
+            }
+
+            return;
+        }
+
+        if (!point.IsLeftButtonPressed)
         {
             return;
         }

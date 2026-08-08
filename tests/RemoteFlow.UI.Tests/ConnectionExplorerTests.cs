@@ -120,6 +120,57 @@ public sealed class ConnectionExplorerTests
     }
 
     [Fact]
+    public async Task NewFolderPicksAFreeNamePerParentAndOpensItForRenaming()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await ExplorerFixture.CreateAsync(token);
+        using var viewModel = fixture.CreateViewModel();
+        await viewModel.InitializeAsync(token);
+        ExplorerNodeViewModel? renaming = null;
+        viewModel.RenameStarted += (_, node) => renaming = node;
+
+        var first = await viewModel.CreateFolderAsync(cancellationToken: token);
+        var second = await viewModel.CreateFolderAsync(cancellationToken: token);
+        var child = await viewModel.CreateFolderAsync(first, token);
+
+        var folders = await fixture.Folders.ListAsync(token);
+        Assert.Equal(3, folders.Count);
+        Assert.Equal("New folder", folders.Single(folder => folder.Id == first!.Value).Name);
+        Assert.Equal("New folder 2", folders.Single(folder => folder.Id == second!.Value).Name);
+        var childFolder = folders.Single(folder => folder.Id == child!.Value);
+        Assert.Equal(first, childFolder.ParentId);
+        Assert.Equal("/New folder/New folder", childFolder.Path);
+        Assert.True(FindFolder(viewModel, first!.Value).IsExpanded);
+        Assert.Equal(child, renaming!.Id);
+        Assert.True(renaming.IsRenaming);
+        Assert.False(viewModel.IsEmpty);
+    }
+
+    [Fact]
+    public async Task FolderRenameAndDeletePersistAndReparentTheContents()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await ExplorerFixture.CreateAsync(token);
+        var folder = await fixture.AddFolderAsync("Staging", cancellationToken: token);
+        var connection = await fixture.AddConnectionAsync("Box", folder.Id, cancellationToken: token);
+        using var viewModel = fixture.CreateViewModel();
+        await viewModel.InitializeAsync(token);
+        var node = FindFolder(viewModel, folder.Id);
+
+        node.BeginRenameCommand.Execute(null);
+        node.EditName = "Production";
+        await node.CommitRenameCommand.ExecuteAsync(null);
+
+        Assert.False(node.IsRenaming);
+        Assert.Equal("/Production", (await fixture.Folders.GetByIdAsync(folder.Id, token))!.Path);
+
+        await FindFolder(viewModel, folder.Id).DeleteCommand.ExecuteAsync(null);
+
+        Assert.Null(await fixture.Folders.GetByIdAsync(folder.Id, token));
+        Assert.Null((await fixture.Connections.GetByIdAsync(connection.Id, token))!.FolderId);
+    }
+
+    [Fact]
     public async Task DragDropPersistsReparentAndOrderAndRejectsInvalidTargetsWithFeedback()
     {
         var token = TestContext.Current.CancellationToken;

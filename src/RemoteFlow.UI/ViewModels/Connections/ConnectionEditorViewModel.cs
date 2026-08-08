@@ -14,6 +14,17 @@ namespace RemoteFlow.UI.ViewModels.Connections;
 
 public sealed record FolderChoiceViewModel(Guid? Id, string Path);
 
+/// <summary>One entry in the environment colour override picker. <paramref name="Hex"/> is null for the
+/// "inherit the environment colour" entry and for the custom entry, which takes its value from the hex box.</summary>
+public sealed record ColorOverrideChoiceViewModel(string Label, string? Hex, bool IsCustom = false)
+{
+    public IBrush Swatch { get; } = Hex is null
+        ? Brushes.Transparent
+        : new SolidColorBrush(Color.Parse(Hex));
+
+    public bool HasSwatch => Hex is not null;
+}
+
 public sealed partial class TagChoiceViewModel(Guid id, string name) : ObservableObject
 {
     public event EventHandler? SelectionChanged;
@@ -41,6 +52,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     private readonly ITagService _tagService;
     private readonly ISettingsStore? _settings;
     private bool _loading;
+    private bool _syncingColorChoice;
 
     public ConnectionEditorViewModel(
         IConnectionService connections,
@@ -75,9 +87,22 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         AuthMethods = Enum.GetValues<AuthMethod>();
         Environments = Enum.GetValues<EnvironmentKind>();
         HostKeyPolicies = Enum.GetValues<HostKeyPolicy>();
+        SelectedColorOverride = ColorOverrideChoices[0];
         UpdateConditionalProperties();
         UpdateEnvironmentPreview();
     }
+
+    /// <summary>Accent colours picked to stay legible against the dark surfaces, and far enough apart in
+    /// hue from each other and from the environment defaults to tell two sessions apart at a glance.</summary>
+    public static IReadOnlyList<ColorOverrideChoiceViewModel> ColorOverrideChoices { get; } =
+    [
+        new("Match environment", null),
+        new("Teal", "#4FD1C5"),
+        new("Violet", "#A78BFA"),
+        new("Amber", "#F5B14C"),
+        new("Rose", "#FF7EB6"),
+        new("Custom…", null, IsCustom: true),
+    ];
 
     public Guid? ConnectionId { get; private set; }
 
@@ -128,6 +153,12 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string? ColorOverrideHex { get; set; }
+
+    [ObservableProperty]
+    public partial ColorOverrideChoiceViewModel SelectedColorOverride { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsCustomColorVisible { get; private set; }
 
     [ObservableProperty]
     public partial bool IsFavorite { get; set; }
@@ -206,6 +237,9 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     public partial string? EnvironmentError { get; private set; }
 
     [ObservableProperty]
+    public partial string? ColorOverrideError { get; private set; }
+
+    [ObservableProperty]
     public partial string? PrivateKeyPathError { get; private set; }
 
     [ObservableProperty]
@@ -227,6 +261,9 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         try
         {
             ConnectionId = connectionId;
+            _syncingColorChoice = true;
+            SelectedColorOverride = ColorOverrideChoices[0];
+            _syncingColorChoice = false;
             FolderChoices.Clear();
             FolderChoices.Add(new FolderChoiceViewModel(null, "No folder"));
             foreach (var folder in (await _folders.ListAsync(cancellationToken).ConfigureAwait(true))
@@ -523,6 +560,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
             case "connection.username": UsernameError = error.Message; break;
             case "connection.auth_method": AuthMethodError = error.Message; break;
             case "connection.environment": EnvironmentError = error.Message; break;
+            case "connection.color": ColorOverrideError = error.Message; break;
             case "connection.private_key_path": PrivateKeyPathError = error.Message; break;
             default: SaveError = error.Message; break;
         }
@@ -542,6 +580,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         UsernameError = null;
         AuthMethodError = null;
         EnvironmentError = null;
+        ColorOverrideError = null;
         PrivateKeyPathError = null;
         SaveError = null;
     }
@@ -646,7 +685,35 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
 
     partial void OnColorOverrideHexChanged(string? value)
     {
+        SyncColorOverrideChoice(value);
         UpdateEnvironmentPreview();
         MarkDirty();
+    }
+
+    partial void OnSelectedColorOverrideChanged(ColorOverrideChoiceViewModel value)
+    {
+        IsCustomColorVisible = value.IsCustom;
+        if (!_syncingColorChoice && !value.IsCustom)
+        {
+            ColorOverrideHex = value.Hex;
+        }
+    }
+
+    /// <summary>Moves the picker onto whichever entry matches the stored hex. Once the user is on
+    /// "Custom…" the selection stays there, so typing a value that happens to match a preset does not
+    /// close the hex box out from under them.</summary>
+    private void SyncColorOverrideChoice(string? hex)
+    {
+        if (_syncingColorChoice || SelectedColorOverride.IsCustom)
+        {
+            return;
+        }
+
+        var match = ColorOverrideChoices.FirstOrDefault(choice =>
+                        !choice.IsCustom && string.Equals(choice.Hex, hex, StringComparison.OrdinalIgnoreCase))
+                    ?? ColorOverrideChoices.Single(choice => choice.IsCustom);
+        _syncingColorChoice = true;
+        SelectedColorOverride = match;
+        _syncingColorChoice = false;
     }
 }

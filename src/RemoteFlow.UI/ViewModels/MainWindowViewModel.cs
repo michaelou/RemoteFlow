@@ -46,6 +46,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public IReadOnlyList<NavigationItemViewModel> NavigationItems => _navigationService.Items;
 
+    /// <summary>The sidebar entry for the page on screen, including pages opened from elsewhere
+    /// (connecting from the explorer, the command palette) rather than from the sidebar.</summary>
+    public NavigationItemViewModel? CurrentNavigationItem => _navigationService.Items
+        .FirstOrDefault(item => string.Equals(item.Key, _navigationService.CurrentPageKey, StringComparison.Ordinal));
+
     public CommandPaletteViewModel Palette { get; }
 
     public TerminalsPageViewModel? Terminals { get; }
@@ -59,5 +64,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(item);
         _navigationService.Navigate(item.Key);
+    }
+
+    partial void OnCurrentPageChanged(PageViewModel value)
+    {
+        OnPropertyChanged(nameof(CurrentNavigationItem));
     }
 }

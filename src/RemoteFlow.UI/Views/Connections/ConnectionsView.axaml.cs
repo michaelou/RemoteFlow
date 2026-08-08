@@ -20,8 +20,23 @@ public sealed partial class ConnectionsView : UserControl
     {
         if (DataContext is ConnectionsPageViewModel viewModel)
         {
+            viewModel.RenameStarted -= OnRenameStarted;
+            viewModel.RenameStarted += OnRenameStarted;
             await viewModel.InitializeAsync().ConfigureAwait(true);
         }
+    }
+
+    private void ConnectionsView_OnUnloaded(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ConnectionsPageViewModel viewModel)
+        {
+            viewModel.RenameStarted -= OnRenameStarted;
+        }
+    }
+
+    private void OnRenameStarted(object? sender, ExplorerNodeViewModel node)
+    {
+        FocusRenameEditor(node);
     }
 
     private void ConnectionTree_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -103,14 +118,7 @@ public sealed partial class ConnectionsView : UserControl
         else if (e.Key == Key.F2 && node.BeginRenameCommand.CanExecute(null))
         {
             node.BeginRenameCommand.Execute(null);
-            Dispatcher.UIThread.Post(() =>
-            {
-                var editor = ConnectionTree.GetVisualDescendants()
-                    .OfType<TextBox>()
-                    .FirstOrDefault(control => ReferenceEquals(control.DataContext, node));
-                _ = editor?.Focus();
-                editor?.SelectAll();
-            });
+            FocusRenameEditor(node);
             e.Handled = true;
         }
         else if (e.Key == Key.Delete && node.DeleteCommand.CanExecute(null))
@@ -162,6 +170,28 @@ public sealed partial class ConnectionsView : UserControl
         {
             viewModel.RequestCreateConnection();
         }
+    }
+
+    private void NewFolder_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ConnectionsPageViewModel viewModel)
+        {
+            viewModel.RequestCreateFolder();
+        }
+    }
+
+    /// <summary>The rename box only exists once the node flips into rename mode, so the focus has to
+    /// wait for the template to swap it in.</summary>
+    private void FocusRenameEditor(ExplorerNodeViewModel node)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var editor = ConnectionTree.GetVisualDescendants()
+                .OfType<TextBox>()
+                .FirstOrDefault(control => ReferenceEquals(control.DataContext, node));
+            _ = editor?.Focus();
+            editor?.SelectAll();
+        });
     }
 
     private void ClearFilters_OnClick(object? sender, RoutedEventArgs e)

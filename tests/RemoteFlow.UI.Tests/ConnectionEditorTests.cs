@@ -1,4 +1,5 @@
 using System.Reflection;
+using Avalonia.Media;
 using Microsoft.EntityFrameworkCore;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Services;
@@ -146,6 +147,71 @@ public sealed class ConnectionEditorTests
 
         Assert.Equal(HostKeyPolicy.TrustOnFirstUse, reopened.HostKeyPolicy);
         Assert.False(reopened.IsDirty);
+    }
+
+    [Fact]
+    public async Task ColorOverridePresetsSetTheHexAndMatchEnvironmentClearsIt()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        var teal = ConnectionEditorViewModel.ColorOverrideChoices.Single(choice => choice.Label == "Teal");
+
+        Assert.Equal("Match environment", editor.SelectedColorOverride.Label);
+        Assert.False(editor.IsCustomColorVisible);
+
+        editor.SelectedColorOverride = teal;
+
+        Assert.Equal(teal.Hex, editor.ColorOverrideHex);
+        Assert.False(editor.IsCustomColorVisible);
+        Assert.Equal(
+            Color.Parse(teal.Hex!),
+            Assert.IsType<SolidColorBrush>(editor.EnvironmentPreviewBrush).Color);
+
+        editor.Name = "Prod";
+        editor.Host = "prod.test";
+        var saved = await editor.SaveAsync(ReadOnlyMemory<char>.Empty, token);
+
+        Assert.True(saved);
+        Assert.Equal(teal.Hex, Assert.Single(await fixture.Connections.ListAsync(token)).ColorOverrideHex);
+
+        editor.SelectedColorOverride = ConnectionEditorViewModel.ColorOverrideChoices[0];
+
+        Assert.Null(editor.ColorOverrideHex);
+    }
+
+    [Fact]
+    public async Task ColorOutsideThePresetsOpensTheCustomHexBoxAndReportsBadValues()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var connection = Connection.Create(
+            SystemGuidProvider.Instance,
+            "Bespoke",
+            "bespoke.test",
+            createdUtc: fixture.Clock.UtcNow).Value;
+        _ = connection.SetDetails(
+            null,
+            AuthMethod.None,
+            null,
+            EnvironmentKind.Unspecified,
+            "#123456",
+            SystemGuidProvider.Instance,
+            fixture.Clock.UtcNow);
+        await fixture.Connections.AddAsync(connection, token);
+
+        var editor = await fixture.CreateEditorAsync(connection.Id, token);
+
+        Assert.True(editor.SelectedColorOverride.IsCustom);
+        Assert.True(editor.IsCustomColorVisible);
+        Assert.Equal("#123456", editor.ColorOverrideHex);
+
+        editor.ColorOverrideHex = "not-a-colour";
+        var saved = await editor.SaveAsync(ReadOnlyMemory<char>.Empty, token);
+
+        Assert.False(saved);
+        Assert.NotNull(editor.ColorOverrideError);
+        Assert.True(editor.IsCustomColorVisible);
     }
 
     [Fact]
