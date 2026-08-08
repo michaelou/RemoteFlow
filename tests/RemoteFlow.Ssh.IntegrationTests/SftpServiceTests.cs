@@ -228,6 +228,95 @@ public sealed class SftpServiceTests(SshServerFixture fixture)
         }
     }
 
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task RemoteEditRestatsImmediatelyBeforeUploadAndCancelKeepsWatching()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var connection = await ConnectAsync(token);
+        await using var sftp = connection.OpenSftp();
+        var directory = $"/tmp/remoteflow-edit-{Guid.NewGuid():N}";
+        var remotePath = SftpPath.Combine(directory, "shared.txt");
+        var localRoot = CreateTempDirectory();
+        Assert.True((await sftp.CreateDirectoryAsync(directory, token)).IsSuccess);
+        try
+        {
+            await WriteRemoteAsync(sftp, remotePath, "original", token);
+            var monitor = new ManualEditMonitor();
+            var resolver = new RecordingEditConflictResolver(RemoteEditConflictResolution.Cancel);
+            await using var edits = new RemoteEditService(
+                sftp,
+                new NoOpEditorLauncher(),
+                monitor,
+                new AllowCloseGuard(),
+                localRoot,
+                Guid.NewGuid(),
+                resolver,
+                new FakeClock(new DateTimeOffset(2026, 8, 8, 12, 34, 56, TimeSpan.Zero)));
+            var edit = await edits.OpenAsync(remotePath, token);
+
+            await WriteRemoteAsync(sftp, remotePath, "external", token); // same byte count, possibly same-second mtime
+            await File.WriteAllTextAsync(edit.LocalPath, "my-local", token);
+            Assert.True(await monitor.TriggerAsync(token));
+
+            var conflict = Assert.Single(resolver.Conflicts);
+            Assert.Equal(edit.OriginalRemotePath, conflict.RemotePath);
+            Assert.Equal(conflict.DownloadedSnapshot.Size, conflict.CurrentSnapshot.Size);
+            Assert.NotEqual(conflict.DownloadedSnapshot.Sha256, conflict.CurrentSnapshot.Sha256);
+            Assert.Equal("external", await ReadRemoteAsync(sftp, remotePath, token));
+            Assert.True(edit.IsDirty);
+            Assert.Equal(1, edits.ActiveCount);
+        }
+        finally
+        {
+            _ = await sftp.DeleteAsync(directory, recursive: true, CancellationToken.None);
+            Directory.Delete(localRoot, recursive: true);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task RemoteEditKeepBothLeavesOriginalByteIdenticalAndUsesTimestampedName()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var connection = await ConnectAsync(token);
+        await using var sftp = connection.OpenSftp();
+        var directory = $"/tmp/remoteflow-edit-{Guid.NewGuid():N}";
+        var remotePath = SftpPath.Combine(directory, "settings.json");
+        var keepBothPath = SftpPath.Combine(directory, "settings.remoteflow-20260808-123456.json");
+        var localRoot = CreateTempDirectory();
+        Assert.True((await sftp.CreateDirectoryAsync(directory, token)).IsSuccess);
+        try
+        {
+            await WriteRemoteAsync(sftp, remotePath, "downloaded", token);
+            var monitor = new ManualEditMonitor();
+            await using var edits = new RemoteEditService(
+                sftp,
+                new NoOpEditorLauncher(),
+                monitor,
+                new AllowCloseGuard(),
+                localRoot,
+                Guid.NewGuid(),
+                new RecordingEditConflictResolver(RemoteEditConflictResolution.KeepBoth),
+                new FakeClock(new DateTimeOffset(2026, 8, 8, 12, 34, 56, TimeSpan.Zero)));
+            var edit = await edits.OpenAsync(remotePath, token);
+
+            await WriteRemoteAsync(sftp, remotePath, "someone-else", token);
+            await File.WriteAllTextAsync(edit.LocalPath, "local-copy", token);
+            Assert.True(await monitor.TriggerAsync(token));
+
+            Assert.Equal("someone-else", await ReadRemoteAsync(sftp, remotePath, token));
+            Assert.Equal("local-copy", await ReadRemoteAsync(sftp, keepBothPath, token));
+            Assert.Equal(keepBothPath, edit.RemotePath);
+            Assert.False(edit.IsDirty);
+        }
+        finally
+        {
+            _ = await sftp.DeleteAsync(directory, recursive: true, CancellationToken.None);
+            Directory.Delete(localRoot, recursive: true);
+        }
+    }
+
     private async Task<ISshConnection> ConnectAsync(CancellationToken cancellationToken)
     {
         var verifier = new HostKeyVerifier(
@@ -245,6 +334,107 @@ public sealed class SftpServiceTests(SshServerFixture fixture)
         }, cancellationToken);
         Assert.True(result.IsSuccess, result.IsFailure ? result.Failure.Message : null);
         return result.Value;
+    }
+
+    private static async Task WriteRemoteAsync(
+        ISftpService sftp,
+        string path,
+        string contents,
+        CancellationToken cancellationToken)
+    {
+        var opened = await sftp.OpenWriteAsync(path, cancellationToken);
+        Assert.True(opened.IsSuccess, opened.IsFailure ? opened.Failure.Message : null);
+        await using var stream = opened.Value;
+        var bytes = Encoding.UTF8.GetBytes(contents);
+        await stream.WriteAsync(bytes, cancellationToken);
+    }
+
+    private static async Task<string> ReadRemoteAsync(
+        ISftpService sftp,
+        string path,
+        CancellationToken cancellationToken)
+    {
+        var opened = await sftp.OpenReadAsync(path, cancellationToken);
+        Assert.True(opened.IsSuccess, opened.IsFailure ? opened.Failure.Message : null);
+        await using var stream = opened.Value;
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return await reader.ReadToEndAsync(cancellationToken);
+    }
+
+    private static string CreateTempDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "RemoteFlow.Tests", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private sealed class ManualEditMonitor : IWatchedFileMonitor, IWatchedFileSubscription
+    {
+        private string? _path;
+        private Func<WatchedFileChange, CancellationToken, Task<bool>>? _callback;
+
+        public Task<IWatchedFileSubscription> WatchAsync(
+            string filePath,
+            string initialSha256,
+            Func<WatchedFileChange, CancellationToken, Task<bool>> onChanged,
+            CancellationToken cancellationToken = default)
+        {
+            _path = filePath;
+            _callback = onChanged;
+            return Task.FromResult<IWatchedFileSubscription>(this);
+        }
+
+        public Task CheckNowAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        public async Task<bool> TriggerAsync(CancellationToken cancellationToken)
+        {
+            var local = await RemoteEditService.CaptureLocalSnapshotAsync(_path!, cancellationToken);
+            return await _callback!(new WatchedFileChange(
+                _path!,
+                local.Size,
+                local.MTimeUtc,
+                local.Sha256), cancellationToken);
+        }
+    }
+
+    private sealed class RecordingEditConflictResolver(RemoteEditConflictResolution resolution) :
+        IRemoteEditConflictResolver
+    {
+        public List<RemoteEditConflict> Conflicts { get; } = [];
+
+        public Task<RemoteEditConflictResolution> ResolveAsync(
+            RemoteEditConflict conflict,
+            CancellationToken cancellationToken = default)
+        {
+            Conflicts.Add(conflict);
+            return Task.FromResult(resolution);
+        }
+    }
+
+    private sealed class NoOpEditorLauncher : IFileEditorLauncher
+    {
+        public Task OpenAsync(string filePath, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class AllowCloseGuard : IRemoteEditCloseGuard
+    {
+        public Task<bool> ConfirmDiscardUnsavedChangesAsync(
+            string remotePath,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
     }
 
     private sealed class AcceptingPrompt : IHostKeyPrompt

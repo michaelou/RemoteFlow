@@ -121,13 +121,15 @@ public sealed class RemoteEditingTests
         var root = CreateTempDirectory();
         var monitor = new ManualMonitor();
         var launcher = new RecordingEditorLauncher();
+        var conflictResolver = new RecordingConflictResolver();
         var service = new RemoteEditService(
             sftp,
             launcher,
             monitor,
             new CloseGuard(true),
             root,
-            Guid.NewGuid());
+            Guid.NewGuid(),
+            conflictResolver);
         try
         {
             var edit = await service.OpenAsync("/home/test/build.gradle.kts", token);
@@ -141,6 +143,7 @@ public sealed class RemoteEditingTests
             Assert.True(opened.IsSuccess);
             using var reader = new StreamReader(opened.Value);
             Assert.Equal("changed", await reader.ReadToEndAsync(token));
+            Assert.Empty(conflictResolver.Conflicts);
 
             Assert.True(await service.CloseAsync(edit, token));
             Assert.Equal(0, service.ActiveCount);
@@ -154,6 +157,19 @@ public sealed class RemoteEditingTests
                 Directory.Delete(root, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public void ConflictComparisonDoesNotTrustSameSecondMtimeOrRequireHashForLargeFiles()
+    {
+        var sameSecond = new DateTimeOffset(2026, 8, 8, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.True(RemoteEditService.HasConflict(
+            new RemoteSnapshot(10, sameSecond, null),
+            new RemoteSnapshot(11, sameSecond, null)));
+        Assert.False(RemoteEditService.HasConflict(
+            new RemoteSnapshot(RemoteEditService.HashLimitBytes + 1, sameSecond, null),
+            new RemoteSnapshot(RemoteEditService.HashLimitBytes + 1, sameSecond, null)));
     }
 
     [Theory]
@@ -257,6 +273,19 @@ public sealed class RemoteEditingTests
         public Task<bool> ConfirmDiscardUnsavedChangesAsync(
             string remotePath,
             CancellationToken cancellationToken = default) => Task.FromResult(result);
+    }
+
+    private sealed class RecordingConflictResolver : IRemoteEditConflictResolver
+    {
+        public List<RemoteEditConflict> Conflicts { get; } = [];
+
+        public Task<RemoteEditConflictResolution> ResolveAsync(
+            RemoteEditConflict conflict,
+            CancellationToken cancellationToken = default)
+        {
+            Conflicts.Add(conflict);
+            return Task.FromResult(RemoteEditConflictResolution.Cancel);
+        }
     }
 
     private sealed class RecordingRunner : IProcessRunner

@@ -64,6 +64,8 @@ public static class DependencyInjection
         services.TryAddSingleton<TerminalClipboardController>();
         services.TryAddSingleton<IConfirmationDialogService, ConfirmationDialogService>();
         services.TryAddSingleton<IRemoteEditCloseGuard, RemoteEditCloseGuard>();
+        services.TryAddSingleton<IRemoteEditConflictDialogService, RemoteEditConflictDialogService>();
+        services.TryAddSingleton<IRemoteEditConflictResolver, RemoteEditConflictResolver>();
         services.TryAddSingleton<IFilePickerService, AvaloniaFilePickerService>();
         services.TryAddSingleton<ISftpWorkspaceSessionFactory, SftpWorkspaceSessionFactory>();
         _ = services.Replace(ServiceDescriptor.Singleton<IHostKeyPrompt, HostKeyPromptService>());

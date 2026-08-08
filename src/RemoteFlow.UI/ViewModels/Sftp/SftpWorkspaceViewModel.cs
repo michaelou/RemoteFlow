@@ -739,7 +739,7 @@ public sealed partial class SftpWorkspaceViewModel(
     {
         ArgumentNullException.ThrowIfNull(item);
         var edit = _remoteEdits?.ActiveEdits.FirstOrDefault(active =>
-            string.Equals(active.RemotePath, item.FullPath, StringComparison.Ordinal));
+            string.Equals(active.OriginalRemotePath, item.FullPath, StringComparison.Ordinal));
         if (edit is null)
         {
             FeedbackMessage = $"'{item.Name}' is not open for remote editing.";

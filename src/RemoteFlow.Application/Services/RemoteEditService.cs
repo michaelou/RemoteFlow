@@ -8,7 +8,9 @@ public sealed class RemoteEditServiceFactory(
     IAppPaths appPaths,
     IFileEditorLauncher editorLauncher,
     IWatchedFileMonitor fileMonitor,
-    IRemoteEditCloseGuard closeGuard) : IRemoteEditServiceFactory
+    IRemoteEditCloseGuard closeGuard,
+    IRemoteEditConflictResolver conflictResolver,
+    IClock clock) : IRemoteEditServiceFactory
 {
     private static readonly TimeSpan _staleAge = TimeSpan.FromDays(1);
     private readonly string _root = Path.Combine(
@@ -17,7 +19,15 @@ public sealed class RemoteEditServiceFactory(
 
     public IRemoteEditService Create(ISftpService sftp, Guid sessionId)
     {
-        return new RemoteEditService(sftp, editorLauncher, fileMonitor, closeGuard, _root, sessionId);
+        return new RemoteEditService(
+            sftp,
+            editorLauncher,
+            fileMonitor,
+            closeGuard,
+            _root,
+            sessionId,
+            conflictResolver,
+            clock);
     }
 
     public Task SweepStaleFilesAsync(CancellationToken cancellationToken = default)
@@ -54,6 +64,8 @@ public sealed class RemoteEditService : IRemoteEditService
     private readonly IFileEditorLauncher _editorLauncher;
     private readonly IWatchedFileMonitor _fileMonitor;
     private readonly IRemoteEditCloseGuard _closeGuard;
+    private readonly IRemoteEditConflictResolver? _conflictResolver;
+    private readonly IClock _clock;
     private readonly string _sessionRoot;
     private readonly List<RemoteEditHandle> _active = [];
     private readonly Lock _sync = new();
@@ -65,12 +77,16 @@ public sealed class RemoteEditService : IRemoteEditService
         IWatchedFileMonitor fileMonitor,
         IRemoteEditCloseGuard closeGuard,
         string cacheRoot,
-        Guid sessionId)
+        Guid sessionId,
+        IRemoteEditConflictResolver? conflictResolver = null,
+        IClock? clock = null)
     {
         _sftp = sftp ?? throw new ArgumentNullException(nameof(sftp));
         _editorLauncher = editorLauncher ?? throw new ArgumentNullException(nameof(editorLauncher));
         _fileMonitor = fileMonitor ?? throw new ArgumentNullException(nameof(fileMonitor));
         _closeGuard = closeGuard ?? throw new ArgumentNullException(nameof(closeGuard));
+        _conflictResolver = conflictResolver;
+        _clock = clock ?? SystemClock.Instance;
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         _sessionRoot = Path.Combine(cacheRoot, sessionId.ToString("N"));
     }
@@ -109,7 +125,7 @@ public sealed class RemoteEditService : IRemoteEditService
         lock (_sync)
         {
             var existing = _active.FirstOrDefault(edit =>
-                string.Equals(edit.RemotePath, normalized, StringComparison.Ordinal));
+                string.Equals(edit.OriginalRemotePath, normalized, StringComparison.Ordinal));
             if (existing is not null)
             {
                 return existing;
@@ -274,19 +290,53 @@ public sealed class RemoteEditService : IRemoteEditService
         try
         {
             edit.IsUploading = true;
+            var current = await CaptureRemoteSnapshotAsync(
+                edit.RemotePath,
+                edit.RemoteSnapshot.Sha256 is not null,
+                cancellationToken).ConfigureAwait(false);
+            if (HasConflict(edit.RemoteSnapshot, current))
+            {
+                edit.IsDirty = true;
+                var resolution = _conflictResolver is null
+                    ? RemoteEditConflictResolution.OverwriteRemote
+                    : await _conflictResolver.ResolveAsync(
+                        new RemoteEditConflict(edit.RemotePath, edit.RemoteSnapshot, current),
+                        cancellationToken).ConfigureAwait(false);
+                switch (resolution)
+                {
+                    case RemoteEditConflictResolution.KeepBoth:
+                        edit.RemotePath = BuildKeepBothPath(edit.RemotePath, _clock.UtcNow);
+                        break;
+                    case RemoteEditConflictResolution.DiscardLocal:
+                        if (!current.Exists)
+                        {
+                            return true;
+                        }
+                        await DownloadAsync(edit.RemotePath, edit.LocalPath, cancellationToken).ConfigureAwait(false);
+                        edit.LocalSnapshot = await CaptureLocalSnapshotAsync(edit.LocalPath, cancellationToken)
+                            .ConfigureAwait(false);
+                        edit.RemoteSnapshot = current;
+                        edit.IsDirty = false;
+                        return true;
+                    case RemoteEditConflictResolution.Cancel:
+                        return true;
+                    case RemoteEditConflictResolution.OverwriteRemote:
+                        break;
+                    default:
+                        throw new InvalidOperationException($"Unknown remote edit conflict resolution: {resolution}.");
+                }
+            }
+
             var uploaded = await UploadAsync(edit.LocalPath, edit.RemotePath, cancellationToken).ConfigureAwait(false);
             if (!uploaded)
             {
                 return false;
             }
             edit.LocalSnapshot = new LocalSnapshot(change.Size, change.MTimeUtc, change.Sha256);
-            var stat = await _sftp.StatAsync(edit.RemotePath, cancellationToken).ConfigureAwait(false);
-            edit.RemoteSnapshot = stat.IsSuccess && stat.Value is not null
-                ? new RemoteSnapshot(
-                    stat.Value.Size,
-                    stat.Value.ModifiedTime.ToUniversalTime(),
-                    stat.Value.Size <= HashLimitBytes ? change.Sha256 : null)
-                : new RemoteSnapshot(change.Size, DateTimeOffset.UtcNow, change.Size <= HashLimitBytes ? change.Sha256 : null);
+            edit.RemoteSnapshot = await CaptureRemoteSnapshotAsync(
+                edit.RemotePath,
+                change.Size <= HashLimitBytes,
+                cancellationToken).ConfigureAwait(false);
             edit.IsDirty = false;
             return true;
         }
@@ -295,6 +345,69 @@ public sealed class RemoteEditService : IRemoteEditService
             edit.IsUploading = false;
             _ = edit.UploadGate.Release();
         }
+    }
+
+    public static bool HasConflict(RemoteSnapshot downloaded, RemoteSnapshot current)
+    {
+        ArgumentNullException.ThrowIfNull(downloaded);
+        ArgumentNullException.ThrowIfNull(current);
+        return downloaded.Exists != current.Exists ||
+            downloaded.Size != current.Size ||
+            downloaded.MTimeUtc != current.MTimeUtc ||
+            (downloaded.Sha256 is not null && !string.Equals(
+                downloaded.Sha256,
+                current.Sha256,
+                StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static string BuildKeepBothPath(string remotePath, DateTimeOffset timestamp)
+    {
+        var normalized = SftpPath.Normalize(remotePath);
+        var name = SftpPath.GetName(normalized);
+        var extension = Path.GetExtension(name);
+        var stem = extension.Length == 0 ? name : name[..^extension.Length];
+        var copyName = $"{stem}.remoteflow-{timestamp.ToUniversalTime():yyyyMMdd-HHmmss}{extension}";
+        var separator = normalized.LastIndexOf('/');
+        if (separator < 0)
+        {
+            return copyName;
+        }
+        var parent = separator == 0 ? "/" : normalized[..separator];
+        return SftpPath.Combine(parent, copyName);
+    }
+
+    private async Task<RemoteSnapshot> CaptureRemoteSnapshotAsync(
+        string remotePath,
+        bool includeHash,
+        CancellationToken cancellationToken)
+    {
+        var stat = await _sftp.StatAsync(remotePath, cancellationToken).ConfigureAwait(false);
+        if (stat.IsFailure)
+        {
+            throw new IOException(stat.Failure.Message);
+        }
+        if (stat.Value is null)
+        {
+            return new RemoteSnapshot(0, DateTimeOffset.UnixEpoch, null, Exists: false);
+        }
+        string? hash = null;
+        if (includeHash && stat.Value.Size <= HashLimitBytes && !stat.Value.IsDirectory)
+        {
+            var opened = await _sftp.OpenReadAsync(remotePath, cancellationToken).ConfigureAwait(false);
+            if (opened.IsFailure)
+            {
+                throw new IOException(opened.Failure.Message);
+            }
+            await using (opened.Value.ConfigureAwait(false))
+            {
+                var bytes = await SHA256.HashDataAsync(opened.Value, cancellationToken).ConfigureAwait(false);
+                hash = Convert.ToHexString(bytes).ToLowerInvariant();
+            }
+        }
+        return new RemoteSnapshot(
+            stat.Value.Size,
+            stat.Value.ModifiedTime.ToUniversalTime(),
+            hash);
     }
 
     private async Task DownloadAsync(string remotePath, string localPath, CancellationToken cancellationToken)

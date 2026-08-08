@@ -1,6 +1,10 @@
 namespace RemoteFlow.Application.Abstractions.Sftp;
 
-public sealed record RemoteSnapshot(long Size, DateTimeOffset MTimeUtc, string? Sha256);
+public sealed record RemoteSnapshot(
+    long Size,
+    DateTimeOffset MTimeUtc,
+    string? Sha256,
+    bool Exists = true);
 
 public sealed record LocalSnapshot(long Size, DateTimeOffset MTimeUtc, string Sha256);
 
@@ -36,6 +40,26 @@ public interface IRemoteEditCloseGuard
         CancellationToken cancellationToken = default);
 }
 
+public enum RemoteEditConflictResolution
+{
+    OverwriteRemote = 1,
+    KeepBoth = 2,
+    DiscardLocal = 3,
+    Cancel = 4,
+}
+
+public sealed record RemoteEditConflict(
+    string RemotePath,
+    RemoteSnapshot DownloadedSnapshot,
+    RemoteSnapshot CurrentSnapshot);
+
+public interface IRemoteEditConflictResolver
+{
+    Task<RemoteEditConflictResolution> ResolveAsync(
+        RemoteEditConflict conflict,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed class RemoteEditHandle
 {
     internal RemoteEditHandle(
@@ -46,6 +70,7 @@ public sealed class RemoteEditHandle
         LocalSnapshot localSnapshot)
     {
         Id = id;
+        OriginalRemotePath = remotePath;
         RemotePath = remotePath;
         LocalPath = localPath;
         RemoteSnapshot = remoteSnapshot;
@@ -54,7 +79,9 @@ public sealed class RemoteEditHandle
 
     public Guid Id { get; }
 
-    public string RemotePath { get; }
+    public string OriginalRemotePath { get; }
+
+    public string RemotePath { get; internal set; }
 
     public string LocalPath { get; }
 

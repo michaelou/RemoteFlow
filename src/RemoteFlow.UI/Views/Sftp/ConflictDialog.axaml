@@ -1,0 +1,43 @@
+<Window
+    x:Class="RemoteFlow.UI.Views.Sftp.ConflictDialog"
+    x:DataType="viewModels:RemoteEditConflictDialogViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Sftp"
+    Title="Remote edit conflict"
+    Width="720"
+    SizeToContent="Height"
+    CanResize="False"
+    WindowStartupLocation="CenterOwner">
+  <Grid Margin="24" RowDefinitions="Auto,Auto,Auto" RowSpacing="18">
+    <StackPanel Spacing="6">
+      <TextBlock FontSize="20" FontWeight="SemiBold" Text="The remote file changed" />
+      <TextBlock Text="{Binding RemotePath}" FontFamily="Cascadia Mono,Consolas" TextWrapping="Wrap" />
+      <TextBlock
+          Foreground="{DynamicResource Brush.Text.Secondary}"
+          Text="Choose how to resolve the local changes."
+          TextWrapping="Wrap" />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="150,*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="8">
+      <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="At download" />
+      <TextBlock Grid.Column="2" FontWeight="SemiBold" Text="Current remote" />
+      <TextBlock Grid.Row="1" Text="Size" />
+      <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Downloaded.Size}" />
+      <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Current.Size}" />
+      <TextBlock Grid.Row="2" Text="Modified" />
+      <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Downloaded.Modified}" />
+      <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding Current.Modified}" />
+      <TextBlock Grid.Row="3" Text="SHA-256" />
+      <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Downloaded.Hash}" TextTrimming="CharacterEllipsis" />
+      <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding Current.Hash}" TextTrimming="CharacterEllipsis" />
+    </Grid>
+
+    <StackPanel Grid.Row="2" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+      <Button Content="Cancel" IsDefault="True" Click="Cancel_OnClick" />
+      <Button Content="Discard local" Click="DiscardLocal_OnClick" />
+      <Button Content="Keep both" Click="KeepBoth_OnClick" />
+      <Button Content="Overwrite remote" Click="OverwriteRemote_OnClick" />
+    </StackPanel>
+  </Grid>
+</Window>

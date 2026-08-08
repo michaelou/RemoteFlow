@@ -190,7 +190,8 @@ public sealed class WatchedFileMonitor(
                 }
                 if (await _onChanged(change, cancellationToken).ConfigureAwait(false))
                 {
-                    _acknowledgedSha256 = change.Sha256;
+                    var acknowledged = await TryCaptureAsync(cancellationToken).ConfigureAwait(false);
+                    _acknowledgedSha256 = acknowledged?.Sha256 ?? change.Sha256;
                 }
             }
             finally
