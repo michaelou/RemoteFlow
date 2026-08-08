@@ -34,6 +34,13 @@
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
+
+      <TextBlock FontSize="18" FontWeight="SemiBold" Text="Apply import" />
+      <ComboBox ItemsSource="{Binding Strategies}" SelectedItem="{Binding SelectedStrategy}" />
+      <ComboBox ItemsSource="{Binding ConflictPolicies}" SelectedItem="{Binding SelectedConflictPolicy}" />
+      <TextBox PlaceholderText="Type REPLACE for destructive replacement" Text="{Binding ReplaceConfirmation}" />
+      <Button HorizontalAlignment="Left" Content="Apply selected strategy" Command="{Binding ApplyCommand}" />
+      <TextBlock Text="{Binding ApplySummary}" TextWrapping="Wrap" />
     </StackPanel>
   </ScrollViewer>
 </UserControl>

@@ -7,13 +7,62 @@ namespace RemoteFlow.Application.Services;
 public sealed class BackupService(
     IBackupDataSource dataSource,
     IBackupArchiveSerializer serializer,
-    IClock clock) : IBackupService
+    IClock clock,
+    IBackupImportStore? importStore = null) : IBackupService
 {
     private readonly IBackupDataSource _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
     private readonly IBackupArchiveSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     private readonly IClock _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+    private readonly IBackupImportStore? _importStore = importStore;
 
     public bool CanExportCredentials => false;
+
+    public async Task<BackupImportResult> ApplyAsync(
+        BackupApplyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.Path);
+        if (!Enum.IsDefined(request.Strategy) || !Enum.IsDefined(request.ConflictPolicy))
+        {
+            throw new ArgumentOutOfRangeException(nameof(request), "The import strategy or conflict policy is invalid.");
+        }
+
+        if (request.Strategy == MergeStrategy.Replace &&
+            !string.Equals(request.ReplaceConfirmation, "REPLACE", StringComparison.Ordinal))
+        {
+            throw new BackupArchiveException("Replace requires typing REPLACE exactly.");
+        }
+
+        var store = _importStore
+            ?? throw new InvalidOperationException("Backup import persistence is not configured.");
+        var archive = await _serializer.ReadAsync(request.Path, cancellationToken).ConfigureAwait(false);
+        var local = await _dataSource.CaptureAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var missingCredentials = archive.EncryptedCredentials is null
+            ? archive.Connections
+                .Where(connection => connection.Credential.Kind != CredentialKind.None)
+                .Select(connection => $"Connection '{connection.Name}' references a credential that was not included.")
+                .ToArray()
+            : [];
+        var sanitized = archive with
+        {
+            Connections = archive.EncryptedCredentials is null
+                ? [.. archive.Connections.Select(ClearCredential)]
+                : archive.Connections,
+        };
+        var plan = request.Strategy == MergeStrategy.Replace
+            ? BackupMergePlanner.Replace(sanitized)
+            : BackupMergePlanner.Merge(sanitized, local, request.ConflictPolicy);
+
+        var storeResult = await store.ApplyAsync(plan.Target, request.Strategy, cancellationToken).ConfigureAwait(false);
+        return new BackupImportResult(
+            request.Strategy,
+            plan.AppliedCounts,
+            plan.Replaced,
+            plan.Renamed,
+            missingCredentials,
+            storeResult.PreImportBackupPath);
+    }
 
     public async Task<BackupInspection> InspectAsync(
         string path,
@@ -293,5 +342,13 @@ public sealed class BackupService(
     private static int CountConflicts(IEnumerable<BackupConflict> conflicts, BackupConflictKind kind)
     {
         return conflicts.Count(conflict => conflict.Kind == kind);
+    }
+
+    private static BackupConnection ClearCredential(BackupConnection connection)
+    {
+        return connection with
+        {
+            Credential = new BackupCredentialReference(CredentialKind.None, string.Empty, string.Empty, null),
+        };
     }
 }

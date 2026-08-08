@@ -75,6 +75,47 @@ public interface IBackupService
         CancellationToken cancellationToken = default);
 
     Task<BackupInspection> InspectAsync(string path, CancellationToken cancellationToken = default);
+
+    Task<BackupImportResult> ApplyAsync(
+        BackupApplyRequest request,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record BackupApplyRequest(
+    string Path,
+    MergeStrategy Strategy,
+    MergeConflictPolicy ConflictPolicy = MergeConflictPolicy.PreferLocal,
+    string? ReplaceConfirmation = null);
+
+public sealed record BackupImportResult(
+    MergeStrategy Strategy,
+    BackupEntityCounts AppliedCounts,
+    int Replaced,
+    int Renamed,
+    IReadOnlyList<string> MissingCredentials,
+    string? PreImportBackupPath)
+{
+    public string Summary =>
+        $"Imported {AppliedCounts.Connections} connections, {AppliedCounts.Folders} folders, " +
+        $"and {AppliedCounts.Tags} tags; replaced {Replaced}, renamed {Renamed}." +
+        (MissingCredentials.Count == 0
+            ? string.Empty
+            : $" {MissingCredentials.Count} credential references were not present in the archive.");
+}
+
+public sealed record BackupImportStoreResult(string? PreImportBackupPath);
+
+public interface IBackupImportStore
+{
+    Task<BackupImportStoreResult> ApplyAsync(
+        BackupDataSnapshot target,
+        MergeStrategy strategy,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IBackupImportFaultInjector
+{
+    void OnImportStep(int stepNumber);
 }
 
 public enum BackupConflictKind

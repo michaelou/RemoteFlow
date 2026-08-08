@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Backup;
 using RemoteFlow.UI.Services;
+using RemoteFlow.Domain.Enums;
 
 namespace RemoteFlow.UI.ViewModels.Backup;
 
@@ -24,6 +25,10 @@ public sealed partial class BackupImportPreviewViewModel(
     private readonly IFilePickerService _filePicker = filePicker ?? throw new ArgumentNullException(nameof(filePicker));
     private readonly IErrorDialogService _errorDialog = errorDialog ?? throw new ArgumentNullException(nameof(errorDialog));
 
+    public IReadOnlyList<MergeStrategy> Strategies { get; } = Enum.GetValues<MergeStrategy>();
+
+    public IReadOnlyList<MergeConflictPolicy> ConflictPolicies { get; } = Enum.GetValues<MergeConflictPolicy>();
+
     [ObservableProperty]
     public partial string SelectedPath { get; private set; } = string.Empty;
 
@@ -41,6 +46,18 @@ public sealed partial class BackupImportPreviewViewModel(
 
     [ObservableProperty]
     public partial IReadOnlyList<string> ConflictDescriptions { get; private set; } = [];
+
+    [ObservableProperty]
+    public partial MergeStrategy SelectedStrategy { get; set; } = MergeStrategy.Merge;
+
+    [ObservableProperty]
+    public partial MergeConflictPolicy SelectedConflictPolicy { get; set; } = MergeConflictPolicy.PreferLocal;
+
+    [ObservableProperty]
+    public partial string ReplaceConfirmation { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ApplySummary { get; private set; } = string.Empty;
 
     [RelayCommand]
     private async Task InspectAsync()
@@ -67,6 +84,30 @@ public sealed partial class BackupImportPreviewViewModel(
         catch (BackupArchiveException exception)
         {
             await _errorDialog.ShowAsync("Backup inspection failed", exception.Message).ConfigureAwait(true);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ApplyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedPath))
+        {
+            await _errorDialog.ShowAsync("No backup selected", "Inspect a backup before applying it.").ConfigureAwait(true);
+            return;
+        }
+
+        try
+        {
+            var result = await _backupService.ApplyAsync(new BackupApplyRequest(
+                SelectedPath,
+                SelectedStrategy,
+                SelectedConflictPolicy,
+                ReplaceConfirmation)).ConfigureAwait(true);
+            ApplySummary = result.Summary;
+        }
+        catch (Exception exception) when (exception is BackupArchiveException or InvalidOperationException)
+        {
+            await _errorDialog.ShowAsync("Backup import failed", exception.Message).ConfigureAwait(true);
         }
     }
 

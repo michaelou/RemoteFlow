@@ -64,5 +64,9 @@ public static class DependencyInjection
             provider.GetRequiredService<DbContextScopeAccessor>()));
         _ = services.AddSingleton<IConnectionQueryService, ConnectionQueryService>();
         _ = services.AddSingleton<IBackupDataSource, EfBackupDataSource>();
+        _ = services.AddSingleton<IBackupImportStore>(provider => new EfBackupImportStore(
+            provider.GetRequiredService<IDbContextFactory<RemoteFlowDbContext>>(),
+            Path.Combine(dataDirectory, RemoteFlowDatabase.FileName),
+            provider.GetService<IBackupImportFaultInjector>()));
     }
 }
