@@ -1,0 +1,8 @@
+<Project>
+  <!-- Appends extra Microsoft.Testing.Platform arguments (trx and coverage reports in CI) without
+       clobbering the per-project TestingPlatformCommandLineArguments set in test project files.
+       Imported after the project body, so the append sees those values. -->
+  <PropertyGroup Condition="'$(ExtraTestingPlatformCommandLineArguments)' != ''">
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) $(ExtraTestingPlatformCommandLineArguments)</TestingPlatformCommandLineArguments>
+  </PropertyGroup>
+</Project>
