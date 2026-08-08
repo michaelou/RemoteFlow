@@ -1,3 +1,6 @@
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Infrastructure.Ssh.Auth;
 using Xunit;
@@ -114,6 +117,51 @@ public sealed class SshKeyServiceTests
 
         Assert.Contains("public key", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.False(File.Exists(Path.Combine(sshDirectory, "id_public")));
+    }
+
+    [Fact]
+    public async Task GeneratedAndImportedKeysAreReadableOnlyByTheirOwner()
+    {
+        var token = TestContext.Current.CancellationToken;
+        using var home = TemporaryDirectory.Create();
+        var service = CreateService(home.Path, out var sshDirectory);
+        var generated = await service.GenerateEd25519Async(Path.Combine(sshDirectory, "id_ed25519"), "acl-test", token);
+        var imported = await service.ImportAsync(
+            Path.Combine(sshDirectory, "id_imported"),
+            await File.ReadAllTextAsync(generated.Path, token),
+            token);
+
+        foreach (var path in new[] { generated.Path, imported.Path })
+        {
+            AssertOwnerOnly(path);
+        }
+    }
+
+    private static void AssertOwnerOnly(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(path));
+            return;
+        }
+
+        AssertOwnerOnlyWindows(path);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void AssertOwnerOnlyWindows(string path)
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        var security = new FileInfo(path).GetAccessControl();
+
+        Assert.True(security.AreAccessRulesProtected, "Inherited permissions should be disabled on a private key.");
+        var identities = security.GetAccessRules(true, true, typeof(SecurityIdentifier))
+            .Cast<FileSystemAccessRule>()
+            .Select(rule => rule.IdentityReference)
+            .Distinct()
+            .ToArray();
+        var owner = Assert.IsType<SecurityIdentifier>(Assert.Single(identities));
+        Assert.Equal(identity.User, owner);
     }
 
     private static SshKeyService CreateService(string home, out string sshDirectory)

@@ -14,7 +14,10 @@ public sealed record ConnectionInput(
     Guid? FolderId = null,
     EnvironmentKind Environment = EnvironmentKind.Unspecified,
     string? ColorOverrideHex = null,
-    string? PrivateKeyPath = null);
+    string? PrivateKeyPath = null,
+    // Trust on first use, not the domain's Strict default: Strict rejects any host whose key is not
+    // already stored and offers no way to store one, so it can only be chosen deliberately.
+    HostKeyPolicy HostKeyPolicy = HostKeyPolicy.TrustOnFirstUse);
 
 public static class ConnectionValidator
 {
@@ -51,6 +54,11 @@ public static class ConnectionValidator
         if (!Enum.IsDefined(input.Environment))
         {
             errors.Add(RemoteFlowError.Validation("connection.environment", "Choose a supported environment."));
+        }
+
+        if (!Enum.IsDefined(input.HostKeyPolicy))
+        {
+            errors.Add(RemoteFlowError.Validation("connection.host_key_policy", "Choose a supported host key policy."));
         }
 
         if (input.Protocol is ProtocolType.Ssh or ProtocolType.Sftp &&

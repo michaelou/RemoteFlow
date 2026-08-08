@@ -1,6 +1,9 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Runtime.Versioning;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using RemoteFlow.Application.Abstractions;
 using Renci.SshNet;
 
@@ -127,10 +130,61 @@ public sealed class SshKeyService(
 
         if (!OperatingSystem.IsWindows())
         {
-            File.SetUnixFileMode(fullPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             File.SetUnixFileMode(fullPath + ".pub", UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
+
+        RestrictToOwner(fullPath);
         return await InspectAsync(fullPath, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Makes a private key readable only by the user who owns it.
+    /// </summary>
+    /// <remarks>
+    /// Both OpenSSH and SSH.NET refuse keys that other principals can read. On Unix that is mode
+    /// 0600; on Windows it is the ACL equivalent of
+    /// <c>icacls key /inheritance:r /grant:r "%USERNAME%:F"</c> — inheritance off and a single
+    /// full-control entry for the current user.
+    /// </remarks>
+    public static void RestrictToOwner(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            return;
+        }
+
+        RestrictToOwnerWindows(path);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void RestrictToOwnerWindows(string path)
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        if (identity.User is not { } user)
+        {
+            return;
+        }
+
+        var file = new FileInfo(path);
+        var security = file.GetAccessControl();
+        // Dropping the inherited entries rather than preserving them is the point: preserving would
+        // copy SYSTEM and Administrators down as explicit entries and leave the key group-readable.
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        foreach (var rule in security.GetAccessRules(true, true, typeof(SecurityIdentifier))
+            .Cast<FileSystemAccessRule>()
+            .Where(rule => !rule.IdentityReference.Equals(user))
+            .ToArray())
+        {
+            security.RemoveAccessRuleSpecific(rule);
+        }
+
+        security.SetAccessRule(new FileSystemAccessRule(
+            user,
+            FileSystemRights.FullControl,
+            AccessControlType.Allow));
+        file.SetAccessControl(security);
     }
 
     public async Task<IReadOnlyList<SshKeyInspection>> DiscoverAsync(CancellationToken cancellationToken = default)
@@ -205,6 +259,10 @@ public sealed class SshKeyService(
 
         if (OperatingSystem.IsWindows())
         {
+            // Windows has no create-time ACL equivalent, so the file is created empty, locked down,
+            // and only then written to.
+            await File.WriteAllBytesAsync(fullPath, [], cancellationToken).ConfigureAwait(false);
+            RestrictToOwner(fullPath);
             await File.WriteAllTextAsync(fullPath, text, cancellationToken).ConfigureAwait(false);
         }
         else

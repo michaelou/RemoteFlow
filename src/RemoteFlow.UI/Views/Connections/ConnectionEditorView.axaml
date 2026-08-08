@@ -120,6 +120,16 @@
                 Text="{Binding PrivateKeyPathError}" />
           </StackPanel>
 
+          <StackPanel IsVisible="{Binding IsSshSectionVisible}">
+            <TextBlock Classes="label" Text="Host key policy" />
+            <ComboBox
+                TabIndex="7"
+                HorizontalAlignment="Stretch"
+                ItemsSource="{Binding HostKeyPolicies}"
+                SelectedItem="{Binding HostKeyPolicy, Mode=TwoWay}" />
+            <TextBlock Classes="hint" Text="{Binding HostKeyPolicyHint}" />
+          </StackPanel>
+
           <StackPanel>
             <TextBlock Classes="label" Text="Credential" />
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">

@@ -105,6 +105,49 @@ public sealed class ConnectionEditorTests
         Assert.Equal("Re-enter credential", editor.CredentialActionLabel);
     }
 
+    /// <summary>
+    /// Strict never prompts, so a connection created with it can never store a host key and can
+    /// never connect. New connections have to pick up the configured default instead.
+    /// </summary>
+    [Fact]
+    public async Task NewConnectionsTakeTheConfiguredHostKeyPolicyRatherThanStrict()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        editor.Name = "Trust on first use";
+        editor.Host = "tofu.test";
+
+        Assert.Equal(HostKeyPolicy.TrustOnFirstUse, editor.HostKeyPolicy);
+        Assert.True(await editor.SaveAsync(ReadOnlyMemory<char>.Empty, token));
+
+        var connection = Assert.Single(await fixture.Connections.ListAsync(token));
+        Assert.Equal(HostKeyPolicy.TrustOnFirstUse, connection.Ssh.HostKeyPolicy);
+    }
+
+    [Fact]
+    public async Task HostKeyPolicyIsEditableAndRoundTripsThroughTheEditor()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        await fixture.Settings.Set(SettingKeys.DefaultHostKeyPolicy, HostKeyPolicy.Strict, token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        editor.Name = "Pinned";
+        editor.Host = "pinned.test";
+
+        Assert.Equal(HostKeyPolicy.Strict, editor.HostKeyPolicy);
+
+        editor.HostKeyPolicy = HostKeyPolicy.TrustOnFirstUse;
+        Assert.True(editor.IsDirty);
+        Assert.True(await editor.SaveAsync(ReadOnlyMemory<char>.Empty, token));
+
+        var connection = Assert.Single(await fixture.Connections.ListAsync(token));
+        var reopened = await fixture.CreateEditorAsync(connection.Id, token);
+
+        Assert.Equal(HostKeyPolicy.TrustOnFirstUse, reopened.HostKeyPolicy);
+        Assert.False(reopened.IsDirty);
+    }
+
     [Fact]
     public void PublicEditorSurfaceHasNoReadableSecretProperty()
     {
@@ -295,7 +338,8 @@ public sealed class ConnectionEditorTests
                 CredentialService,
                 Folders,
                 Tags,
-                TagService);
+                TagService,
+                settings: Settings);
             await editor.InitializeAsync(connectionId, cancellationToken);
             return editor;
         }

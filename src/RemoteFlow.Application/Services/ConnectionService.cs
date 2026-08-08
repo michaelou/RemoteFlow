@@ -278,7 +278,9 @@ public sealed class ConnectionService(
 
     private Result<Connection> Configure(Connection connection, ConnectionInput input)
     {
-        var ssh = SshOptions.Default().Configure(privateKeyPath: input.PrivateKeyPath);
+        var ssh = SshOptions.Default().Configure(
+            privateKeyPath: input.PrivateKeyPath,
+            hostKeyPolicy: input.HostKeyPolicy);
         if (ssh.IsFailure)
         {
             return Result<Connection>.Failure(ssh.Error);

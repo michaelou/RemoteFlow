@@ -39,6 +39,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     private readonly IFolderRepository _folders;
     private readonly ITagRepository _tags;
     private readonly ITagService _tagService;
+    private readonly ISettingsStore? _settings;
     private bool _loading;
 
     public ConnectionEditorViewModel(
@@ -49,7 +50,8 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         ITagRepository tags,
         ITagService tagService,
         ISshKeyService? sshKeyService = null,
-        IClipboardService? clipboard = null)
+        IClipboardService? clipboard = null,
+        ISettingsStore? settings = null)
     {
         _connections = connections;
         _connectionRepository = connectionRepository;
@@ -57,6 +59,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         _folders = folders;
         _tags = tags;
         _tagService = tagService;
+        _settings = settings;
         if (sshKeyService is not null && clipboard is not null)
         {
             KeyPicker = new SshKeyPickerViewModel(sshKeyService, clipboard);
@@ -71,6 +74,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         Protocols = Enum.GetValues<ProtocolType>();
         AuthMethods = Enum.GetValues<AuthMethod>();
         Environments = Enum.GetValues<EnvironmentKind>();
+        HostKeyPolicies = Enum.GetValues<HostKeyPolicy>();
         UpdateConditionalProperties();
         UpdateEnvironmentPreview();
     }
@@ -86,6 +90,8 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     public IReadOnlyList<AuthMethod> AuthMethods { get; }
 
     public IReadOnlyList<EnvironmentKind> Environments { get; }
+
+    public IReadOnlyList<HostKeyPolicy> HostKeyPolicies { get; }
 
     public ObservableCollection<FolderChoiceViewModel> FolderChoices { get; } = [];
 
@@ -128,6 +134,21 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string? PrivateKeyPath { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HostKeyPolicyHint))]
+    public partial HostKeyPolicy HostKeyPolicy { get; set; } = HostKeyPolicy.TrustOnFirstUse;
+
+    public string HostKeyPolicyHint => HostKeyPolicy switch
+    {
+        HostKeyPolicy.Strict =>
+            "Only connects when the host key is already trusted. It never prompts, so import the key from a known_hosts file first.",
+        HostKeyPolicy.TrustOnFirstUse =>
+            "Asks you to confirm the host key the first time, then requires it to match on every later connection.",
+        HostKeyPolicy.AcceptAny =>
+            "Accepts any host key without checking. Sessions are flagged as unverified and remain open to interception.",
+        _ => throw new ArgumentOutOfRangeException(nameof(HostKeyPolicy)),
+    };
 
     [ObservableProperty]
     public partial string? TagInput { get; set; }
@@ -235,6 +256,12 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
                 SelectedFolder = FolderChoices[0];
                 CredentialStatus = CredentialStorageStatus.NotStored;
                 UpdateCredentialPresentation();
+                if (_settings is not null)
+                {
+                    HostKeyPolicy = await _settings
+                        .Get(SettingKeys.DefaultHostKeyPolicy, cancellationToken)
+                        .ConfigureAwait(true);
+                }
             }
 
             if (KeyPicker is not null)
@@ -277,7 +304,8 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
                 SelectedFolder?.Id,
                 Environment,
                 ColorOverrideHex,
-                PrivateKeyPath);
+                PrivateKeyPath,
+                HostKeyPolicy);
             var saved = ConnectionId is { } id
                 ? await _connections.UpdateAsync(id, input, cancellationToken).ConfigureAwait(true)
                 : await _connections.CreateAsync(input, cancellationToken).ConfigureAwait(true);
@@ -381,6 +409,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         ColorOverrideHex = connection.ColorOverrideHex;
         IsFavorite = connection.IsFavorite;
         PrivateKeyPath = connection.Ssh.PrivateKeyPath;
+        HostKeyPolicy = connection.Ssh.HostKeyPolicy;
         var selectedTagIds = connection.Tags.Select(tag => tag.TagId).ToHashSet();
         foreach (var choice in TagChoices)
         {
@@ -590,6 +619,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         MarkDirty();
     }
     partial void OnTagInputChanged(string? value) { MarkDirty(); }
+    partial void OnHostKeyPolicyChanged(HostKeyPolicy value) { MarkDirty(); }
 
     partial void OnProtocolChanged(ProtocolType oldValue, ProtocolType newValue)
     {

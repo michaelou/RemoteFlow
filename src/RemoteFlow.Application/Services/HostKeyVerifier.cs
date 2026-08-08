@@ -135,9 +135,14 @@ public sealed class HostKeyVerifier(
         {
             if (request.Policy == HostKeyPolicy.Strict)
             {
+                // Strict never prompts, so the message has to name the two ways out; otherwise the
+                // connection is simply unusable with no indication of why.
                 return SshResult<HostKeyVerificationResult>.Fail(
                     SshError.HostKeyUnknown,
-                    $"No trusted host key is stored for {request.Host}:{request.Port}.");
+                    $"No trusted host key is stored for {request.Host}:{request.Port}, and this " +
+                    "connection uses the Strict host key policy, which never prompts. Import the " +
+                    "key from a known_hosts file, or change the connection's host key policy to " +
+                    "'Trust on first use'.");
             }
 
             if (request.Policy == HostKeyPolicy.TrustOnFirstUse)
