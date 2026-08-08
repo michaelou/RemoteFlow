@@ -16,6 +16,10 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
   installer is per-user, adds a Start-menu entry and an optional desktop shortcut, and **leaves your saved
   connections, settings, and credential references in place when you uninstall** unless you ask for them
   to be removed.
+- A release workflow. Pushing a `v*` tag builds both architectures on runners of their own architecture,
+  launches every zip and installer to confirm it starts and reports the version in the tag, and creates a
+  **draft** GitHub release with `checksums.txt` and generated notes. Releases are never published
+  automatically, and there is deliberately no auto-update mechanism and no update ping.
 - This changelog.
 
 ### Changed

@@ -19,8 +19,9 @@ Everything lands in `artifacts/`, which is git-ignored:
 | `RemoteFlow-<version>-win-arm64-setup.exe` | Installer for ARM64. |
 
 Useful switches: `-Runtime win-x64` to build one architecture, `-SkipInstaller` to produce only the zips
-(also what happens automatically, with a warning, when Inno Setup is not installed), and
-`-KeepPublishOutput` to leave the intermediate publish tree in `artifacts/publish/` for inspection.
+(also what happens automatically, with a warning, when Inno Setup is not installed), `-RequireInstaller`
+to turn that warning into an error, and `-KeepPublishOutput` to leave the intermediate publish tree in
+`artifacts/publish/` for inspection.
 
 The version in every filename is read back out of the built binary rather than passed in, so an artefact
 cannot be named something other than what it reports. The script runs `--version` on each binary it can
@@ -98,6 +99,10 @@ Publish artefacts with a SHA-256 checksum alongside them so a user can verify a 
 warned them about.
 
 ## Verifying a release candidate
+
+Pushing a `v*` tag builds these artefacts, launches each one, and drafts a release — see
+[releasing.md](releasing.md). What follows is what the automation cannot prove and a human has to do
+before publishing that draft.
 
 1. `pwsh ./scripts/publish-windows.ps1` — both architectures, zips and installers.
 2. Extract the x64 zip on a machine with **no .NET runtime installed** and launch it.
