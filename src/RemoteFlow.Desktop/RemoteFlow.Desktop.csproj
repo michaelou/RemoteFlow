@@ -2,6 +2,34 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <ApplicationIcon>../RemoteFlow.UI/Assets/remoteflow.ico</ApplicationIcon>
+    <!-- What a user sees and types: RemoteFlow.exe, not RemoteFlow.Desktop.exe. The project keeps its
+         name; only the produced binary is renamed. -->
+    <AssemblyName>RemoteFlow</AssemblyName>
+    <RootNamespace>RemoteFlow.Desktop</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Explorer's Details tab and the installer both read these. Version and FileVersion come from MinVer;
+       nothing here restates a version number. -->
+  <PropertyGroup>
+    <Product>RemoteFlow</Product>
+    <AssemblyTitle>RemoteFlow</AssemblyTitle>
+    <Company>michaelou</Company>
+    <Authors>michaelou</Authors>
+    <Copyright>Copyright (c) 2026 michaelou</Copyright>
+    <Description>SSH, SFTP, and terminal client for managing remote machines.</Description>
+  </PropertyGroup>
+
+  <!-- Shipping shape: self-contained per architecture, so the zip runs on a machine with no .NET
+       installed. Trimming and AOT stay off — EF Core and Avalonia's XAML loader both use reflection that
+       a trimmer cannot see (ADR 0003, and the properties set repository-wide). -->
+  <PropertyGroup>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <SelfContained Condition="'$(RuntimeIdentifier)' != ''">true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>portable</DebugType>
+    <!-- The published tree is zipped and shipped; symbols belong with the build, not the download. -->
+    <DebugSymbols Condition="'$(RuntimeIdentifier)' != ''">false</DebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>
