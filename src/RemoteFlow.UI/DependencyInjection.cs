@@ -13,6 +13,7 @@ using RemoteFlow.UI.ViewModels.Transfers;
 using RemoteFlow.UI.ViewModels.Settings;
 using RemoteFlow.UI.ViewModels.Security;
 using RemoteFlow.UI.ViewModels.Sftp;
+using RemoteFlow.UI.ViewModels.Backup;
 using RemoteFlow.UI.Views;
 
 namespace RemoteFlow.UI;
@@ -24,6 +25,8 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton<ConnectionsPageViewModel>();
+        services.TryAddSingleton<BackupExportViewModel>();
+        services.TryAddSingleton<BackupPageViewModel>();
         services.TryAddSingleton<ConnectionEditorViewModelFactory>();
         services.TryAddSingleton<CommandPaletteViewModel>();
         services.TryAddSingleton<TerminalsPageViewModel>();
@@ -49,6 +52,10 @@ public static class DependencyInjection
             "sftp",
             "SFTP",
             provider.GetRequiredService<SftpWorkspaceViewModel>));
+        _ = services.AddSingleton(provider => new NavigationPageRegistration(
+            "backup",
+            "Backup",
+            provider.GetRequiredService<BackupPageViewModel>));
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "settings",
             "Settings",

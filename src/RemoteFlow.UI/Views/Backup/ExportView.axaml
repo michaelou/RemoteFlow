@@ -1,0 +1,35 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Backup.ExportView"
+    x:DataType="viewModels:BackupExportViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Backup">
+  <ScrollViewer>
+    <StackPanel Margin="28" MaxWidth="720" HorizontalAlignment="Left" Spacing="16">
+      <TextBlock FontSize="28" FontWeight="SemiBold" Text="Export backup" />
+      <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Create a portable ZIP archive of your RemoteFlow data." />
+
+      <TextBlock FontWeight="SemiBold" Text="Scope" />
+      <ComboBox ItemsSource="{Binding ScopeKinds}" SelectedItem="{Binding SelectedScopeKind}" />
+      <TextBox PlaceholderText="Folder ID for subtree export" Text="{Binding SelectedFolderId}" />
+      <TextBox PlaceholderText="Connection IDs separated by commas" Text="{Binding SelectedConnectionIds}" />
+
+      <CheckBox Content="Include settings" IsChecked="{Binding IncludeSettings}" />
+      <CheckBox Content="Include trusted host keys" IsChecked="{Binding IncludeHostKeys}" />
+      <CheckBox
+          Content="Include encrypted credentials"
+          IsChecked="{Binding IncludeCredentials}"
+          IsEnabled="{Binding CanExportCredentials}" />
+      <TextBlock Foreground="#C47F00" Text="{Binding CredentialWarning}" TextWrapping="Wrap" />
+
+      <ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" />
+      <TextBlock Text="{Binding ProgressText}" />
+      <TextBlock Text="{Binding ResultSummary}" TextWrapping="Wrap" />
+
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="Choose destination and export" Command="{Binding ExportCommand}" />
+        <Button Content="Cancel" Command="{Binding CancelCommand}" />
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Ssh;
 using RemoteFlow.Application.Abstractions.Sftp;
+using RemoteFlow.Application.Abstractions.Backup;
 using RemoteFlow.Application.Services;
 using RemoteFlow.Domain.Abstractions;
 
@@ -16,6 +17,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IClock>(SystemClock.Instance);
         services.TryAddSingleton<IGuidProvider>(SystemGuidProvider.Instance);
         services.TryAddSingleton<IConnectionChangeNotifier, ConnectionChangeNotifier>();
+        services.TryAddSingleton<IBackupService, BackupService>();
         services.TryAddSingleton<IConnectionService, ConnectionService>();
         services.TryAddSingleton<IConnectionCredentialService, ConnectionCredentialService>();
         services.TryAddSingleton<ITagService, TagService>();

@@ -1,0 +1,141 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Abstractions.Backup;
+using RemoteFlow.UI.Services;
+
+namespace RemoteFlow.UI.ViewModels.Backup;
+
+public sealed class BackupPageViewModel(BackupExportViewModel export) : PageViewModel("Backup")
+{
+    public BackupExportViewModel Export { get; } = export ?? throw new ArgumentNullException(nameof(export));
+}
+
+public sealed partial class BackupExportViewModel(
+    IBackupService backupService,
+    IFilePickerService filePicker,
+    IErrorDialogService errorDialog) : ObservableObject, IDisposable
+{
+    private readonly IBackupService _backupService = backupService ?? throw new ArgumentNullException(nameof(backupService));
+    private readonly IFilePickerService _filePicker = filePicker ?? throw new ArgumentNullException(nameof(filePicker));
+    private readonly IErrorDialogService _errorDialog = errorDialog ?? throw new ArgumentNullException(nameof(errorDialog));
+    private CancellationTokenSource? _cancellation;
+
+    public IReadOnlyList<BackupExportScopeKind> ScopeKinds { get; } = Enum.GetValues<BackupExportScopeKind>();
+
+    public bool CanExportCredentials => _backupService.CanExportCredentials;
+
+    public string CredentialWarning => CanExportCredentials
+        ? "Credentials are encrypted, but anyone with the passphrase can recover them."
+        : "Encrypted credential export is not available yet; no credential secrets will be included.";
+
+    [ObservableProperty]
+    public partial BackupExportScopeKind SelectedScopeKind { get; set; } = BackupExportScopeKind.All;
+
+    [ObservableProperty]
+    public partial string? SelectedFolderId { get; set; }
+
+    [ObservableProperty]
+    public partial string SelectedConnectionIds { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool IncludeSettings { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool IncludeHostKeys { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool IncludeCredentials { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsExporting { get; private set; }
+
+    [ObservableProperty]
+    public partial double ProgressPercent { get; private set; }
+
+    [ObservableProperty]
+    public partial string ProgressText { get; private set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ResultSummary { get; private set; } = string.Empty;
+
+    [RelayCommand(CanExecute = nameof(CanStartExport))]
+    private async Task ExportAsync()
+    {
+        var folder = await _filePicker.PickDownloadFolderAsync(cancellationToken: default).ConfigureAwait(true);
+        if (folder is null)
+        {
+            return;
+        }
+
+        var destination = Path.Combine(folder, $"RemoteFlow-backup-{DateTime.UtcNow:yyyyMMdd-HHmmss}.zip");
+        _cancellation = new CancellationTokenSource();
+        IsExporting = true;
+        ResultSummary = string.Empty;
+        ExportCommand.NotifyCanExecuteChanged();
+        CancelCommand.NotifyCanExecuteChanged();
+        try
+        {
+            var progress = new Progress<BackupProgress>(item =>
+            {
+                ProgressPercent = item.Percent;
+                ProgressText = item.Stage;
+            });
+            var request = new BackupExportRequest(
+                destination,
+                CreateScope(),
+                IncludeSettings,
+                IncludeHostKeys,
+                IncludeCredentials);
+            var result = await _backupService.ExportAsync(request, progress, _cancellation.Token).ConfigureAwait(true);
+            ResultSummary = result.Summary;
+        }
+        catch (OperationCanceledException)
+        {
+            ProgressText = "Export cancelled";
+        }
+        catch (Exception exception) when (exception is BackupArchiveException or ArgumentException or IOException)
+        {
+            await _errorDialog.ShowAsync("Backup export failed", exception.Message).ConfigureAwait(true);
+        }
+        finally
+        {
+            _cancellation.Dispose();
+            _cancellation = null;
+            IsExporting = false;
+            ExportCommand.NotifyCanExecuteChanged();
+            CancelCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(IsExporting))]
+    private void Cancel()
+    {
+        _cancellation?.Cancel();
+    }
+
+    public void Dispose()
+    {
+        _cancellation?.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    private bool CanStartExport()
+    {
+        return !IsExporting;
+    }
+
+    private BackupExportScope CreateScope()
+    {
+        return SelectedScopeKind switch
+        {
+            BackupExportScopeKind.All => BackupExportScope.All,
+            BackupExportScopeKind.FolderSubtree when Guid.TryParse(SelectedFolderId, out var folderId) =>
+                BackupExportScope.FolderSubtree(folderId),
+            BackupExportScopeKind.SelectedConnections => BackupExportScope.SelectedConnections(
+                SelectedConnectionIds.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries)
+                    .Select(Guid.Parse)),
+            _ => throw new ArgumentException("Choose a valid folder or connection selection."),
+        };
+    }
+}

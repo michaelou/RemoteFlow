@@ -5,6 +5,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
     xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
+    xmlns:backupViewModels="using:RemoteFlow.UI.ViewModels.Backup"
+    xmlns:backupViews="using:RemoteFlow.UI.Views.Backup"
     xmlns:paletteViews="using:RemoteFlow.UI.Views.CommandPalette"
     xmlns:settingsViews="using:RemoteFlow.UI.Views.Settings"
     xmlns:securityViews="using:RemoteFlow.UI.Views.Security"
@@ -25,6 +27,9 @@
   <Window.DataTemplates>
     <DataTemplate DataType="{x:Type connectionViewModels:ConnectionsPageViewModel}" x:DataType="connectionViewModels:ConnectionsPageViewModel">
       <connectionViews:ConnectionsView />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type backupViewModels:BackupPageViewModel}" x:DataType="backupViewModels:BackupPageViewModel">
+      <backupViews:ExportView DataContext="{Binding Export}" />
     </DataTemplate>
     <DataTemplate DataType="{x:Type terminalViewModels:TerminalsPageViewModel}" x:DataType="terminalViewModels:TerminalsPageViewModel">
       <terminalViews:TerminalWorkspace />

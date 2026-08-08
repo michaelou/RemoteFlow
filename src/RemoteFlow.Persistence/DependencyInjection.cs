@@ -3,6 +3,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Queries;
+using RemoteFlow.Application.Abstractions.Backup;
+using RemoteFlow.Persistence.Backup;
 using RemoteFlow.Persistence.Queries;
 using RemoteFlow.Persistence.Repositories;
 
@@ -61,5 +63,6 @@ public static class DependencyInjection
             provider.GetRequiredService<IDbContextFactory<RemoteFlowDbContext>>(),
             provider.GetRequiredService<DbContextScopeAccessor>()));
         _ = services.AddSingleton<IConnectionQueryService, ConnectionQueryService>();
+        _ = services.AddSingleton<IBackupDataSource, EfBackupDataSource>();
     }
 }
