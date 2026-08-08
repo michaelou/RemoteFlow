@@ -23,6 +23,10 @@ public sealed class CredentialEnvelope(
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true,
+        // Indented output follows Environment.NewLine unless told otherwise, which would make an
+        // envelope written on Windows differ byte for byte from the same envelope written on Linux or
+        // macOS. The backup format is an interchange format: pin the line ending.
+        NewLine = "\n",
     };
     private readonly IReadOnlyList<ICredentialProvider> _providers = [.. providers];
 

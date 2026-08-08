@@ -1,4 +1,6 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using RemoteFlow.Application.Abstractions;
@@ -118,7 +120,9 @@ public sealed class CredentialEnvelopeTests
         await using var prepared = await envelope.PrepareImportAsync(
             encrypted, manifest, null, connections, "Known!Pass123".AsMemory(), token);
 
-        Assert.Equal("849ECD416E972D40BDC67F80D4439C104E82717164F381667C6AB9CD6CE52585", digest);
+        // The envelope pins "\n" as its line ending, so this digest is the same on every host. The
+        // previous value was the CRLF form Windows produced before that was pinned.
+        Assert.Equal("33E5393B12A5340DD5F49E99C8A180452F6B0B834F6759E7341359A56512463E", digest);
         Assert.Contains(Ids.First, prepared.References.Keys);
     }
 
@@ -152,6 +156,39 @@ public sealed class CredentialEnvelopeTests
                 token);
 
             Assert.Contains(Ids.First, prepared.References.Keys);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task IndentedBackupJsonUsesLineFeedsOnEveryHost()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var source = new MemoryCredentialProvider("source");
+        var target = new MemoryCredentialProvider("target");
+        await source.SetAsync("source-key", "newline-secret".AsMemory(), "Source", token);
+        var envelope = CreateEnvelope(source, target);
+        var connections = new[] { Connection(Ids.First, "source-key") };
+        var manifest = Manifest(1);
+        var encrypted = await envelope.EncryptAsync(connections, manifest, "Strong!Pass123".AsMemory(), token);
+
+        Assert.DoesNotContain("\r\n", Encoding.UTF8.GetString(encrypted), StringComparison.Ordinal);
+
+        var archive = new BackupArchive(manifest, connections, [], [], [], [], [], encrypted);
+        var directory = Path.Combine(Path.GetTempPath(), $"RemoteFlow-Credentials-{Guid.NewGuid():N}");
+        _ = Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "credentials.zip");
+        try
+        {
+            await new ZipBackupArchiveSerializer().WriteAsync(path, archive, token);
+            using var zip = ZipFile.OpenRead(path);
+            var entry = Assert.Single(zip.Entries, item => item.FullName == BackupFormat.ManifestEntry);
+            using var reader = new StreamReader(entry.Open(), Encoding.UTF8);
+
+            Assert.DoesNotContain("\r\n", await reader.ReadToEndAsync(token), StringComparison.Ordinal);
         }
         finally
         {
