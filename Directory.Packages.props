@@ -26,6 +26,8 @@
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageVersion Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+    <!-- Versioning comes from git tags. Build-only: PrivateAssets="all" in Directory.Build.props. -->
+    <PackageVersion Include="MinVer" Version="7.0.0" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <!-- Coverage extension for Microsoft.Testing.Platform. xunit.v3 3.2.2 carries platform 1.9.1, so this
          must stay on the 1.x platform line: 18.1 and later require platform 2.x. Upgrade it only together

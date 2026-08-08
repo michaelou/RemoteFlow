@@ -35,6 +35,10 @@ public static class DependencyInjection
         services.TryAddSingleton<TransfersPageViewModel>();
         services.TryAddSingleton<SftpWorkspaceViewModel>();
         services.TryAddSingleton<TerminalSettingsViewModel>();
+        // The version is stamped into the assembly that started the process; a host that knows better can
+        // register its own IAppVersionInfo before calling this.
+        services.TryAddSingleton<IAppVersionInfo>(_ => AssemblyVersionInfo.ForEntryAssembly());
+        services.TryAddSingleton<AboutViewModel>();
         services.TryAddSingleton<SettingsPageViewModel>();
         services.TryAddSingleton<TrustedKeysViewModel>();
         _ = services.AddSingleton(provider => new NavigationPageRegistration(

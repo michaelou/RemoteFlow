@@ -55,6 +55,9 @@
         <TabItem Header="Trusted keys">
           <securityViews:TrustedKeysView DataContext="{Binding Security}" />
         </TabItem>
+        <TabItem Header="About">
+          <settingsViews:AboutView DataContext="{Binding About}" />
+        </TabItem>
       </TabControl>
     </DataTemplate>
     <DataTemplate DataType="{x:Type viewModels:PageViewModel}" x:DataType="viewModels:PageViewModel">

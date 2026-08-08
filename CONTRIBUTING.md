@@ -27,6 +27,33 @@ The equivalent direct command is:
 dotnet test tests/RemoteFlow.Ssh.IntegrationTests --filter Category=Integration
 ```
 
+## Versioning and the changelog
+
+Versions come from git tags, through [MinVer](https://github.com/adamralph/minver). There is no version
+number written down in a file to forget to bump:
+
+- An untagged commit builds as a prerelease — `0.0.0-alpha.0.57`, where the last part counts commits since
+  the last tag (or the root).
+- A commit tagged `v0.1.0` builds as exactly `0.1.0`. The `v` prefix is required; MinVer is configured to
+  expect it.
+- Every assembly also records the commit, because the SDK appends it to
+  `AssemblyInformationalVersion`. Check what a build claims to be with:
+
+```shell
+dotnet run --project src/RemoteFlow.Desktop -- --version
+```
+
+That prints `RemoteFlow <version> (commit <sha>)` and exits without opening a window. The Settings page has
+an About tab showing the same two values, which is what to ask for in a bug report. A tree built without
+`.git` reports `commit unknown` rather than failing.
+
+Keep `CHANGELOG.md` current in the same pull request as the change, under `## [Unreleased]`, using the
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) headings (`Added`, `Changed`, `Deprecated`,
+`Removed`, `Fixed`, `Security`). Write entries for the person upgrading, not for the person who wrote the
+code: what changed for them, and what they have to do about it. Internal refactoring that no user can
+observe does not need an entry. Releasing means renaming `Unreleased` to the version with a date, opening a
+fresh `Unreleased` section, and tagging that commit — nothing automated does this yet.
+
 ## Migrations
 
 Database migrations may be squashed until the `v0.1.0` tag. After `v0.1.0`, migrations are append-only: never edit, remove, reorder, or squash a migration that has been released.
