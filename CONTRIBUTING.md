@@ -33,4 +33,18 @@ Database migrations may be squashed until the `v0.1.0` tag. After `v0.1.0`, migr
 
 ## Automation
 
-Continuous integration is intentionally deferred until Milestone 8. Do not add CI workflows before then; contributors run the checks above locally and record any environment-specific results in the pull request.
+`.github/workflows/ci.yml` runs the checks above on `windows-latest` for every push to `main` and every
+pull request: restore, `Release` build with warnings as errors, and the unit tests. Linux and macOS are not
+covered, so a cross-platform change still has to be exercised locally. The SSH integration suite needs a
+Linux Docker engine and does not run in CI at all; every run writes that into its summary so a green run is
+not read as more than it is. There is no coverage gate — the reviewable rule is that changes to Domain or
+Application come with tests.
+
+CI adds trx and coverage reports by appending platform arguments through
+`-p:ExtraTestingPlatformCommandLineArguments=...`, which `Directory.Build.targets` appends to any
+`TestingPlatformCommandLineArguments` a test project already sets. Use that property rather than setting
+`TestingPlatformCommandLineArguments` directly, which would discard the per-project test filters. The
+reports land in each project's `bin/<config>/<tfm>/TestResults` and are uploaded as a run artefact.
+
+Still run the local checks before opening a pull request, and record any environment-specific results in
+the pull request.
