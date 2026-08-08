@@ -29,6 +29,13 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 - The connection details panel is a fixed 500px wide, and its Edit, Duplicate, and Delete buttons are now
   icons with tooltips.
 
+### Fixed
+
+- The Windows taskbar button shows the RemoteFlow icon instead of a generic placeholder. Avalonia builds a
+  24x24 icon for the window's large slot; the taskbar asks for 32x32 and falls back to the placeholder
+  rather than accepting a different size, so RemoteFlow now applies the executable's own icon once the
+  window is open.
+
 ## [0.0.0] - unreleased
 
 RemoteFlow has not had a tagged release yet. Everything up to this point was built and reviewed as

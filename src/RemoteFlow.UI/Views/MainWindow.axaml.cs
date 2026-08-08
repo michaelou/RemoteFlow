@@ -38,6 +38,7 @@ public sealed partial class MainWindow : Window
         DataContext = viewModel;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         NavigationList.Loaded += (_, _) => SyncNavigationSelection();
+        Opened += OnOpened;
         PositionChanged += OnPositionChanged;
         Resized += OnResized;
         Closed += OnClosed;
@@ -88,6 +89,15 @@ public sealed partial class MainWindow : Window
         _restoringNavigationSelection = true;
         NavigationList.SelectedItem = item;
         _restoringNavigationSelection = false;
+    }
+
+    /// <summary>The native handle only exists once the window is open, and the taskbar icon is set
+    /// through it. Avalonia posts its own icon to the window rather than setting it inline, so the
+    /// correction has to be queued behind that message or it would simply be overwritten.</summary>
+    private void OnOpened(object? sender, EventArgs e)
+    {
+        Opened -= OnOpened;
+        Dispatcher.UIThread.Post(() => WindowsTaskbarIcon.Apply(this), DispatcherPriority.Background);
     }
 
     private void OnPositionChanged(object? sender, PixelPointEventArgs e)

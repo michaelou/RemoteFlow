@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -5,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.TestSupport;
+using RemoteFlow.UI.Converters;
 using RemoteFlow.UI.Navigation;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels;
@@ -144,6 +146,48 @@ public sealed class ShellTests
         Assert.True(Contrast(GetColor(app, "Color.Environment.Dev"), surface) >= 4.5);
         Assert.True(Contrast(GetColor(app, "Color.Environment.Staging"), surface) >= 4.5);
         Assert.True(Contrast(GetColor(app, "Color.Environment.Production"), surface) >= 4.5);
+    }
+
+    /// <summary>The sidebar carries a resource key rather than the glyph itself, so a typo or a missing
+    /// entry in Icons.axaml would only show up as a blank sidebar at runtime.</summary>
+    [AvaloniaFact]
+    public void EverySidebarIconKeyResolvesToGeometry()
+    {
+        var app = Assert.IsType<UI.App>(global::Avalonia.Application.Current);
+
+        foreach (var item in NavigationService.CreateDefault().Items)
+        {
+            _ = Assert.IsAssignableFrom<Geometry>(ResourceKeyConverter.Instance.Convert(
+                item.IconKey,
+                typeof(Geometry),
+                parameter: null,
+                CultureInfo.InvariantCulture));
+        }
+
+        // Registered only in DependencyInjection, and used by the connection details panel.
+        foreach (var key in new[] { "Icon.Sftp", "Icon.Backup", "Icon.Edit", "Icon.Duplicate", "Icon.Delete" })
+        {
+            Assert.True(app.TryFindResource(key, out var geometry));
+            _ = Assert.IsAssignableFrom<Geometry>(geometry);
+        }
+    }
+
+    [AvaloniaFact]
+    public void UnknownIconKeysResolveToNothingRatherThanThrowing()
+    {
+        Assert.Null(ResourceKeyConverter.Instance.Convert(
+            "Icon.NoSuchThing",
+            typeof(Geometry),
+            parameter: null,
+            CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>The taskbar icon is set through the native window handle, which a window that was never
+    /// shown does not have. Off Windows there is no handle to set at all.</summary>
+    [AvaloniaFact]
+    public void TaskbarIconIsANoOpWithoutANativeWindowHandle()
+    {
+        Assert.False(WindowsTaskbarIcon.Apply(new Window()));
     }
 
     private static Color GetColor(global::Avalonia.Application app, string key)
