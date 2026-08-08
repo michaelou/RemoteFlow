@@ -11,7 +11,16 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 - Tag-driven versioning with MinVer. Every assembly records the version and the commit it was built from,
   `RemoteFlow.exe --version` prints both, and the Settings page has an About tab showing the same values.
+- Windows release artefacts: a portable zip and an installer for both x64 and ARM64, built by
+  `scripts/publish-windows.ps1`. The zip is self-contained and needs no .NET runtime installed. The
+  installer is per-user, adds a Start-menu entry and an optional desktop shortcut, and **leaves your saved
+  connections, settings, and credential references in place when you uninstall** unless you ask for them
+  to be removed.
 - This changelog.
+
+### Changed
+
+- The application binary is now `RemoteFlow.exe` rather than `RemoteFlow.Desktop.exe`.
 
 ## [0.0.0] - unreleased
 

@@ -54,6 +54,20 @@ code: what changed for them, and what they have to do about it. Internal refacto
 observe does not need an entry. Releasing means renaming `Unreleased` to the version with a date, opening a
 fresh `Unreleased` section, and tagging that commit — nothing automated does this yet.
 
+## Packaging
+
+Windows release artefacts — a portable zip and an installer, for x64 and ARM64 — are built with:
+
+```shell
+pwsh ./scripts/publish-windows.ps1
+```
+
+The installer step needs [Inno Setup 6](https://jrsoftware.org/isdl.php) and is skipped with a warning
+when it is absent, so the zips still build without it. Signing no-ops unless a certificate is configured.
+See [docs/packaging-windows.md](docs/packaging-windows.md) for the artefact layout, the signing
+configuration, what uninstall does and does not remove, and the SmartScreen behaviour to expect from an
+unsigned build.
+
 ## Migrations
 
 Database migrations may be squashed until the `v0.1.0` tag. After `v0.1.0`, migrations are append-only: never edit, remove, reorder, or squash a migration that has been released.

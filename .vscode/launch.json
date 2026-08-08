@@ -10,9 +10,9 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build",
-      "program": "${workspaceFolder}/src/RemoteFlow.Desktop/bin/Debug/net10.0/RemoteFlow.Desktop",
+      "program": "${workspaceFolder}/src/RemoteFlow.Desktop/bin/Debug/net10.0/RemoteFlow",
       "windows": {
-        "program": "${workspaceFolder}/src/RemoteFlow.Desktop/bin/Debug/net10.0/RemoteFlow.Desktop.exe"
+        "program": "${workspaceFolder}/src/RemoteFlow.Desktop/bin/Debug/net10.0/RemoteFlow.exe"
       },
       "args": [],
       "cwd": "${workspaceFolder}/src/RemoteFlow.Desktop",
