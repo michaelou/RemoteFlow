@@ -2,6 +2,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using RemoteFlow.UI.ViewModels.Sftp;
 
 namespace RemoteFlow.UI.Views.Sftp;
@@ -75,6 +77,16 @@ public sealed partial class SftpWorkspace : UserControl
         else if (e.Key == Key.R && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             await viewModel.RefreshAsync().ConfigureAwait(true);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F2 && FileList.SelectedItem is SftpItemViewModel renameItem)
+        {
+            BeginRename(viewModel, renameItem);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Delete)
+        {
+            _ = await viewModel.DeleteAsync(viewModel.SelectedItems).ConfigureAwait(true);
             e.Handled = true;
         }
     }
@@ -169,6 +181,123 @@ public sealed partial class SftpWorkspace : UserControl
     private static SftpItemViewModel? FindItem(object? source)
     {
         return source is Control { DataContext: SftpItemViewModel item } ? item : null;
+    }
+
+    private void NewFolder_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SftpWorkspaceViewModel viewModel)
+        {
+            viewModel.BeginCreateFolder();
+            Dispatcher.UIThread.Post(() =>
+            {
+                _ = NewFolderEditor.Focus();
+                NewFolderEditor.SelectAll();
+            });
+        }
+    }
+
+    private async void CreateFolder_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SftpWorkspaceViewModel viewModel)
+        {
+            _ = await viewModel.CommitCreateFolderAsync().ConfigureAwait(true);
+        }
+    }
+
+    private void CancelCreateFolder_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SftpWorkspaceViewModel viewModel)
+        {
+            viewModel.CancelCreateFolder();
+        }
+    }
+
+    private async void NewFolderEditor_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (DataContext is not SftpWorkspaceViewModel viewModel)
+        {
+            return;
+        }
+        if (e.Key == Key.Enter)
+        {
+            _ = await viewModel.CommitCreateFolderAsync().ConfigureAwait(true);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            viewModel.CancelCreateFolder();
+            e.Handled = true;
+        }
+    }
+
+    private void Rename_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: SftpItemViewModel item } &&
+            DataContext is SftpWorkspaceViewModel viewModel)
+        {
+            BeginRename(viewModel, item);
+        }
+    }
+
+    private async void RenameEditor_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox { DataContext: SftpItemViewModel item } ||
+            DataContext is not SftpWorkspaceViewModel viewModel)
+        {
+            return;
+        }
+        if (e.Key == Key.Enter)
+        {
+            _ = await viewModel.CommitRenameAsync(item).ConfigureAwait(true);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            SftpWorkspaceViewModel.CancelRename(item);
+            e.Handled = true;
+        }
+    }
+
+    private async void Delete_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: SftpItemViewModel item } &&
+            DataContext is SftpWorkspaceViewModel viewModel)
+        {
+            var selected = viewModel.SelectedItems.Contains(item) ? viewModel.SelectedItems : [item];
+            _ = await viewModel.DeleteAsync(selected).ConfigureAwait(true);
+        }
+    }
+
+    private async void Properties_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: SftpItemViewModel item } &&
+            TopLevel.GetTopLevel(this) is Window owner)
+        {
+            var dialog = new SftpPropertiesDialog(SftpWorkspaceViewModel.GetProperties(item));
+            await dialog.ShowDialog(owner).ConfigureAwait(true);
+        }
+    }
+
+    private async void CopyPath_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: SftpItemViewModel item } &&
+            DataContext is SftpWorkspaceViewModel viewModel)
+        {
+            await viewModel.CopyPathAsync(item).ConfigureAwait(true);
+        }
+    }
+
+    private void BeginRename(SftpWorkspaceViewModel viewModel, SftpItemViewModel item)
+    {
+        viewModel.BeginRename(item);
+        Dispatcher.UIThread.Post(() =>
+        {
+            var editor = FileList.GetVisualDescendants()
+                .OfType<TextBox>()
+                .FirstOrDefault(control => ReferenceEquals(control.DataContext, item));
+            _ = editor?.Focus();
+            editor?.SelectAll();
+        });
     }
 
     private void SortName_OnClick(object? sender, RoutedEventArgs e)

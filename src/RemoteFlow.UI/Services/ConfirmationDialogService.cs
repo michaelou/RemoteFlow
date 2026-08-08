@@ -48,7 +48,7 @@ public sealed class ConfirmationDialogService : IConfirmationDialogService
         }
 
         var result = false;
-        var cancelButton = new Button { Content = "Cancel" };
+        var cancelButton = new Button { Content = "Cancel", IsDefault = true };
         var confirmButton = new Button { Content = confirmLabel };
         var dialog = new Window
         {
@@ -81,6 +81,7 @@ public sealed class ConfirmationDialogService : IConfirmationDialogService
             result = true;
             dialog.Close();
         };
+        dialog.Opened += (_, _) => _ = cancelButton.Focus();
         await dialog.ShowDialog(desktop.MainWindow);
         return result;
     }

@@ -1,4 +1,5 @@
 using Avalonia.Headless.XUnit;
+using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Domain.Abstractions;
 using RemoteFlow.Domain.Entities;
@@ -115,6 +116,152 @@ public sealed class SftpWorkspaceTests
         }
     }
 
+    [Fact]
+    public async Task RenameCollisionIsRejectedBeforeAnyRemoteMutationOrRefresh()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var inner = new FakeSftpService();
+        await SeedFileAsync(inner, "/home/test/first.txt", [1], token);
+        await SeedFileAsync(inner, "/home/test/second.txt", [2], token);
+        var recording = new RecordingSftpService(inner);
+        var fixture = CreateFixture(recording);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var listCalls = recording.ListCalls;
+        var first = fixture.ViewModel.Items.Single(item => item.Name == "first.txt");
+        fixture.ViewModel.BeginRename(first);
+        first.RenameText = "second.txt";
+
+        var renamed = await fixture.ViewModel.CommitRenameAsync(first, token);
+
+        Assert.False(renamed);
+        Assert.Equal(0, recording.RenameCalls);
+        Assert.Equal(listCalls, recording.ListCalls);
+        Assert.Contains("already exists", fixture.ViewModel.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RecursiveDeleteCountsBeforeSafeConfirmationAndCancelDeletesNothing()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var inner = new FakeSftpService();
+        _ = await inner.CreateDirectoryAsync("/home/test/tree", token);
+        _ = await inner.CreateDirectoryAsync("/home/test/tree/nested", token);
+        await SeedFileAsync(inner, "/home/test/tree/root.txt", [1], token);
+        await SeedFileAsync(inner, "/home/test/tree/nested/child.txt", [2], token);
+        var recording = new RecordingSftpService(inner);
+        var fixture = CreateFixture(recording, confirmationResult: false);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var tree = Assert.Single(fixture.ViewModel.Items);
+
+        var deleted = await fixture.ViewModel.DeleteAsync([tree], token);
+
+        Assert.False(deleted);
+        Assert.Equal(0, recording.DeleteCalls);
+        Assert.Contains("4 item(s)", fixture.Confirmation.Messages.Single(), StringComparison.Ordinal);
+        Assert.Equal("Delete", fixture.Confirmation.ConfirmLabels.Single());
+        Assert.NotNull((await inner.StatAsync("/home/test/tree/root.txt", token)).Value);
+    }
+
+    [Fact]
+    public async Task PartialRecursiveDeleteReportsSucceededAndFailedPathsAndRefreshesViewOnce()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var inner = new FakeSftpService();
+        _ = await inner.CreateDirectoryAsync("/home/test/tree", token);
+        await SeedFileAsync(inner, "/home/test/tree/good.txt", [1], token);
+        await SeedFileAsync(inner, "/home/test/tree/blocked.txt", [2], token);
+        var recording = new RecordingSftpService(inner)
+        {
+            DeleteFailurePath = "/home/test/tree/blocked.txt",
+        };
+        var fixture = CreateFixture(recording);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var tree = Assert.Single(fixture.ViewModel.Items);
+        var listsBefore = recording.ListCalls;
+
+        var deleted = await fixture.ViewModel.DeleteAsync([tree], token);
+
+        Assert.False(deleted);
+        Assert.Contains("Deleted 2 of 3", fixture.ViewModel.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("/home/test/tree/blocked.txt", fixture.ViewModel.ErrorMessage, StringComparison.Ordinal);
+        Assert.Equal(listsBefore + 2, recording.ListCalls); // one recursive count, one affected-pane refresh
+        Assert.Null((await inner.StatAsync("/home/test/tree/good.txt", token)).Value);
+        Assert.NotNull((await inner.StatAsync("/home/test/tree/blocked.txt", token)).Value);
+    }
+
+    [Fact]
+    public async Task CreateExistingFolderIsClearAndSuccessfulCreateRefreshesOnlyCurrentPane()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var inner = new FakeSftpService();
+        _ = await inner.CreateDirectoryAsync("/home/test/existing", token);
+        var recording = new RecordingSftpService(inner);
+        var fixture = CreateFixture(recording);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var listsBefore = recording.ListCalls;
+        fixture.ViewModel.BeginCreateFolder();
+        fixture.ViewModel.NewFolderName = "existing";
+
+        Assert.False(await fixture.ViewModel.CommitCreateFolderAsync(token));
+        Assert.Equal(0, recording.CreateCalls);
+        Assert.Contains("already exists", fixture.ViewModel.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+
+        fixture.ViewModel.NewFolderName = "created";
+        Assert.True(await fixture.ViewModel.CommitCreateFolderAsync(token));
+        Assert.Equal(1, recording.CreateCalls);
+        Assert.Equal(listsBefore + 1, recording.ListCalls);
+        Assert.Contains(fixture.ViewModel.Items, item => item.Name == "created" && item.IsDirectory);
+    }
+
+    [Fact]
+    public async Task PropertiesExposeCompleteMetadataAndCopyPathIsShellSafe()
+    {
+        var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead;
+        var item = new SftpItemViewModel(new RemoteFileInfo(
+            "report's link",
+            "/srv/team reports/report's link",
+            1234,
+            new DateTimeOffset(2026, 8, 8, 12, 30, 0, TimeSpan.Zero),
+            mode,
+            "alice",
+            "ops",
+            false,
+            true,
+            "/archive/report.txt"));
+        var properties = SftpWorkspaceViewModel.GetProperties(item);
+        var fixture = CreateFixture();
+
+        await fixture.ViewModel.CopyPathAsync(item, TestContext.Current.CancellationToken);
+
+        Assert.Equal("0754", properties.OctalMode);
+        Assert.Equal("rwxr-xr--", properties.SymbolicMode);
+        Assert.Equal("alice", properties.Owner);
+        Assert.Equal("ops", properties.Group);
+        Assert.Equal("/archive/report.txt", properties.SymlinkTarget);
+        Assert.Equal("'/srv/team reports/report'\"'\"'s link'", fixture.Clipboard.WrittenText);
+    }
+
+    [Fact]
+    public async Task DeleteCanBeCancelledMidFlightAndReportsExactProgress()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var inner = new FakeSftpService();
+        await SeedFileAsync(inner, "/home/test/slow.txt", [1], token);
+        var recording = new RecordingSftpService(inner) { BlockDeletes = true };
+        var fixture = CreateFixture(recording);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+
+        var deleteTask = fixture.ViewModel.DeleteAsync([Assert.Single(fixture.ViewModel.Items)], token);
+        await recording.DeleteStarted.Task.WaitAsync(token);
+        fixture.ViewModel.CancelOperation();
+        var deleted = await deleteTask;
+
+        Assert.False(deleted);
+        Assert.Contains("after deleting 0 of 1", fixture.ViewModel.ErrorMessage, StringComparison.Ordinal);
+        Assert.False(fixture.ViewModel.IsMutating);
+    }
+
     [AvaloniaFact]
     public void ViewUsesVirtualizingStackPanel()
     {
@@ -122,14 +269,21 @@ public sealed class SftpWorkspaceTests
         Assert.NotNull(view);
     }
 
-    private static Fixture CreateFixture(ISftpService? service = null)
+    private static Fixture CreateFixture(ISftpService? service = null, bool confirmationResult = true)
     {
         var connection = Connection.Create(SystemGuidProvider.Instance, "Files", "example.test").Value;
         var ssh = new FakeSshConnection();
         var sftp = service ?? ssh.Sftp;
         var session = new SftpWorkspaceSession(connection, ssh, sftp);
         var factory = new StubSessionFactory(session);
-        return new Fixture(connection, sftp, new SftpWorkspaceViewModel(factory, new StubFilePicker()));
+        var confirmation = new RecordingConfirmation(confirmationResult);
+        var clipboard = new RecordingClipboard();
+        return new Fixture(
+            connection,
+            sftp,
+            new SftpWorkspaceViewModel(factory, new StubFilePicker(), confirmation, clipboard),
+            confirmation,
+            clipboard);
     }
 
     private static async Task SeedFileAsync(
@@ -151,7 +305,12 @@ public sealed class SftpWorkspaceTests
         return path;
     }
 
-    private sealed record Fixture(Connection Connection, ISftpService Sftp, SftpWorkspaceViewModel ViewModel);
+    private sealed record Fixture(
+        Connection Connection,
+        ISftpService Sftp,
+        SftpWorkspaceViewModel ViewModel,
+        RecordingConfirmation Confirmation,
+        RecordingClipboard Clipboard);
 
     private sealed class StubSessionFactory(SftpWorkspaceSession session) : ISftpWorkspaceSessionFactory
     {
@@ -175,6 +334,145 @@ public sealed class SftpWorkspaceTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult<string?>(null);
+        }
+    }
+
+    private sealed class RecordingConfirmation(bool result) : IConfirmationDialogService
+    {
+        public List<string> Messages { get; } = [];
+
+        public List<string> ConfirmLabels { get; } = [];
+
+        public Task<bool> ConfirmAsync(
+            string title,
+            string message,
+            string confirmLabel,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Messages.Add(message);
+            ConfirmLabels.Add(confirmLabel);
+            return Task.FromResult(result);
+        }
+    }
+
+    private sealed class RecordingClipboard : IClipboardService
+    {
+        public string? WrittenText { get; private set; }
+
+        public Task<ClipboardReadResult> ReadTextAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(ClipboardReadResult.Success(WrittenText));
+        }
+
+        public Task<ClipboardWriteResult> WriteTextAsync(
+            string text,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            WrittenText = text;
+            return Task.FromResult(ClipboardWriteResult.Success);
+        }
+    }
+
+    private sealed class RecordingSftpService(ISftpService inner) : ISftpService
+    {
+        public int ListCalls { get; private set; }
+
+        public int RenameCalls { get; private set; }
+
+        public int CreateCalls { get; private set; }
+
+        public int DeleteCalls { get; private set; }
+
+        public string? DeleteFailurePath { get; init; }
+
+        public bool BlockDeletes { get; init; }
+
+        public TaskCompletionSource DeleteStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<SftpResult<IReadOnlyList<RemoteFileInfo>>> ListAsync(
+            string path,
+            CancellationToken cancellationToken = default)
+        {
+            ListCalls++;
+            return inner.ListAsync(path, cancellationToken);
+        }
+
+        public Task<SftpResult<RemoteFileInfo?>> StatAsync(
+            string path,
+            CancellationToken cancellationToken = default)
+        {
+            return inner.StatAsync(path, cancellationToken);
+        }
+
+        public Task<SftpResult> CreateDirectoryAsync(
+            string path,
+            CancellationToken cancellationToken = default)
+        {
+            CreateCalls++;
+            return inner.CreateDirectoryAsync(path, cancellationToken);
+        }
+
+        public Task<SftpResult> RenameAsync(
+            string sourcePath,
+            string destinationPath,
+            CancellationToken cancellationToken = default)
+        {
+            RenameCalls++;
+            return inner.RenameAsync(sourcePath, destinationPath, cancellationToken);
+        }
+
+        public async Task<SftpResult> DeleteAsync(
+            string path,
+            bool recursive,
+            CancellationToken cancellationToken = default)
+        {
+            DeleteCalls++;
+            _ = DeleteStarted.TrySetResult();
+            if (BlockDeletes)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            return string.Equals(path, DeleteFailurePath, StringComparison.Ordinal)
+                ? SftpResult.Fail(SftpError.PermissionDenied, "Permission denied by the test server.")
+                : await inner.DeleteAsync(path, recursive, cancellationToken);
+        }
+
+        public Task<SftpResult> SetPermissionsAsync(
+            string path,
+            UnixFileMode mode,
+            CancellationToken cancellationToken = default)
+        {
+            return inner.SetPermissionsAsync(path, mode, cancellationToken);
+        }
+
+        public Task<SftpResult<string>> GetRealPathAsync(
+            string path,
+            CancellationToken cancellationToken = default)
+        {
+            return inner.GetRealPathAsync(path, cancellationToken);
+        }
+
+        public Task<SftpResult<Stream>> OpenReadAsync(
+            string path,
+            CancellationToken cancellationToken = default)
+        {
+            return inner.OpenReadAsync(path, cancellationToken);
+        }
+
+        public Task<SftpResult<Stream>> OpenWriteAsync(
+            string path,
+            CancellationToken cancellationToken = default)
+        {
+            return inner.OpenWriteAsync(path, cancellationToken);
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return inner.DisposeAsync();
         }
     }
 

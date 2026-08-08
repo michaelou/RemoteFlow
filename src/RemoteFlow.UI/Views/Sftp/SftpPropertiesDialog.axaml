@@ -1,0 +1,23 @@
+<Window
+    x:Class="RemoteFlow.UI.Views.Sftp.SftpPropertiesDialog"
+    x:DataType="viewModels:SftpPropertiesViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Sftp"
+    Title="Remote item properties"
+    Width="560"
+    SizeToContent="Height"
+    CanResize="False"
+    WindowStartupLocation="CenterOwner">
+  <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="120,*" RowSpacing="10">
+    <TextBlock FontWeight="SemiBold" Text="Name" /><TextBlock Grid.Column="1" Text="{Binding Name}" TextWrapping="Wrap" />
+    <TextBlock Grid.Row="1" FontWeight="SemiBold" Text="Full path" /><TextBlock Grid.Row="1" Grid.Column="1" FontFamily="Cascadia Mono,Consolas" Text="{Binding FullPath}" TextWrapping="Wrap" />
+    <TextBlock Grid.Row="2" FontWeight="SemiBold" Text="Size" /><TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Size}" />
+    <TextBlock Grid.Row="3" FontWeight="SemiBold" Text="Modified" /><TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Modified, StringFormat={}{0:F}}" />
+    <TextBlock Grid.Row="4" FontWeight="SemiBold" Text="Mode" /><TextBlock Grid.Row="4" Grid.Column="1" FontFamily="Cascadia Mono,Consolas" Text="{Binding OctalMode}" />
+    <TextBlock Grid.Row="5" FontWeight="SemiBold" Text="Permissions" /><TextBlock Grid.Row="5" Grid.Column="1" FontFamily="Cascadia Mono,Consolas" Text="{Binding SymbolicMode}" />
+    <TextBlock Grid.Row="6" FontWeight="SemiBold" Text="Owner / group" /><TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding OwnerAndGroup}" />
+    <TextBlock Grid.Row="7" IsVisible="{Binding HasSymlinkTarget}" FontWeight="SemiBold" Text="Symlink target" /><TextBlock Grid.Row="7" Grid.Column="1" IsVisible="{Binding HasSymlinkTarget}" Text="{Binding SymlinkTarget}" TextWrapping="Wrap" />
+    <Button Grid.Row="8" Grid.Column="1" HorizontalAlignment="Right" IsDefault="True" Content="Close" Click="Close_OnClick" />
+  </Grid>
+</Window>

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Application.Services;
 using RemoteFlow.UI.Services;
@@ -18,7 +19,7 @@ public enum SftpSortColumn
 
 public sealed record SftpBreadcrumb(string Label, string Path);
 
-public sealed class SftpItemViewModel(RemoteFileInfo file)
+public sealed partial class SftpItemViewModel(RemoteFileInfo file) : ObservableObject
 {
     public RemoteFileInfo File { get; } = file;
 
@@ -40,6 +41,12 @@ public sealed class SftpItemViewModel(RemoteFileInfo file)
 
     public bool IsSymlink => File.IsSymlink;
 
+    [ObservableProperty]
+    public partial bool IsRenaming { get; set; }
+
+    [ObservableProperty]
+    public partial string RenameText { get; set; } = file.Name;
+
     private static string FormatSize(long bytes)
     {
         string[] units = ["B", "KB", "MB", "GB", "TB"];
@@ -54,14 +61,33 @@ public sealed class SftpItemViewModel(RemoteFileInfo file)
     }
 }
 
+public sealed record SftpPropertiesViewModel(
+    string Name,
+    string FullPath,
+    string Size,
+    DateTimeOffset Modified,
+    string OctalMode,
+    string SymbolicMode,
+    string Owner,
+    string Group,
+    string? SymlinkTarget)
+{
+    public bool HasSymlinkTarget => !string.IsNullOrWhiteSpace(SymlinkTarget);
+
+    public string OwnerAndGroup => $"{Owner} / {Group}";
+}
+
 public sealed partial class SftpWorkspaceViewModel(
     ISftpWorkspaceSessionFactory sessions,
-    IFilePickerService filePicker) : PageViewModel("SFTP"), IAsyncDisposable
+    IFilePickerService filePicker,
+    IConfirmationDialogService confirmation,
+    IClipboardService clipboard) : PageViewModel("SFTP"), IAsyncDisposable
 {
     private readonly List<string> _backHistory = [];
     private readonly List<string> _forwardHistory = [];
     private SftpWorkspaceSession? _session;
     private TransferEngine? _transfers;
+    private CancellationTokenSource? _operationCancellation;
 
     public ObservableCollection<SftpItemViewModel> Items { get; } = [];
 
@@ -104,6 +130,17 @@ public sealed partial class SftpWorkspaceViewModel(
     public bool CanGoForward => _forwardHistory.Count > 0;
 
     public bool IsConnected => _session is not null;
+
+    public bool CanCancelOperation => IsMutating;
+
+    [ObservableProperty]
+    public partial bool IsMutating { get; private set; }
+
+    [ObservableProperty]
+    public partial bool IsCreatingFolder { get; private set; }
+
+    [ObservableProperty]
+    public partial string NewFolderName { get; set; } = "New folder";
 
     public async Task AttachAsync(Guid connectionId, CancellationToken cancellationToken = default)
     {
@@ -371,6 +408,264 @@ public sealed partial class SftpWorkspaceViewModel(
         return DownloadAsync(items, stagingDirectory, cancellationToken);
     }
 
+    public void BeginRename(SftpItemViewModel item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        foreach (var other in Items)
+        {
+            other.IsRenaming = false;
+        }
+        item.RenameText = item.Name;
+        item.IsRenaming = true;
+        ErrorMessage = null;
+    }
+
+    public static void CancelRename(SftpItemViewModel item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        item.RenameText = item.Name;
+        item.IsRenaming = false;
+    }
+
+    public async Task<bool> CommitRenameAsync(
+        SftpItemViewModel item,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (_session is null)
+        {
+            return false;
+        }
+        var name = item.RenameText.Trim();
+        if (name.Length == 0 || name is "." or ".." || name.Contains('/') || name.Contains('\\'))
+        {
+            ErrorMessage = "Enter a valid name without path separators.";
+            return false;
+        }
+        if (Items.Any(other => !ReferenceEquals(other, item) &&
+            string.Equals(other.Name, name, StringComparison.Ordinal)))
+        {
+            ErrorMessage = $"An item named '{name}' already exists in this folder.";
+            return false;
+        }
+        if (string.Equals(item.Name, name, StringComparison.Ordinal))
+        {
+            item.IsRenaming = false;
+            return true;
+        }
+
+        using var operation = BeginOperation(cancellationToken);
+        try
+        {
+            var result = await _session.Sftp.RenameAsync(
+                item.FullPath,
+                SftpPath.Combine(CurrentPath, name),
+                operation.Token).ConfigureAwait(true);
+            if (result.IsFailure)
+            {
+                ErrorMessage = result.Failure.Message;
+                return false;
+            }
+            item.IsRenaming = false;
+            FeedbackMessage = $"Renamed '{item.Name}' to '{name}'.";
+            _ = await NavigateCoreAsync(CurrentPath, addHistory: false, CancellationToken.None).ConfigureAwait(true);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            ErrorMessage = "The rename was cancelled.";
+            return false;
+        }
+        finally
+        {
+            EndOperation();
+        }
+    }
+
+    public void BeginCreateFolder()
+    {
+        NewFolderName = "New folder";
+        IsCreatingFolder = true;
+        ErrorMessage = null;
+    }
+
+    public void CancelCreateFolder()
+    {
+        IsCreatingFolder = false;
+        NewFolderName = "New folder";
+    }
+
+    public async Task<bool> CommitCreateFolderAsync(CancellationToken cancellationToken = default)
+    {
+        if (_session is null)
+        {
+            return false;
+        }
+        var name = NewFolderName.Trim();
+        if (name.Length == 0 || name is "." or ".." || name.Contains('/') || name.Contains('\\'))
+        {
+            ErrorMessage = "Enter a valid folder name without path separators.";
+            return false;
+        }
+        if (Items.Any(item => string.Equals(item.Name, name, StringComparison.Ordinal)))
+        {
+            ErrorMessage = $"A file or folder named '{name}' already exists.";
+            return false;
+        }
+
+        using var operation = BeginOperation(cancellationToken);
+        try
+        {
+            var result = await _session.Sftp.CreateDirectoryAsync(
+                SftpPath.Combine(CurrentPath, name),
+                operation.Token).ConfigureAwait(true);
+            if (result.IsFailure)
+            {
+                ErrorMessage = result.Failure.Error == SftpError.AlreadyExists
+                    ? $"A folder named '{name}' already exists."
+                    : result.Failure.Message;
+                return false;
+            }
+            IsCreatingFolder = false;
+            FeedbackMessage = $"Created folder '{name}'.";
+            _ = await NavigateCoreAsync(CurrentPath, addHistory: false, CancellationToken.None).ConfigureAwait(true);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            ErrorMessage = "Folder creation was cancelled.";
+            return false;
+        }
+        finally
+        {
+            EndOperation();
+        }
+    }
+
+    public async Task<bool> DeleteAsync(
+        IEnumerable<SftpItemViewModel> selected,
+        CancellationToken cancellationToken = default)
+    {
+        if (_session is null)
+        {
+            return false;
+        }
+        var roots = selected.Distinct().ToArray();
+        if (roots.Length == 0)
+        {
+            return false;
+        }
+
+        using var operation = BeginOperation(cancellationToken);
+        var plan = new List<RemoteFileInfo>();
+        var succeeded = new List<string>();
+        var failures = new List<(string Path, SftpFailure Failure)>();
+        try
+        {
+            foreach (var root in roots)
+            {
+                if (!await BuildDeletePlanAsync(root.File, plan, operation.Token).ConfigureAwait(true))
+                {
+                    return false;
+                }
+            }
+
+            var confirmed = await confirmation.ConfirmAsync(
+                plan.Count == 1 ? "Delete item?" : "Delete items recursively?",
+                $"Permanently delete {plan.Count} item(s)? This includes every file and folder below the selection.",
+                "Delete",
+                operation.Token).ConfigureAwait(true);
+            if (!confirmed)
+            {
+                FeedbackMessage = "Delete cancelled.";
+                return false;
+            }
+
+            foreach (var entry in plan)
+            {
+                operation.Token.ThrowIfCancellationRequested();
+                var result = await _session.Sftp.DeleteAsync(
+                    entry.FullPath,
+                    recursive: false,
+                    operation.Token).ConfigureAwait(true);
+                if (result.IsSuccess)
+                {
+                    succeeded.Add(entry.FullPath);
+                }
+                else
+                {
+                    failures.Add((entry.FullPath, result.Failure));
+                }
+            }
+
+            if (succeeded.Count > 0)
+            {
+                _ = await NavigateCoreAsync(CurrentPath, addHistory: false, CancellationToken.None).ConfigureAwait(true);
+            }
+            if (failures.Count > 0)
+            {
+                ErrorMessage = $"Deleted {succeeded.Count} of {plan.Count} item(s). " +
+                    $"Failed: {string.Join(", ", failures.Select(failure => failure.Path))}. " +
+                    failures[0].Failure.Message;
+                return false;
+            }
+
+            FeedbackMessage = $"Deleted {succeeded.Count} item(s).";
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            var cancellationMessage =
+                $"Delete cancelled after deleting {succeeded.Count} of {plan.Count} planned item(s).";
+            if (succeeded.Count > 0)
+            {
+                _ = await NavigateCoreAsync(CurrentPath, addHistory: false, CancellationToken.None).ConfigureAwait(true);
+            }
+            ErrorMessage = cancellationMessage;
+            return false;
+        }
+        finally
+        {
+            EndOperation();
+        }
+    }
+
+    public static SftpPropertiesViewModel GetProperties(SftpItemViewModel item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return new SftpPropertiesViewModel(
+            item.Name,
+            item.FullPath,
+            item.IsDirectory ? "Folder" : item.SizeText,
+            item.Modified,
+            item.Permissions,
+            FormatSymbolicMode(item.File.Mode),
+            item.File.Owner,
+            item.File.Group,
+            item.File.SymlinkTarget);
+    }
+
+    public async Task CopyPathAsync(SftpItemViewModel item, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        var literal = SftpPath.ToShellLiteral(item.FullPath);
+        var result = await clipboard.WriteTextAsync(literal, cancellationToken).ConfigureAwait(true);
+        if (result.Succeeded)
+        {
+            FeedbackMessage = $"Copied shell-safe path: {literal}";
+        }
+        else
+        {
+            ErrorMessage = result.ErrorMessage ?? "The path could not be copied.";
+        }
+    }
+
+    [RelayCommand]
+    public void CancelOperation()
+    {
+        _operationCancellation?.Cancel();
+    }
+
     partial void OnShowHiddenFilesChanged(bool value)
     {
         if (_session is not null)
@@ -498,6 +793,7 @@ public sealed partial class SftpWorkspaceViewModel(
 
     private async Task DisposeSessionAsync()
     {
+        _operationCancellation?.Cancel();
         _transfers?.Dispose();
         _transfers = null;
         if (_session is not null)
@@ -505,6 +801,84 @@ public sealed partial class SftpWorkspaceViewModel(
             await _session.DisposeAsync().ConfigureAwait(false);
             _session = null;
         }
+    }
+
+    private async Task<bool> BuildDeletePlanAsync(
+        RemoteFileInfo entry,
+        List<RemoteFileInfo> plan,
+        CancellationToken cancellationToken)
+    {
+        if (_session is null || plan.Any(item => string.Equals(item.FullPath, entry.FullPath, StringComparison.Ordinal)))
+        {
+            return true;
+        }
+        if (entry.IsDirectory && !entry.IsSymlink)
+        {
+            var children = await _session.Sftp.ListAsync(entry.FullPath, cancellationToken).ConfigureAwait(true);
+            if (children.IsFailure)
+            {
+                ErrorMessage = $"Cannot count items below '{entry.FullPath}': {children.Failure.Message}";
+                return false;
+            }
+            foreach (var child in children.Value)
+            {
+                if (!await BuildDeletePlanAsync(child, plan, cancellationToken).ConfigureAwait(true))
+                {
+                    return false;
+                }
+            }
+        }
+        plan.Add(entry);
+        return true;
+    }
+
+    private CancellationTokenSource BeginOperation(CancellationToken cancellationToken)
+    {
+        _operationCancellation?.Cancel();
+        _operationCancellation?.Dispose();
+        _operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        IsMutating = true;
+        return _operationCancellation;
+    }
+
+    private void EndOperation()
+    {
+        _operationCancellation = null;
+        IsMutating = false;
+    }
+
+    partial void OnIsMutatingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanCancelOperation));
+    }
+
+    private static string FormatSymbolicMode(UnixFileMode mode)
+    {
+        Span<char> symbols =
+        [
+            mode.HasFlag(UnixFileMode.UserRead) ? 'r' : '-',
+            mode.HasFlag(UnixFileMode.UserWrite) ? 'w' : '-',
+            mode.HasFlag(UnixFileMode.UserExecute) ? 'x' : '-',
+            mode.HasFlag(UnixFileMode.GroupRead) ? 'r' : '-',
+            mode.HasFlag(UnixFileMode.GroupWrite) ? 'w' : '-',
+            mode.HasFlag(UnixFileMode.GroupExecute) ? 'x' : '-',
+            mode.HasFlag(UnixFileMode.OtherRead) ? 'r' : '-',
+            mode.HasFlag(UnixFileMode.OtherWrite) ? 'w' : '-',
+            mode.HasFlag(UnixFileMode.OtherExecute) ? 'x' : '-',
+        ];
+        if (mode.HasFlag(UnixFileMode.SetUser))
+        {
+            symbols[2] = symbols[2] == 'x' ? 's' : 'S';
+        }
+        if (mode.HasFlag(UnixFileMode.SetGroup))
+        {
+            symbols[5] = symbols[5] == 'x' ? 's' : 'S';
+        }
+        if (mode.HasFlag(UnixFileMode.StickyBit))
+        {
+            symbols[8] = symbols[8] == 'x' ? 't' : 'T';
+        }
+        return new string(symbols);
     }
 
     private static string DescribeTransferFailure(TransferResult result, string operation)
