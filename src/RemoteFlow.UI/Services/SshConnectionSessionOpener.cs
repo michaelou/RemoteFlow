@@ -16,13 +16,22 @@ public sealed class SshConnectionSessionOpener(
         ConnectionOpenMode mode,
         CancellationToken cancellationToken = default)
     {
-        if (mode != ConnectionOpenMode.Default)
+        if (mode == ConnectionOpenMode.Rdp)
         {
             return false;
         }
         try
         {
-            _services.GetRequiredService<INavigationService>().Navigate("terminals");
+            var navigation = _services.GetRequiredService<INavigationService>();
+            if (mode == ConnectionOpenMode.Sftp)
+            {
+                var workspace = _services.GetRequiredService<ViewModels.Sftp.SftpWorkspaceViewModel>();
+                navigation.Navigate("sftp");
+                await workspace.AttachAsync(connectionId, cancellationToken).ConfigureAwait(true);
+                return workspace.IsConnected && workspace.ErrorMessage is null;
+            }
+
+            navigation.Navigate("terminals");
             _ = await _sessions.OpenAsync(connectionId, cancellationToken).ConfigureAwait(true);
             return true;
         }

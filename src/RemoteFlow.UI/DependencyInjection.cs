@@ -10,6 +10,7 @@ using RemoteFlow.UI.ViewModels.CommandPalette;
 using RemoteFlow.UI.ViewModels.Terminal;
 using RemoteFlow.UI.ViewModels.Settings;
 using RemoteFlow.UI.ViewModels.Security;
+using RemoteFlow.UI.ViewModels.Sftp;
 using RemoteFlow.UI.Views;
 
 namespace RemoteFlow.UI;
@@ -26,6 +27,7 @@ public static class DependencyInjection
         services.TryAddSingleton<TerminalsPageViewModel>();
         services.TryAddSingleton<IUiDispatcher, UiDispatcher>();
         services.TryAddSingleton<TransfersPageViewModel>();
+        services.TryAddSingleton<SftpWorkspaceViewModel>();
         services.TryAddSingleton<TerminalSettingsViewModel>();
         services.TryAddSingleton<SettingsPageViewModel>();
         services.TryAddSingleton<TrustedKeysViewModel>();
@@ -42,6 +44,10 @@ public static class DependencyInjection
             "Transfers",
             provider.GetRequiredService<TransfersPageViewModel>));
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
+            "sftp",
+            "SFTP",
+            provider.GetRequiredService<SftpWorkspaceViewModel>));
+        _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "settings",
             "Settings",
             provider.GetRequiredService<SettingsPageViewModel>));
@@ -56,6 +62,8 @@ public static class DependencyInjection
         services.TryAddSingleton<IPasteWarningService, PasteWarningDialogService>();
         services.TryAddSingleton<TerminalClipboardController>();
         services.TryAddSingleton<IConfirmationDialogService, ConfirmationDialogService>();
+        services.TryAddSingleton<IFilePickerService, AvaloniaFilePickerService>();
+        services.TryAddSingleton<ISftpWorkspaceSessionFactory, SftpWorkspaceSessionFactory>();
         _ = services.Replace(ServiceDescriptor.Singleton<IHostKeyPrompt, HostKeyPromptService>());
         services.TryAddSingleton<IKeyboardInteractivePrompt, KeyboardInteractivePromptService>();
         services.TryAddSingleton<ISshCredentialPrompt, SshCredentialPromptService>();

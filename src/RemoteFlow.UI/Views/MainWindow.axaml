@@ -8,6 +8,8 @@
     xmlns:paletteViews="using:RemoteFlow.UI.Views.CommandPalette"
     xmlns:settingsViews="using:RemoteFlow.UI.Views.Settings"
     xmlns:securityViews="using:RemoteFlow.UI.Views.Security"
+    xmlns:sftpViews="using:RemoteFlow.UI.Views.Sftp"
+    xmlns:sftpViewModels="using:RemoteFlow.UI.ViewModels.Sftp"
     xmlns:terminalViews="using:RemoteFlow.UI.Views.Terminal"
     xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels"
@@ -23,6 +25,9 @@
     </DataTemplate>
     <DataTemplate DataType="{x:Type terminalViewModels:TerminalsPageViewModel}" x:DataType="terminalViewModels:TerminalsPageViewModel">
       <terminalViews:TerminalWorkspace />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type sftpViewModels:SftpWorkspaceViewModel}" x:DataType="sftpViewModels:SftpWorkspaceViewModel">
+      <sftpViews:SftpWorkspace />
     </DataTemplate>
     <DataTemplate DataType="{x:Type viewModels:SettingsPageViewModel}" x:DataType="viewModels:SettingsPageViewModel">
       <TabControl>

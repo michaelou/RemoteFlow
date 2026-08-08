@@ -1,0 +1,94 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Sftp.SftpWorkspace"
+    x:DataType="viewModels:SftpWorkspaceViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Sftp"
+    Loaded="Workspace_OnLoaded">
+  <Grid Margin="20" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+    <Grid ColumnDefinitions="Auto,*,Auto">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+        <Button Content="←" IsEnabled="{Binding CanGoBack}" Command="{Binding BackCommand}" ToolTip.Tip="Back" />
+        <Button Content="→" IsEnabled="{Binding CanGoForward}" Command="{Binding ForwardCommand}" ToolTip.Tip="Forward" />
+        <Button Content="↑" Command="{Binding UpCommand}" ToolTip.Tip="Up" />
+        <Button Content="↻" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh" />
+      </StackPanel>
+      <TextBox
+          x:Name="PathEditor"
+          Grid.Column="1"
+          Margin="10,0"
+          Text="{Binding PathText}"
+          KeyDown="PathEditor_OnKeyDown"
+          PlaceholderText="/absolute/remote/path" />
+      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+        <CheckBox Content="Hidden files" IsChecked="{Binding ShowHiddenFiles}" />
+        <Button Content="Upload…" Command="{Binding ChooseAndUploadCommand}" />
+        <Button Content="Download…" Command="{Binding ChooseAndDownloadCommand}" />
+      </StackPanel>
+    </Grid>
+
+    <ItemsControl Grid.Row="1" Margin="0,10,0,6" ItemsSource="{Binding Breadcrumbs}">
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ItemsControl.ItemTemplate>
+        <DataTemplate x:DataType="viewModels:SftpBreadcrumb">
+          <StackPanel Orientation="Horizontal">
+            <Button Classes="flat" Content="{Binding Label}" Click="Breadcrumb_OnClick" />
+            <TextBlock Margin="3,0" VerticalAlignment="Center" Text="/" Foreground="{DynamicResource Brush.Text.Secondary}" />
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <Border Grid.Row="2" IsVisible="{Binding IsLoading}" Padding="10" Background="{DynamicResource Brush.Surface.1}">
+      <StackPanel Orientation="Horizontal" Spacing="8"><ProgressBar Width="120" IsIndeterminate="True" /><TextBlock Text="Loading remote folder…" /></StackPanel>
+    </Border>
+    <Border Grid.Row="2" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Padding="10" Background="#33D43B3B">
+      <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+    </Border>
+
+    <Grid Grid.Row="3" ColumnDefinitions="3*,110,180,120,160" Margin="0,8,0,0">
+      <Button Classes="flat" HorizontalContentAlignment="Left" Content="Name" Click="SortName_OnClick" />
+      <Button Grid.Column="1" Classes="flat" HorizontalContentAlignment="Right" Content="Size" Click="SortSize_OnClick" />
+      <Button Grid.Column="2" Classes="flat" HorizontalContentAlignment="Left" Content="Modified" Click="SortModified_OnClick" />
+      <Button Grid.Column="3" Classes="flat" HorizontalContentAlignment="Left" Content="Permissions" Click="SortPermissions_OnClick" />
+      <Button Grid.Column="4" Classes="flat" HorizontalContentAlignment="Left" Content="Owner" Click="SortOwner_OnClick" />
+    </Grid>
+
+    <ListBox
+        x:Name="FileList"
+        Grid.Row="4"
+        SelectionMode="Multiple"
+        ItemsSource="{Binding Items}"
+        SelectionChanged="FileList_OnSelectionChanged"
+        DoubleTapped="FileList_OnDoubleTapped"
+        KeyDown="FileList_OnKeyDown"
+        TextInput="FileList_OnTextInput"
+        PointerPressed="FileList_OnPointerPressed"
+        DragDrop.AllowDrop="True"
+        DragDrop.DragOver="FileList_OnDragOver"
+        DragDrop.DragLeave="FileList_OnDragLeave"
+        DragDrop.Drop="FileList_OnDrop">
+      <ListBox.ItemsPanel>
+        <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+      </ListBox.ItemsPanel>
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="viewModels:SftpItemViewModel">
+          <Grid ColumnDefinitions="3*,110,180,120,160" MinHeight="30">
+            <TextBlock VerticalAlignment="Center" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Text="{Binding SizeText}" />
+            <TextBlock Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center" Text="{Binding Modified, StringFormat={}{0:g}}" />
+            <TextBlock Grid.Column="3" VerticalAlignment="Center" FontFamily="Cascadia Mono,Consolas" Text="{Binding Permissions}" />
+            <TextBlock Grid.Column="4" VerticalAlignment="Center" Text="{Binding Owner}" TextTrimming="CharacterEllipsis" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <Grid Grid.Row="5" Margin="0,8,0,0" ColumnDefinitions="*,Auto">
+      <TextBlock Text="{Binding FeedbackMessage}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+      <TextBlock Grid.Column="1" Text="{Binding DropTargetMessage}" FontWeight="SemiBold" />
+    </Grid>
+  </Grid>
+</UserControl>
