@@ -73,6 +73,8 @@ public sealed record BackupArchive(
     IReadOnlyList<BackupHostKey> HostKeys,
     byte[]? EncryptedCredentials = null)
 {
+    public byte[]? ManifestHash { get; init; }
+
     public BackupEntityCounts ActualCounts => new(
         Connections.Count,
         Folders.Count,

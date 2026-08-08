@@ -39,6 +39,7 @@
       <ComboBox ItemsSource="{Binding Strategies}" SelectedItem="{Binding SelectedStrategy}" />
       <ComboBox ItemsSource="{Binding ConflictPolicies}" SelectedItem="{Binding SelectedConflictPolicy}" />
       <TextBox PlaceholderText="Type REPLACE for destructive replacement" Text="{Binding ReplaceConfirmation}" />
+      <TextBox PasswordChar="•" PlaceholderText="Credential passphrase (when present)" Text="{Binding CredentialPassphrase}" />
       <Button HorizontalAlignment="Left" Content="Apply selected strategy" Command="{Binding ApplyCommand}" />
       <TextBlock Text="{Binding ApplySummary}" TextWrapping="Wrap" />
     </StackPanel>

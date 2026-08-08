@@ -36,7 +36,9 @@ public sealed record BackupExportRequest(
     bool IncludeSettings = true,
     bool IncludeHostKeys = true,
     bool IncludeCredentials = false,
-    bool IncludeMachineName = true);
+    bool IncludeMachineName = true,
+    ReadOnlyMemory<char> CredentialPassphrase = default,
+    bool AllowWeakPassphrase = false);
 
 public sealed record BackupProgress(string Stage, int CompletedUnits, int TotalUnits)
 {
@@ -85,7 +87,8 @@ public sealed record BackupApplyRequest(
     string Path,
     MergeStrategy Strategy,
     MergeConflictPolicy ConflictPolicy = MergeConflictPolicy.PreferLocal,
-    string? ReplaceConfirmation = null);
+    string? ReplaceConfirmation = null,
+    ReadOnlyMemory<char> CredentialPassphrase = default);
 
 public sealed record BackupImportResult(
     MergeStrategy Strategy,
@@ -116,6 +119,47 @@ public interface IBackupImportStore
 public interface IBackupImportFaultInjector
 {
     void OnImportStep(int stepNumber);
+}
+
+public interface IBackupCredentialProtector
+{
+    BackupCredentialKdf CreateKdfParameters();
+
+    Task<byte[]> EncryptAsync(
+        IReadOnlyList<BackupConnection> connections,
+        BackupManifest manifest,
+        ReadOnlyMemory<char> passphrase,
+        CancellationToken cancellationToken = default);
+
+    Task<IPreparedCredentialImport> PrepareImportAsync(
+        byte[] encryptedCredentials,
+        BackupManifest manifest,
+        byte[]? sourceManifestHash,
+        IReadOnlyList<BackupConnection> connections,
+        ReadOnlyMemory<char> passphrase,
+        CancellationToken cancellationToken = default);
+}
+
+public interface IPreparedCredentialImport : IAsyncDisposable
+{
+    IReadOnlyDictionary<Guid, BackupCredentialReference> References { get; }
+
+    Task StoreAsync(CancellationToken cancellationToken = default);
+
+    Task RollbackAsync(CancellationToken cancellationToken = default);
+}
+
+public sealed class BackupCredentialException : Exception
+{
+    public BackupCredentialException(string message)
+        : base(message)
+    {
+    }
+
+    public BackupCredentialException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }
 
 public enum BackupConflictKind

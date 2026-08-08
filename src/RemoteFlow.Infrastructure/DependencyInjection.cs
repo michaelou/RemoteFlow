@@ -27,6 +27,7 @@ public static class DependencyInjection
 
         services.TryAddSingleton<IAppPaths>(appPaths);
         services.TryAddSingleton<IBackupArchiveSerializer, ZipBackupArchiveSerializer>();
+        services.TryAddSingleton<IBackupCredentialProtector, CredentialEnvelope>();
         services.TryAddSingleton<ISecureRandom, SecureRandom>();
         services.TryAddSingleton<IPtyService, PortaPtyService>();
         services.TryAddSingleton<ISystemPlatform, SystemPlatform>();

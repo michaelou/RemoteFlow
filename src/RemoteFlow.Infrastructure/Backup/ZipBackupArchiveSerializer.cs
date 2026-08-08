@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Security.Cryptography;
 using RemoteFlow.Application.Abstractions.Backup;
 
 namespace RemoteFlow.Infrastructure.Backup;
@@ -84,10 +85,7 @@ public sealed class ZipBackupArchiveSerializer : IBackupArchiveSerializer
                 65_536,
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
             using var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
-            var manifest = await ReadRequiredJsonEntryAsync<BackupManifest>(
-                zip,
-                BackupFormat.ManifestEntry,
-                cancellationToken);
+            var (manifest, manifestHash) = await ReadManifestAsync(zip, cancellationToken);
             if (manifest.FormatVersion != BackupFormat.CurrentVersion)
             {
                 throw new BackupArchiveException(
@@ -129,7 +127,10 @@ public sealed class ZipBackupArchiveSerializer : IBackupArchiveSerializer
                 connectionTags,
                 settings,
                 hostKeys,
-                encryptedCredentials);
+                encryptedCredentials)
+            {
+                ManifestHash = manifestHash,
+            };
             ValidateArchive(archive);
             return archive;
         }
@@ -190,16 +191,19 @@ public sealed class ZipBackupArchiveSerializer : IBackupArchiveSerializer
         await JsonSerializer.SerializeAsync(entryStream, value, _jsonOptions, cancellationToken);
     }
 
-    private static async Task<T> ReadRequiredJsonEntryAsync<T>(
+    private static async Task<(BackupManifest Manifest, byte[] Hash)> ReadManifestAsync(
         ZipArchive zip,
-        string name,
         CancellationToken cancellationToken)
     {
-        var entry = GetSingleEntry(zip, name)
-            ?? throw new BackupArchiveException($"The backup is missing the required '{name}' entry.");
+        var entry = GetSingleEntry(zip, BackupFormat.ManifestEntry)
+            ?? throw new BackupArchiveException($"The backup is missing the required '{BackupFormat.ManifestEntry}' entry.");
         await using var stream = entry.Open();
-        return await JsonSerializer.DeserializeAsync<T>(stream, _jsonOptions, cancellationToken)
-            ?? throw new BackupArchiveException($"The backup entry '{name}' is empty.");
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer, cancellationToken);
+        var bytes = buffer.ToArray();
+        var manifest = JsonSerializer.Deserialize<BackupManifest>(bytes, _jsonOptions)
+            ?? throw new BackupArchiveException($"The backup entry '{BackupFormat.ManifestEntry}' is empty.");
+        return (manifest, SHA256.HashData(bytes));
     }
 
     private static async Task<IReadOnlyList<T>> ReadOptionalJsonEntryAsync<T>(

@@ -4,6 +4,8 @@ using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Backup;
 using RemoteFlow.UI.Services;
 using RemoteFlow.Domain.Enums;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 
 namespace RemoteFlow.UI.ViewModels.Backup;
 
@@ -57,6 +59,9 @@ public sealed partial class BackupImportPreviewViewModel(
     public partial string ReplaceConfirmation { get; set; } = string.Empty;
 
     [ObservableProperty]
+    public partial string CredentialPassphrase { get; set; } = string.Empty;
+
+    [ObservableProperty]
     public partial string ApplySummary { get; private set; } = string.Empty;
 
     [RelayCommand]
@@ -98,14 +103,24 @@ public sealed partial class BackupImportPreviewViewModel(
 
         try
         {
-            var result = await _backupService.ApplyAsync(new BackupApplyRequest(
-                SelectedPath,
-                SelectedStrategy,
-                SelectedConflictPolicy,
-                ReplaceConfirmation)).ConfigureAwait(true);
-            ApplySummary = result.Summary;
+            var passphrase = CredentialPassphrase.ToCharArray();
+            try
+            {
+                var result = await _backupService.ApplyAsync(new BackupApplyRequest(
+                    SelectedPath,
+                    SelectedStrategy,
+                    SelectedConflictPolicy,
+                    ReplaceConfirmation,
+                    passphrase)).ConfigureAwait(true);
+                ApplySummary = result.Summary;
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(MemoryMarshal.AsBytes(passphrase.AsSpan()));
+                CredentialPassphrase = string.Empty;
+            }
         }
-        catch (Exception exception) when (exception is BackupArchiveException or InvalidOperationException)
+        catch (Exception exception) when (exception is BackupArchiveException or BackupCredentialException or InvalidOperationException)
         {
             await _errorDialog.ShowAsync("Backup import failed", exception.Message).ConfigureAwait(true);
         }
@@ -133,7 +148,7 @@ public sealed partial class BackupExportViewModel(
     public bool CanExportCredentials => _backupService.CanExportCredentials;
 
     public string CredentialWarning => CanExportCredentials
-        ? "Credentials are encrypted, but anyone with the passphrase can recover them."
+        ? "A lost passphrase is unrecoverable. Anyone who has the archive and passphrase can recover every included credential."
         : "Encrypted credential export is not available yet; no credential secrets will be included.";
 
     [ObservableProperty]
@@ -153,6 +168,12 @@ public sealed partial class BackupExportViewModel(
 
     [ObservableProperty]
     public partial bool IncludeCredentials { get; set; }
+
+    [ObservableProperty]
+    public partial string CredentialPassphrase { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial bool AllowWeakPassphrase { get; set; }
 
     [ObservableProperty]
     public partial bool IsExporting { get; private set; }
@@ -188,20 +209,31 @@ public sealed partial class BackupExportViewModel(
                 ProgressPercent = item.Percent;
                 ProgressText = item.Stage;
             });
-            var request = new BackupExportRequest(
-                destination,
-                CreateScope(),
-                IncludeSettings,
-                IncludeHostKeys,
-                IncludeCredentials);
-            var result = await _backupService.ExportAsync(request, progress, _cancellation.Token).ConfigureAwait(true);
-            ResultSummary = result.Summary;
+            var passphrase = CredentialPassphrase.ToCharArray();
+            try
+            {
+                var request = new BackupExportRequest(
+                    destination,
+                    CreateScope(),
+                    IncludeSettings,
+                    IncludeHostKeys,
+                    IncludeCredentials,
+                    CredentialPassphrase: passphrase,
+                    AllowWeakPassphrase: AllowWeakPassphrase);
+                var result = await _backupService.ExportAsync(request, progress, _cancellation.Token).ConfigureAwait(true);
+                ResultSummary = result.Summary;
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(MemoryMarshal.AsBytes(passphrase.AsSpan()));
+                CredentialPassphrase = string.Empty;
+            }
         }
         catch (OperationCanceledException)
         {
             ProgressText = "Export cancelled";
         }
-        catch (Exception exception) when (exception is BackupArchiveException or ArgumentException or IOException)
+        catch (Exception exception) when (exception is BackupArchiveException or BackupCredentialException or ArgumentException or IOException)
         {
             await _errorDialog.ShowAsync("Backup export failed", exception.Message).ConfigureAwait(true);
         }

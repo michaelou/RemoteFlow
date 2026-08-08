@@ -99,6 +99,50 @@ public sealed class BackupServiceExportTests
     }
 
     [Fact]
+    public async Task CredentialExportWritesEnvelopeAndManifestKdfWhenProtectorIsAvailable()
+    {
+        var serializer = new RecordingSerializer();
+        var protector = new StubCredentialProtector();
+        var service = new BackupService(
+            new StagedDataSource(CreateSnapshot()),
+            serializer,
+            new FixedClock(),
+            credentialProtector: protector);
+        var request = new BackupExportRequest(
+            "credentials.zip",
+            BackupExportScope.All,
+            IncludeCredentials: true,
+            CredentialPassphrase: "Strong!Pass123".AsMemory());
+
+        _ = await service.ExportAsync(request, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(service.CanExportCredentials);
+        Assert.True(serializer.Written!.Manifest.IncludesCredentials);
+        Assert.NotNull(serializer.Written.Manifest.CredentialKdf);
+        Assert.Equal([1, 2, 3], serializer.Written.EncryptedCredentials);
+    }
+
+    [Fact]
+    public async Task WeakCredentialPassphraseRequiresExplicitOverride()
+    {
+        var service = new BackupService(
+            new StagedDataSource(CreateSnapshot()),
+            new RecordingSerializer(),
+            new FixedClock(),
+            credentialProtector: new StubCredentialProtector());
+        var request = new BackupExportRequest(
+            "credentials.zip",
+            BackupExportScope.All,
+            IncludeCredentials: true,
+            CredentialPassphrase: "weak".AsMemory());
+
+        var exception = await Assert.ThrowsAsync<BackupCredentialException>(() =>
+            service.ExportAsync(request, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Contains("explicitly allow", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task ProgressHasMultipleStagesAndCancellationStopsBeforeWrite()
     {
         using var cancellation = new CancellationTokenSource();
@@ -307,6 +351,34 @@ public sealed class BackupServiceExportTests
         public void Report(T value)
         {
             report(value);
+        }
+    }
+
+    private sealed class StubCredentialProtector : IBackupCredentialProtector
+    {
+        public BackupCredentialKdf CreateKdfParameters()
+        {
+            return new BackupCredentialKdf("argon2id", 8, 1, 1, Convert.ToBase64String(new byte[16]));
+        }
+
+        public Task<byte[]> EncryptAsync(
+            IReadOnlyList<BackupConnection> connections,
+            BackupManifest manifest,
+            ReadOnlyMemory<char> passphrase,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<byte[]>([1, 2, 3]);
+        }
+
+        public Task<IPreparedCredentialImport> PrepareImportAsync(
+            byte[] encryptedCredentials,
+            BackupManifest manifest,
+            byte[]? sourceManifestHash,
+            IReadOnlyList<BackupConnection> connections,
+            ReadOnlyMemory<char> passphrase,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
         }
     }
 }

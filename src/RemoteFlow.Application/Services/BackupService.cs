@@ -8,14 +8,16 @@ public sealed class BackupService(
     IBackupDataSource dataSource,
     IBackupArchiveSerializer serializer,
     IClock clock,
-    IBackupImportStore? importStore = null) : IBackupService
+    IBackupImportStore? importStore = null,
+    IBackupCredentialProtector? credentialProtector = null) : IBackupService
 {
     private readonly IBackupDataSource _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
     private readonly IBackupArchiveSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     private readonly IClock _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     private readonly IBackupImportStore? _importStore = importStore;
+    private readonly IBackupCredentialProtector? _credentialProtector = credentialProtector;
 
-    public bool CanExportCredentials => false;
+    public bool CanExportCredentials => _credentialProtector is not null;
 
     public async Task<BackupImportResult> ApplyAsync(
         BackupApplyRequest request,
@@ -38,23 +40,39 @@ public sealed class BackupService(
             ?? throw new InvalidOperationException("Backup import persistence is not configured.");
         var archive = await _serializer.ReadAsync(request.Path, cancellationToken).ConfigureAwait(false);
         var local = await _dataSource.CaptureAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-        var missingCredentials = archive.EncryptedCredentials is null
-            ? archive.Connections
-                .Where(connection => connection.Credential.Kind != CredentialKind.None)
-                .Select(connection => $"Connection '{connection.Name}' references a credential that was not included.")
-                .ToArray()
-            : [];
+        await using var preparedCredentials = archive.EncryptedCredentials is null
+            ? null
+            : await PrepareCredentialsAsync(archive, request.CredentialPassphrase, cancellationToken).ConfigureAwait(false);
+        var missingCredentials = archive.Connections
+            .Where(connection => connection.Credential.Kind != CredentialKind.None &&
+                (preparedCredentials is null || !preparedCredentials.References.ContainsKey(connection.Id)))
+            .Select(connection => $"Connection '{connection.Name}' references a credential that was not included.")
+            .ToArray();
         var sanitized = archive with
         {
             Connections = archive.EncryptedCredentials is null
                 ? [.. archive.Connections.Select(ClearCredential)]
-                : archive.Connections,
+                : [.. archive.Connections.Select(connection => preparedCredentials!.References.TryGetValue(connection.Id, out var reference)
+                    ? connection with { Credential = reference }
+                    : ClearCredential(connection))],
         };
         var plan = request.Strategy == MergeStrategy.Replace
             ? BackupMergePlanner.Replace(sanitized)
             : BackupMergePlanner.Merge(sanitized, local, request.ConflictPolicy);
 
         var storeResult = await store.ApplyAsync(plan.Target, request.Strategy, cancellationToken).ConfigureAwait(false);
+        if (preparedCredentials is not null)
+        {
+            try
+            {
+                await preparedCredentials.StoreAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                await preparedCredentials.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                throw;
+            }
+        }
         return new BackupImportResult(
             request.Strategy,
             plan.AppliedCounts,
@@ -120,10 +138,18 @@ public sealed class BackupService(
         ArgumentException.ThrowIfNullOrWhiteSpace(request.DestinationPath);
         ArgumentNullException.ThrowIfNull(request.Scope);
         ValidateScope(request.Scope);
-        if (request.IncludeCredentials)
+        if (request.IncludeCredentials && _credentialProtector is null)
         {
             throw new BackupArchiveException(
                 "Credential export is not available until encrypted credential backup is enabled.");
+        }
+
+        if (request.IncludeCredentials &&
+            !request.AllowWeakPassphrase &&
+            !IsStrongPassphrase(request.CredentialPassphrase.Span))
+        {
+            throw new BackupCredentialException(
+                "Use a passphrase of at least 12 characters with upper, lower, number, and symbol characters, or explicitly allow a weak passphrase.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -139,13 +165,22 @@ public sealed class BackupService(
             selected.ConnectionTags.Count,
             selected.Settings.Count,
             selected.HostKeys.Count);
+        var credentialKdf = request.IncludeCredentials ? _credentialProtector!.CreateKdfParameters() : null;
         var manifest = new BackupManifest(
             BackupFormat.CurrentVersion,
             typeof(BackupService).Assembly.GetName().Version?.ToString() ?? "0.0.0",
             _clock.UtcNow.ToUniversalTime(),
             request.IncludeMachineName ? Environment.MachineName : null,
             counts,
-            IncludesCredentials: false);
+            request.IncludeCredentials,
+            credentialKdf);
+        var encryptedCredentials = request.IncludeCredentials
+            ? await _credentialProtector!.EncryptAsync(
+                selected.Connections,
+                manifest,
+                request.CredentialPassphrase,
+                cancellationToken).ConfigureAwait(false)
+            : null;
         var archive = new BackupArchive(
             manifest,
             selected.Connections,
@@ -153,7 +188,8 @@ public sealed class BackupService(
             selected.Tags,
             selected.ConnectionTags,
             selected.Settings,
-            selected.HostKeys);
+            selected.HostKeys,
+            encryptedCredentials);
 
         progress?.Report(new BackupProgress("Writing archive", 7, 8));
         await _serializer.WriteAsync(request.DestinationPath, archive, cancellationToken).ConfigureAwait(false);
@@ -350,5 +386,48 @@ public sealed class BackupService(
         {
             Credential = new BackupCredentialReference(CredentialKind.None, string.Empty, string.Empty, null),
         };
+    }
+
+    private async Task<IPreparedCredentialImport> PrepareCredentialsAsync(
+        BackupArchive archive,
+        ReadOnlyMemory<char> passphrase,
+        CancellationToken cancellationToken)
+    {
+        var protector = _credentialProtector
+            ?? throw new BackupCredentialException("Encrypted credential import is not configured.");
+
+        var checkedPassphrase = !passphrase.IsEmpty
+            ? passphrase
+            : throw new BackupCredentialException("Enter the backup passphrase.");
+
+        return await protector.PrepareImportAsync(
+            archive.EncryptedCredentials!,
+            archive.Manifest,
+            archive.ManifestHash,
+            archive.Connections,
+            checkedPassphrase,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool IsStrongPassphrase(ReadOnlySpan<char> passphrase)
+    {
+        if (passphrase.Length < 12)
+        {
+            return false;
+        }
+
+        var categories = 0;
+        categories += passphrase.ContainsAnyInRange('a', 'z') ? 1 : 0;
+        categories += passphrase.ContainsAnyInRange('A', 'Z') ? 1 : 0;
+        categories += passphrase.ContainsAnyInRange('0', '9') ? 1 : 0;
+        foreach (var character in passphrase)
+        {
+            if (!char.IsLetterOrDigit(character))
+            {
+                categories++;
+                break;
+            }
+        }
+        return categories >= 3;
     }
 }

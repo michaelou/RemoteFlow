@@ -21,6 +21,8 @@
           IsChecked="{Binding IncludeCredentials}"
           IsEnabled="{Binding CanExportCredentials}" />
       <TextBlock Foreground="#C47F00" Text="{Binding CredentialWarning}" TextWrapping="Wrap" />
+      <TextBox PasswordChar="•" PlaceholderText="Credential encryption passphrase" Text="{Binding CredentialPassphrase}" />
+      <CheckBox Content="I understand the risk and want to allow a weak passphrase" IsChecked="{Binding AllowWeakPassphrase}" />
 
       <ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" />
       <TextBlock Text="{Binding ProgressText}" />
