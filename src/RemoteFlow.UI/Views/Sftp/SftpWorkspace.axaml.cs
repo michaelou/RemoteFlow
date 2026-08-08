@@ -239,6 +239,24 @@ public sealed partial class SftpWorkspace : UserControl
         }
     }
 
+    private async void EditRemote_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: SftpItemViewModel item } &&
+            DataContext is SftpWorkspaceViewModel viewModel)
+        {
+            await viewModel.EditRemoteAsync(item).ConfigureAwait(true);
+        }
+    }
+
+    private async void StopRemoteEdit_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: SftpItemViewModel item } &&
+            DataContext is SftpWorkspaceViewModel viewModel)
+        {
+            await viewModel.CloseRemoteEditAsync(item).ConfigureAwait(true);
+        }
+    }
+
     private async void RenameEditor_OnKeyDown(object? sender, KeyEventArgs e)
     {
         if (sender is not TextBox { DataContext: SftpItemViewModel item } ||

@@ -81,12 +81,14 @@ public sealed partial class SftpWorkspaceViewModel(
     ISftpWorkspaceSessionFactory sessions,
     IFilePickerService filePicker,
     IConfirmationDialogService confirmation,
-    IClipboardService clipboard) : PageViewModel("SFTP"), IAsyncDisposable
+    IClipboardService clipboard,
+    IRemoteEditServiceFactory? remoteEditFactory = null) : PageViewModel("SFTP"), IAsyncDisposable
 {
     private readonly List<string> _backHistory = [];
     private readonly List<string> _forwardHistory = [];
     private SftpWorkspaceSession? _session;
     private TransferEngine? _transfers;
+    private IRemoteEditService? _remoteEdits;
     private CancellationTokenSource? _operationCancellation;
 
     public ObservableCollection<SftpItemViewModel> Items { get; } = [];
@@ -133,6 +135,14 @@ public sealed partial class SftpWorkspaceViewModel(
 
     public bool CanCancelOperation => IsMutating;
 
+    public int ActiveRemoteEditCount => _remoteEdits?.ActiveCount ?? 0;
+
+    public bool HasActiveRemoteEdits => ActiveRemoteEditCount > 0;
+
+    public string RemoteEditIndicator => ActiveRemoteEditCount == 1
+        ? "Editing 1 remote file"
+        : $"Editing {ActiveRemoteEditCount} remote files";
+
     [ObservableProperty]
     public partial bool IsMutating { get; private set; }
 
@@ -149,9 +159,19 @@ public sealed partial class SftpWorkspaceViewModel(
         try
         {
             var next = await sessions.OpenAsync(connectionId, cancellationToken).ConfigureAwait(true);
-            await DisposeSessionAsync().ConfigureAwait(true);
+            if (!await DisposeSessionAsync().ConfigureAwait(true))
+            {
+                await next.DisposeAsync().ConfigureAwait(true);
+                ErrorMessage = "The existing SFTP session has an unsaved remote edit.";
+                return;
+            }
             _session = next;
             _transfers = new TransferEngine(next.Sftp);
+            _remoteEdits = remoteEditFactory?.Create(next.Sftp, Guid.NewGuid());
+            if (_remoteEdits is { } activeRemoteEdits)
+            {
+                activeRemoteEdits.ActiveEditsChanged += OnActiveEditsChanged;
+            }
             ConnectionTitle = next.Definition.Name;
             ShowHiddenFiles = next.Definition.Sftp.ShowHiddenFiles;
             _backHistory.Clear();
@@ -690,6 +710,47 @@ public sealed partial class SftpWorkspaceViewModel(
         }
     }
 
+    public async Task EditRemoteAsync(
+        SftpItemViewModel item,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (item.IsDirectory || _remoteEdits is null)
+        {
+            ErrorMessage = item.IsDirectory
+                ? "Choose a file to edit."
+                : "Remote editing is not available for this session.";
+            return;
+        }
+        try
+        {
+            var edit = await _remoteEdits.OpenAsync(item.FullPath, cancellationToken).ConfigureAwait(true);
+            FeedbackMessage = $"Editing '{item.Name}' at {edit.LocalPath}. Changes upload automatically.";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            ErrorMessage = $"The remote file could not be opened for editing: {exception.Message}";
+        }
+    }
+
+    public async Task CloseRemoteEditAsync(
+        SftpItemViewModel item,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        var edit = _remoteEdits?.ActiveEdits.FirstOrDefault(active =>
+            string.Equals(active.RemotePath, item.FullPath, StringComparison.Ordinal));
+        if (edit is null)
+        {
+            FeedbackMessage = $"'{item.Name}' is not open for remote editing.";
+            return;
+        }
+        if (await _remoteEdits!.CloseAsync(edit, cancellationToken).ConfigureAwait(true))
+        {
+            FeedbackMessage = $"Stopped editing '{item.Name}'.";
+        }
+    }
+
     [RelayCommand]
     public void CancelOperation()
     {
@@ -706,7 +767,7 @@ public sealed partial class SftpWorkspaceViewModel(
 
     public async ValueTask DisposeAsync()
     {
-        await DisposeSessionAsync().ConfigureAwait(false);
+        _ = await DisposeSessionAsync().ConfigureAwait(false);
         GC.SuppressFinalize(this);
     }
 
@@ -821,9 +882,19 @@ public sealed partial class SftpWorkspaceViewModel(
         OnPropertyChanged(nameof(CanGoForward));
     }
 
-    private async Task DisposeSessionAsync()
+    private async Task<bool> DisposeSessionAsync()
     {
         _operationCancellation?.Cancel();
+        if (_remoteEdits is not null)
+        {
+            if (!await _remoteEdits.CloseAllAsync().ConfigureAwait(false))
+            {
+                return false;
+            }
+            _remoteEdits.ActiveEditsChanged -= OnActiveEditsChanged;
+            await _remoteEdits.DisposeAsync().ConfigureAwait(false);
+            _remoteEdits = null;
+        }
         _transfers?.Dispose();
         _transfers = null;
         if (_session is not null)
@@ -831,6 +902,17 @@ public sealed partial class SftpWorkspaceViewModel(
             await _session.DisposeAsync().ConfigureAwait(false);
             _session = null;
         }
+        OnPropertyChanged(nameof(ActiveRemoteEditCount));
+        OnPropertyChanged(nameof(HasActiveRemoteEdits));
+        OnPropertyChanged(nameof(RemoteEditIndicator));
+        return true;
+    }
+
+    private void OnActiveEditsChanged(object? sender, EventArgs args)
+    {
+        OnPropertyChanged(nameof(ActiveRemoteEditCount));
+        OnPropertyChanged(nameof(HasActiveRemoteEdits));
+        OnPropertyChanged(nameof(RemoteEditIndicator));
     }
 
     private async Task<bool> BuildDeletePlanAsync(

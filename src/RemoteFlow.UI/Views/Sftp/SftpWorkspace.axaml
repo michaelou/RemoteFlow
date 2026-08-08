@@ -96,6 +96,9 @@
             <TextBlock Grid.Column="4" VerticalAlignment="Center" Text="{Binding Owner}" TextTrimming="CharacterEllipsis" />
             <Grid.ContextFlyout>
               <MenuFlyout>
+                <MenuItem Header="Edit remotely" Click="EditRemote_OnClick" />
+                <MenuItem Header="Stop remote editing" Click="StopRemoteEdit_OnClick" />
+                <Separator />
                 <MenuItem Header="Rename" Click="Rename_OnClick" />
                 <MenuItem Header="Delete…" Click="Delete_OnClick" />
                 <Separator />
@@ -111,7 +114,13 @@
 
     <Grid Grid.Row="5" Margin="0,8,0,0" ColumnDefinitions="*,Auto">
       <TextBlock Text="{Binding FeedbackMessage}" Foreground="{DynamicResource Brush.Text.Secondary}" />
-      <TextBlock Grid.Column="1" Text="{Binding DropTargetMessage}" FontWeight="SemiBold" />
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+        <TextBlock
+            IsVisible="{Binding HasActiveRemoteEdits}"
+            Text="{Binding RemoteEditIndicator}"
+            FontWeight="SemiBold" />
+        <TextBlock Text="{Binding DropTargetMessage}" FontWeight="SemiBold" />
+      </StackPanel>
     </Grid>
   </Grid>
 </UserControl>

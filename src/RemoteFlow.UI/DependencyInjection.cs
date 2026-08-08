@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Ssh;
+using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.UI.Navigation;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels;
@@ -62,6 +63,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IPasteWarningService, PasteWarningDialogService>();
         services.TryAddSingleton<TerminalClipboardController>();
         services.TryAddSingleton<IConfirmationDialogService, ConfirmationDialogService>();
+        services.TryAddSingleton<IRemoteEditCloseGuard, RemoteEditCloseGuard>();
         services.TryAddSingleton<IFilePickerService, AvaloniaFilePickerService>();
         services.TryAddSingleton<ISftpWorkspaceSessionFactory, SftpWorkspaceSessionFactory>();
         _ = services.Replace(ServiceDescriptor.Singleton<IHostKeyPrompt, HostKeyPromptService>());
@@ -79,6 +81,8 @@ public static class DependencyInjection
             {
                 await provider.GetRequiredService<IDbInitializer>().InitializeAsync().ConfigureAwait(true);
                 await provider.GetRequiredService<IThemeService>().InitializeAsync().ConfigureAwait(true);
+                await provider.GetRequiredService<IRemoteEditServiceFactory>()
+                    .SweepStaleFilesAsync().ConfigureAwait(true);
             },
             StartupErrorAction = exception => provider.GetRequiredService<IGlobalExceptionHandler>()
                 .HandleAsync(exception, "application startup"),

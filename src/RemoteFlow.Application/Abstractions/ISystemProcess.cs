@@ -30,7 +30,8 @@ public sealed record ProcessLaunchRequest(
     string FileName,
     IReadOnlyList<string> Arguments,
     string? WorkingDirectory = null,
-    IReadOnlyDictionary<string, string>? EnvironmentVariables = null);
+    IReadOnlyDictionary<string, string>? EnvironmentVariables = null,
+    bool UseShellExecute = false);
 
 public interface IProcessRunner
 {

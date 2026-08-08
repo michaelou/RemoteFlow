@@ -12,7 +12,7 @@ public sealed class ProcessRunner : IProcessRunner
         var startInfo = new ProcessStartInfo
         {
             FileName = request.FileName,
-            UseShellExecute = false,
+            UseShellExecute = request.UseShellExecute,
             CreateNoWindow = false,
             WorkingDirectory = string.IsNullOrWhiteSpace(request.WorkingDirectory)
                 ? Environment.CurrentDirectory
@@ -23,7 +23,7 @@ public sealed class ProcessRunner : IProcessRunner
             startInfo.ArgumentList.Add(argument);
         }
 
-        if (request.EnvironmentVariables is not null)
+        if (!request.UseShellExecute && request.EnvironmentVariables is not null)
         {
             foreach (var variable in request.EnvironmentVariables)
             {

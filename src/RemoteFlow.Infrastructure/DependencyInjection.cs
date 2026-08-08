@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Ssh;
+using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Infrastructure.Diagnostics;
 using RemoteFlow.Infrastructure.Platform;
 using RemoteFlow.Infrastructure.Pty;
@@ -28,6 +29,8 @@ public static class DependencyInjection
         services.TryAddSingleton<ISystemPlatform, SystemPlatform>();
         services.TryAddSingleton<IProcessRunner, ProcessRunner>();
         services.TryAddSingleton<ISystemTerminalLauncher, SystemTerminalLauncher>();
+        services.TryAddSingleton<IFileEditorLauncher, FileEditorLauncher>();
+        services.TryAddSingleton<IWatchedFileMonitor, WatchedFileMonitor>();
         services.TryAddSingleton<TmdsSshTransport>();
         services.TryAddSingleton<SshNetTransport>();
         services.TryAddSingleton<ISshTransport, ConfiguredSshTransport>();
