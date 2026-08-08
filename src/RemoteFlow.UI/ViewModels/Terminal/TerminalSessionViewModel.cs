@@ -23,6 +23,8 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     private readonly ITerminalChannel _channel;
     private readonly IUiDispatcher _dispatcher;
+    // Injected so a test can decide when the resize debounce elapses rather than sleeping past it.
+    private readonly TimeProvider _timeProvider;
     private readonly Func<CancellationToken, Task>? _retry;
     private readonly Func<CancellationToken, Task>? _close;
     private readonly CancellationTokenSource _lifetime = new();
@@ -33,6 +35,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     private readonly Lock _resizeSync = new();
     private CancellationTokenSource? _pendingResize;
     private long _droppedOutputBytes;
+    private int _outputFramesApplied;
     private List<SearchNavigationMatch> _filteredSearchMatches = [];
     private bool _usesNativeSearch = true;
     private int _currentFilteredSearchMatch = -1;
@@ -49,10 +52,12 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         Guid? managedSessionId = null,
         SessionState initialState = SessionState.Connected,
         Func<CancellationToken, Task>? retry = null,
-        Func<CancellationToken, Task>? close = null)
+        Func<CancellationToken, Task>? close = null,
+        TimeProvider? timeProvider = null)
     {
         _channel = channel ?? throw new ArgumentNullException(nameof(channel));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _timeProvider = timeProvider ?? TimeProvider.System;
         Model = model ?? new TerminalControlModel(new TerminalOptions
         {
             Cols = 120,
@@ -84,6 +89,10 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     public int? ProcessId => (_channel as IPtySession)?.ProcessId;
 
     public long DroppedOutputBytes => Interlocked.Read(ref _droppedOutputBytes);
+
+    /// <summary>How many output frames have been fully applied to the model. Exposed so tests can wait for
+    /// a frame boundary rather than for the text to appear, which happens partway through one.</summary>
+    internal int OutputFramesApplied => Volatile.Read(ref _outputFramesApplied);
 
     [ObservableProperty]
     public partial string FontFamilyName { get; private set; } = OperatingSystem.IsWindows() ? "Cascadia Mono" : "DejaVu Sans Mono";
@@ -463,6 +472,11 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
                             {
                                 Title = reportedTitles[^1];
                             }
+
+                            // Last, so that observing it means the whole frame — text, viewport, title —
+                            // has been applied. A test that waits for the text alone can otherwise act
+                            // while this callback is still between feeding and restoring the viewport.
+                            _ = Interlocked.Increment(ref _outputFramesApplied);
                         }, cancellationToken).ConfigureAwait(false);
                     }
                     else if (droppedThisFrame > 0)
@@ -553,7 +567,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     {
         try
         {
-            await Task.Delay(ResizeDebounce, pending.Token).ConfigureAwait(false);
+            await Task.Delay(ResizeDebounce, _timeProvider, pending.Token).ConfigureAwait(false);
             await _channel.ResizeAsync(columns, rows, pending.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (pending.IsCancellationRequested)

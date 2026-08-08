@@ -6,11 +6,15 @@ namespace RemoteFlow.Infrastructure.Platform;
 public sealed class WatchedFileMonitor(
     TimeSpan? debounce = null,
     TimeSpan? pollingInterval = null,
-    bool forcePolling = false) : IWatchedFileMonitor
+    bool forcePolling = false,
+    TimeProvider? timeProvider = null) : IWatchedFileMonitor
 {
     private readonly TimeSpan _debounce = debounce ?? TimeSpan.FromMilliseconds(750);
     private readonly TimeSpan _pollingInterval = pollingInterval ?? TimeSpan.FromSeconds(2);
     private readonly bool _forcePolling = forcePolling;
+    // Both timers come from here so a test can hold the clock still and decide when they fire, instead of
+    // racing a real 100 ms window against a loaded machine.
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     public Task<IWatchedFileSubscription> WatchAsync(
         string filePath,
@@ -33,7 +37,8 @@ public sealed class WatchedFileMonitor(
             onChanged,
             _debounce,
             _pollingInterval,
-            _forcePolling);
+            _forcePolling,
+            _timeProvider);
         return Task.FromResult(subscription);
     }
 
@@ -44,8 +49,8 @@ public sealed class WatchedFileMonitor(
         private readonly TimeSpan _debounce;
         private readonly CancellationTokenSource _stopping = new();
         private readonly SemaphoreSlim _checkGate = new(1, 1);
-        private readonly Timer _debounceTimer;
-        private readonly Timer _pollingTimer;
+        private readonly ITimer _debounceTimer;
+        private readonly ITimer _pollingTimer;
         private FileSystemWatcher? _watcher;
         private string _acknowledgedSha256;
         private int _disposed;
@@ -56,14 +61,19 @@ public sealed class WatchedFileMonitor(
             Func<WatchedFileChange, CancellationToken, Task<bool>> onChanged,
             TimeSpan debounce,
             TimeSpan pollingInterval,
-            bool forcePolling)
+            bool forcePolling,
+            TimeProvider timeProvider)
         {
             _path = path;
             _acknowledgedSha256 = initialSha256;
             _onChanged = onChanged;
             _debounce = debounce;
-            _debounceTimer = new Timer(_ => _ = CheckSafelyAsync(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-            _pollingTimer = new Timer(
+            _debounceTimer = timeProvider.CreateTimer(
+                _ => _ = CheckSafelyAsync(),
+                null,
+                Timeout.InfiniteTimeSpan,
+                Timeout.InfiniteTimeSpan);
+            _pollingTimer = timeProvider.CreateTimer(
                 _ => _ = CheckSafelyAsync(),
                 null,
                 pollingInterval,

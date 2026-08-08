@@ -32,5 +32,6 @@
 
   <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').EndsWith('Tests'))">
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
   </ItemGroup>
 </Project>

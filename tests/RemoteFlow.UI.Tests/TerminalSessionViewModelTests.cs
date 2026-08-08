@@ -2,6 +2,7 @@ using System.Buffers;
 using System.IO.Pipelines;
 using System.Text;
 using Avalonia.Headless.XUnit;
+using Microsoft.Extensions.Time.Testing;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
@@ -63,17 +64,23 @@ public sealed class TerminalSessionViewModelTests
     {
         var token = TestContext.Current.CancellationToken;
         var channel = new FakeTerminalChannel();
-        await using var viewModel = new TerminalSessionViewModel(channel, new ImmediateDispatcher());
+        // The debounce runs on this clock, so all three requests are inside one window however slow the
+        // machine is. Sleeping between them only ever tested the machine.
+        var time = new FakeTimeProvider();
+        await using var viewModel = new TerminalSessionViewModel(
+            channel,
+            new ImmediateDispatcher(),
+            timeProvider: time);
 
         viewModel.RequestResize(80, 24);
-        await Task.Delay(20, token);
         viewModel.RequestResize(100, 30);
-        await Task.Delay(20, token);
         viewModel.RequestResize(132, 43);
 
-        await channel.ResizeReceived.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
-        await Task.Delay(TerminalSessionViewModel.ResizeDebounce + TimeSpan.FromMilliseconds(30), token);
+        time.Advance(TerminalSessionViewModel.ResizeDebounce);
+        await channel.ResizeReceived.Task.WaitAsync(TimeSpan.FromSeconds(10), token);
 
+        // Nothing further is owed: the superseded requests were cancelled, not merely delayed.
+        time.Advance(TimeSpan.FromMinutes(1));
         Assert.Equal(1, channel.ResizeCallCount);
         Assert.Equal((132, 43), channel.LastResize);
     }

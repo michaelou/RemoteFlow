@@ -33,6 +33,8 @@
          must stay on the 1.x platform line: 18.1 and later require platform 2.x. Upgrade it only together
          with xunit.v3. Trx reports need no package; xunit.v3 writes them itself. -->
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.0.6" />
+    <!-- FakeTimeProvider: lets tests advance a virtual clock instead of sleeping past real debounce windows. -->
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.8.0" />
     <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.1.1" />
     <PackageVersion Include="NSubstitute" Version="6.0.0" />
     <PackageVersion Include="AwesomeAssertions" Version="9.5.0" />

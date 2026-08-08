@@ -82,8 +82,11 @@ public sealed class TerminalWorkspaceViewModelTests
         await channel.PublishAsync("\u001b]2;build server\a", token);
         await UntilAsync(() => session.Title == "build server", token);
         session.SetTitleOverride("Pinned title");
+        // Waiting for the frame to be applied, rather than sleeping and hoping, is what makes "the title
+        // did not change" mean the title was offered and refused, not merely that it had not arrived.
+        var framesBefore = session.OutputFramesApplied;
         await channel.PublishAsync("\u001b]0;ignored title\u001b\\", token);
-        await Task.Delay(25, token);
+        await UntilAsync(() => session.OutputFramesApplied > framesBefore, token);
 
         Assert.Equal("Pinned title", session.Title);
         session.SetTitleOverride(null);
