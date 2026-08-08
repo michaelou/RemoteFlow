@@ -11,6 +11,8 @@ using RemoteFlow.Infrastructure.Security;
 using RemoteFlow.Infrastructure.Ssh;
 using RemoteFlow.Infrastructure.Ssh.Auth;
 using RemoteFlow.Infrastructure.Security.Crypto;
+using RemoteFlow.Application.Abstractions.Backup;
+using RemoteFlow.Infrastructure.Backup;
 
 namespace RemoteFlow.Infrastructure;
 
@@ -24,6 +26,7 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(appPaths);
 
         services.TryAddSingleton<IAppPaths>(appPaths);
+        services.TryAddSingleton<IBackupArchiveSerializer, ZipBackupArchiveSerializer>();
         services.TryAddSingleton<ISecureRandom, SecureRandom>();
         services.TryAddSingleton<IPtyService, PortaPtyService>();
         services.TryAddSingleton<ISystemPlatform, SystemPlatform>();
