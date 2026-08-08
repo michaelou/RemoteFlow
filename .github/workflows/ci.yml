@@ -1,8 +1,13 @@
-# Build and test on the three desktop platforms. This transcribes the checks contributors have run
-# locally since Milestone 1 (see CONTRIBUTING.md); it does not add new gates.
+# Build and test on Windows. This transcribes the checks contributors have run locally since Milestone 1
+# (see CONTRIBUTING.md); it does not add new gates.
 #
-# Wall-time budget: 15 minutes for the slowest leg, and the job times out at 20. A leg that regularly
-# approaches the budget is a signal to split it, not to raise the timeout.
+# Windows only, deliberately. RemoteFlow ships on Windows first, and the Linux and macOS legs are the ones
+# that would have to carry the Docker-backed SSH suite and the timing-sensitive terminal tests. Bringing
+# them back means restoring a matrix over windows/ubuntu/macos and running the integration step on the
+# Linux leg, which is the only runner with a Docker engine.
+#
+# Wall-time budget: 15 minutes, and the job times out at 20. A run that regularly approaches the budget is
+# a signal to split it, not to raise the timeout.
 #
 # Every action is pinned by commit SHA. The trailing comment records the tag the SHA came from; when
 # bumping, resolve the new tag to its SHA rather than trusting the tag to stay put.
@@ -26,31 +31,15 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
-  # Keep the package cache inside the workspace so actions/cache handles it identically on all three
-  # runner images.
+  # Keep the package cache inside the workspace so actions/cache handles it the same way if other runner
+  # images are added back.
   NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
 
 jobs:
   build:
-    name: build (${{ matrix.leg }})
-    runs-on: ${{ matrix.os }}
+    name: build (windows)
+    runs-on: windows-latest
     timeout-minutes: 20
-    strategy:
-      # One platform failing should not hide the state of the other two.
-      fail-fast: false
-      matrix:
-        include:
-          - leg: windows
-            os: windows-latest
-            integration: false
-          - leg: linux
-            os: ubuntu-latest
-            # Docker is available on the Linux runner, so this is the only leg that can host the SSH
-            # container the integration tests need.
-            integration: true
-          - leg: macos
-            os: macos-latest
-            integration: false
 
     steps:
       - name: Check out
@@ -79,34 +68,29 @@ jobs:
         run: dotnet build --no-restore -c Release
 
       # The default run excludes Category=Integration on every project, so this is the same command
-      # contributors run locally, plus trx and coverage reports. The report names are fixed because the
-      # default embeds the runner's user and host, which on macOS is long enough to push the extracted
-      # artefact past the Windows path limit.
+      # contributors run locally, plus trx and coverage reports. The report name is fixed because the
+      # default embeds the runner's user and host.
       - name: Unit tests
         run: >
           dotnet test --no-build -c Release
           -p:ExtraTestingPlatformCommandLineArguments="--report-xunit-trx --report-xunit-trx-filename unit.trx --coverage --coverage-output-format cobertura"
 
-      - name: Integration tests (SSH, Docker)
-        if: matrix.integration
-        run: >
-          dotnet test tests/RemoteFlow.Ssh.IntegrationTests --no-build -c Release --filter Category=Integration
-          -p:ExtraTestingPlatformCommandLineArguments="--report-xunit-trx --report-xunit-trx-filename integration.trx --coverage --coverage-output-format cobertura"
-
-      # Without this note a green Windows or macOS leg reads as "integration tests passed here".
+      # Without this note a green run reads as "everything in the repository passed", which is not true:
+      # nothing here exercises the SSH integration suite.
       - name: Note skipped integration tests
-        if: ${{ !matrix.integration }}
+        if: always()
         shell: bash
         run: |
-          echo "### Integration tests were NOT run on ${{ matrix.leg }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Integration tests were NOT run" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "The SSH integration suite needs a Docker engine and runs on the Linux leg only." >> "$GITHUB_STEP_SUMMARY"
+          echo "The SSH integration suite needs a Linux Docker engine, which this Windows-only workflow does not have." >> "$GITHUB_STEP_SUMMARY"
+          echo "Run it locally with \`pwsh ./scripts/run-integration.ps1\` and record the result in the pull request." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-results-${{ matrix.leg }}
+          name: test-results
           # Each test project writes into its own bin/**/TestResults, so the artefact paths name the
           # project that produced them.
           path: |
