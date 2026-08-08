@@ -28,7 +28,9 @@ public static class DependencyInjection
         services.TryAddSingleton<ISystemPlatform, SystemPlatform>();
         services.TryAddSingleton<IProcessRunner, ProcessRunner>();
         services.TryAddSingleton<ISystemTerminalLauncher, SystemTerminalLauncher>();
-        services.TryAddSingleton<ISshTransport, TmdsSshTransport>();
+        services.TryAddSingleton<TmdsSshTransport>();
+        services.TryAddSingleton<SshNetTransport>();
+        services.TryAddSingleton<ISshTransport, ConfiguredSshTransport>();
         services.TryAddSingleton<INetworkChangeMonitor, NetworkChangeMonitor>();
         services.TryAddSingleton<ISshAgentDiscovery, SshAgentDiscovery>();
         services.TryAddSingleton<ISshKeyService, SshKeyService>();

@@ -55,6 +55,18 @@
             </StackPanel>
           </Grid>
 
+          <StackPanel Spacing="5">
+            <TextBlock FontWeight="SemiBold" Text="SSH transport" />
+            <ComboBox ItemsSource="{Binding SshTransports}" SelectedItem="{Binding SelectedSshTransport}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="settingsViewModels:SshTransportOption">
+                  <TextBlock Text="{Binding DisplayName}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Transport changes apply to new SSH sessions only." />
+          </StackPanel>
+
           <CheckBox Content="Blink cursor" IsChecked="{Binding CursorBlink}" />
           <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding ApplyNote}" TextWrapping="Wrap" />
           <TextBlock Foreground="{DynamicResource Brush.Danger}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Text="{Binding ErrorMessage}" TextWrapping="Wrap" />

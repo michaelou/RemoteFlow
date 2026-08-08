@@ -58,6 +58,22 @@ public sealed class TerminalSettingsViewModelTests
         Assert.Equal(TerminalBellMode.Visual, restarted.BellMode);
     }
 
+    [AvaloniaFact]
+    public async Task SshNetFallbackLabelAndSelectionRoundTrip()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var settings = new InMemorySettingsStore();
+        var viewModel = new TerminalSettingsViewModel(settings);
+        await viewModel.InitializeAsync(token);
+        var fallback = Assert.Single(viewModel.SshTransports, option => option.Value == SshTransport.SshNet);
+
+        Assert.Contains("fallback - please report why you needed it", fallback.DisplayName, StringComparison.Ordinal);
+        viewModel.SelectedSshTransport = fallback;
+        await viewModel.FlushAsync();
+
+        Assert.Equal(SshTransport.SshNet, await settings.Get(SettingKeys.SshTransport, token));
+    }
+
     [Fact]
     public void HighContrastSchemeExceedsSevenToOneForNormalText()
     {

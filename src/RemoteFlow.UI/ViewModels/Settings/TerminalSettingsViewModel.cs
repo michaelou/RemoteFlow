@@ -69,6 +69,12 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
 
     public IReadOnlyList<TerminalBellMode> BellModes { get; } = Enum.GetValues<TerminalBellMode>();
 
+    public IReadOnlyList<SshTransportOption> SshTransports { get; } =
+    [
+        new(SshTransport.Tmds, "Tmds.Ssh (recommended)"),
+        new(SshTransport.SshNet, "SSH.NET (fallback - please report why you needed it)"),
+    ];
+
     public TerminalControlModel PreviewModel { get; }
 
     public ObservableCollection<ShellProfileEditorViewModel> ShellProfiles { get; } = [];
@@ -139,6 +145,9 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
     public partial TerminalBellMode BellMode { get; set; } = TerminalBellMode.None;
 
     [ObservableProperty]
+    public partial SshTransportOption? SelectedSshTransport { get; set; }
+
+    [ObservableProperty]
     public partial string? ErrorMessage { get; private set; }
 
     [ObservableProperty]
@@ -173,6 +182,8 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
             CursorStyle = await _settings.Get(SettingKeys.CursorStyle, cancellationToken).ConfigureAwait(true);
             CursorBlink = await _settings.Get(SettingKeys.CursorBlink, cancellationToken).ConfigureAwait(true);
             BellMode = await _settings.Get(SettingKeys.BellMode, cancellationToken).ConfigureAwait(true);
+            var selectedTransport = await _settings.Get(SettingKeys.SshTransport, cancellationToken).ConfigureAwait(true);
+            SelectedSshTransport = SshTransports.First(option => option.Value == selectedTransport);
             _loading = false;
             ApplyPreview();
             await LoadShellProfilesAsync(cancellationToken).ConfigureAwait(true);
@@ -269,6 +280,14 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
 
     partial void OnBellModeChanged(TerminalBellMode value) => OnValueChanged();
 
+    partial void OnSelectedSshTransportChanged(SshTransportOption? value)
+    {
+        if (!_loading && _initialized && value is not null)
+        {
+            _pendingSave = PersistSshTransportAsync(value.Value, CancellationToken.None);
+        }
+    }
+
     private void OnValueChanged()
     {
         if (_loading || PreviewModel is null)
@@ -326,6 +345,19 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
         finally
         {
             _ = _saveGate.Release();
+        }
+    }
+
+    private async Task PersistSshTransportAsync(SshTransport transport, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _settings.Set(SettingKeys.SshTransport, transport, cancellationToken).ConfigureAwait(false);
+            ErrorMessage = null;
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = $"SSH transport setting could not be saved: {exception.Message}";
         }
     }
 
@@ -396,6 +428,8 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
         };
     }
 }
+
+public sealed record SshTransportOption(SshTransport Value, string DisplayName);
 
 public sealed partial class ShellProfileEditorViewModel : ObservableObject
 {

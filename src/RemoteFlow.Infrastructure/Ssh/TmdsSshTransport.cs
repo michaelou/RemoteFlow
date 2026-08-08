@@ -175,9 +175,16 @@ internal static class SshErrorMapper
             return SshError.Cancelled;
         }
 
-        if (Find<TimeoutException>(exception) is not null || Find<OperationCanceledException>(exception) is not null)
+        if (Find<TimeoutException>(exception) is not null ||
+            Find<OperationCanceledException>(exception) is not null ||
+            Find<Renci.SshNet.Common.SshOperationTimeoutException>(exception) is not null)
         {
             return SshError.Timeout;
+        }
+
+        if (Find<Renci.SshNet.Common.SshAuthenticationException>(exception) is not null)
+        {
+            return SshError.AuthFailed;
         }
 
         if (Find<SshChannelClosedException>(exception) is not null ||
