@@ -1,0 +1,27 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Connections.SshKeyPicker"
+    x:DataType="viewModels:SshKeyPickerViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Connections">
+  <StackPanel Spacing="7">
+    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+      <ComboBox
+          AutomationProperties.Name="Private key path and recent keys"
+          IsEditable="True"
+          ItemsSource="{Binding RecentKeys}"
+          SelectedItem="{Binding SelectedPath, Mode=TwoWay}"
+          Text="{Binding SelectedPath, Mode=TwoWay}" />
+      <Button Grid.Column="1" Click="Browse_OnClick" Content="Browse…" />
+      <Button Grid.Column="2" Click="Generate_OnClick" Content="Generate Ed25519…" />
+    </Grid>
+    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" IsVisible="{Binding Sha256Fingerprint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock FontWeight="SemiBold" Text="{Binding KeyType}" />
+      <TextBlock Grid.Column="1" FontFamily="Cascadia Mono,Consolas,monospace" Text="{Binding Sha256Fingerprint}" TextWrapping="Wrap" />
+      <Button Grid.Column="2" Click="CopyPublicKey_OnClick" Content="Copy public key" IsEnabled="{Binding CanCopyPublicKey}" />
+    </Grid>
+    <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Comment}" TextWrapping="Wrap" />
+    <CheckBox Content="Store this key's passphrase with the connection" IsChecked="{Binding StorePassphrase}" IsVisible="{Binding IsEncrypted}" />
+    <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
+  </StackPanel>
+</UserControl>

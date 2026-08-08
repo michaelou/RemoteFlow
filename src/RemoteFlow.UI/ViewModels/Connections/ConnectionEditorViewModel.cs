@@ -47,7 +47,9 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         IConnectionCredentialService credentials,
         IFolderRepository folders,
         ITagRepository tags,
-        ITagService tagService)
+        ITagService tagService,
+        ISshKeyService? sshKeyService = null,
+        IClipboardService? clipboard = null)
     {
         _connections = connections;
         _connectionRepository = connectionRepository;
@@ -55,6 +57,17 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         _folders = folders;
         _tags = tags;
         _tagService = tagService;
+        if (sshKeyService is not null && clipboard is not null)
+        {
+            KeyPicker = new SshKeyPickerViewModel(sshKeyService, clipboard);
+            KeyPicker.PropertyChanged += (_, eventArgs) =>
+            {
+                if (eventArgs.PropertyName == nameof(SshKeyPickerViewModel.SelectedPath))
+                {
+                    PrivateKeyPath = KeyPicker.SelectedPath;
+                }
+            };
+        }
         Protocols = Enum.GetValues<ProtocolType>();
         AuthMethods = Enum.GetValues<AuthMethod>();
         Environments = Enum.GetValues<EnvironmentKind>();
@@ -77,6 +90,8 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     public ObservableCollection<FolderChoiceViewModel> FolderChoices { get; } = [];
 
     public ObservableCollection<TagChoiceViewModel> TagChoices { get; } = [];
+
+    public SshKeyPickerViewModel? KeyPicker { get; }
 
     [ObservableProperty]
     public partial string Name { get; set; } = string.Empty;
@@ -556,7 +571,14 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     partial void OnNotesChanged(string? value) { MarkDirty(); }
     partial void OnSelectedFolderChanged(FolderChoiceViewModel? value) { MarkDirty(); }
     partial void OnIsFavoriteChanged(bool value) { MarkDirty(); }
-    partial void OnPrivateKeyPathChanged(string? value) { MarkDirty(); }
+    partial void OnPrivateKeyPathChanged(string? value)
+    {
+        if (KeyPicker is not null && !string.Equals(KeyPicker.SelectedPath, value, StringComparison.Ordinal))
+        {
+            KeyPicker.SelectedPath = value;
+        }
+        MarkDirty();
+    }
     partial void OnTagInputChanged(string? value) { MarkDirty(); }
 
     partial void OnProtocolChanged(ProtocolType oldValue, ProtocolType newValue)

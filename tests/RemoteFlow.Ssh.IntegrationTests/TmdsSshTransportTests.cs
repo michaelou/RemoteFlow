@@ -108,6 +108,92 @@ public sealed class TmdsSshTransportTests(SshServerFixture fixture)
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task KeyboardInteractiveAuthenticatesAndPreservesSecretEchoFlag()
+    {
+        var token = TestContext.Current.CancellationToken;
+        IReadOnlyList<SshAuthenticationPrompt>? presented = null;
+        var request = PasswordRequest() with
+        {
+            Username = SshTestServer.KeyboardInteractiveUsername,
+            Authentication = new SshAuthMaterial.KeyboardInteractive((prompts, _) =>
+            {
+                presented = prompts;
+                return ValueTask.FromResult<IReadOnlyList<string>>([SshTestServer.KeyboardInteractivePassword]);
+            }),
+        };
+
+        await using var connection = await ConnectAsync(request, token);
+        var result = await connection.ExecuteAsync("printf interactive-ok", token);
+
+        Assert.Equal("interactive-ok", result.Value.StandardOutput);
+        Assert.NotNull(presented);
+        Assert.True(Assert.Single(presented).IsSecret);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task MissingAgentFallsBackToPassword()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var request = PasswordRequest() with
+        {
+            AuthenticationMethods =
+            [
+                new SshAuthMaterial.Agent(),
+                new SshAuthMaterial.Password(SshTestServer.Password),
+            ],
+        };
+
+        await using var connection = await ConnectAsync(request, token);
+        var result = await connection.ExecuteAsync("printf fallback-ok", token);
+
+        Assert.Equal("fallback-ok", result.Value.StandardOutput);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task EncryptedPrivateKeyAuthenticatesWithPassphrase()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var request = PasswordRequest() with
+        {
+            Username = SshTestServer.PublicKeyUsername,
+            Authentication = new SshAuthMaterial.PrivateKey(
+                await fixture.Server.GetEncryptedPrivateKeyAsync(token),
+                SshTestServer.EncryptedPrivateKeyPassphrase),
+        };
+
+        await using var connection = await ConnectAsync(request, token);
+        var result = await connection.ExecuteAsync("printf encrypted-key-ok", token);
+
+        Assert.Equal("encrypted-key-ok", result.Value.StandardOutput);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task KeyboardInteractiveRetryLimitStopsPromptLoop()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var attempts = 0;
+        var request = PasswordRequest() with
+        {
+            Username = SshTestServer.KeyboardInteractiveUsername,
+            MaxAuthenticationAttempts = 2,
+            Authentication = new SshAuthMaterial.KeyboardInteractive((_, _) =>
+            {
+                _ = Interlocked.Increment(ref attempts);
+                return ValueTask.FromResult<IReadOnlyList<string>>(["wrong-secret"]);
+            }),
+        };
+
+        var result = await CreateTransport().ConnectAsync(request, token);
+
+        Assert.Equal(SshError.AuthFailed, result.Failure.Error);
+        Assert.InRange(attempts, 1, 2);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task StrictUnknownHostIsTypedAndConnectionIsNotEstablished()
     {
         var transport = CreateTransport();
@@ -298,6 +384,15 @@ public sealed class TmdsSshTransportTests(SshServerFixture fixture)
         {
             cancellationToken.ThrowIfCancellationRequested();
             return ValueTask.FromResult(true);
+        }
+
+        public ValueTask<HostKeyPromptDecision> PromptAsync(
+            HostKeyTrustPrompt prompt,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(
+                prompt.IsMismatch ? HostKeyPromptDecision.Reject : HostKeyPromptDecision.AcceptAndSave);
         }
     }
 }

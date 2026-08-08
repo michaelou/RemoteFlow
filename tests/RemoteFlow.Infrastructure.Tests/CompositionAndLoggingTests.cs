@@ -55,8 +55,10 @@ public sealed class CompositionAndLoggingTests
             var logger = factory.CreateLogger("RedactionTest");
             logger.LogError(
                 new InvalidOperationException("exception contains registered-marker-2468"),
-                "Password={Password}; Marker={Marker}; PrivateKey={PrivateKey}; Sftp={SftpFileContents}",
+                "Password={Password}; Passphrase={Passphrase}; Agent={AgentResponse}; Marker={Marker}; PrivateKey={PrivateKey}; Sftp={SftpFileContents}",
                 "correct horse battery staple",
+                "private-key-passphrase-1357",
+                "agent-signature-response-8642",
                 "registered-marker-2468",
                 "-----BEGIN OPENSSH PRIVATE KEY-----\nprivate-material\n-----END OPENSSH PRIVATE KEY-----",
                 "confidential file contents");
@@ -70,6 +72,8 @@ public sealed class CompositionAndLoggingTests
         var content = File.ReadAllText(logFile);
         Assert.Contains(RedactingLoggerProvider.RedactedValue, content, StringComparison.Ordinal);
         Assert.DoesNotContain("correct horse battery staple", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-key-passphrase-1357", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("agent-signature-response-8642", content, StringComparison.Ordinal);
         Assert.DoesNotContain("registered-marker-2468", content, StringComparison.Ordinal);
         Assert.DoesNotContain("private-material", content, StringComparison.Ordinal);
         Assert.DoesNotContain("confidential file contents", content, StringComparison.Ordinal);

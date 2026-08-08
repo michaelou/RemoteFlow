@@ -3,7 +3,8 @@
     x:DataType="connectionViewModels:ConnectionEditorViewModel"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections">
+    xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
+    xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections">
   <Border Padding="20" Background="{DynamicResource Brush.Surface.1}" CornerRadius="8">
     <Grid RowDefinitions="Auto,*,Auto">
       <Grid ColumnDefinitions="*,Auto">
@@ -49,7 +50,7 @@
           <StackPanel IsVisible="{Binding IsSshSectionVisible}" Spacing="6">
             <TextBlock FontWeight="SemiBold" Text="SSH options" />
             <TextBlock Text="Private key path" />
-            <TextBox TabIndex="7" Text="{Binding PrivateKeyPath, Mode=TwoWay}" />
+            <connectionViews:SshKeyPicker DataContext="{Binding KeyPicker}" />
             <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding PrivateKeyPathError}" />
           </StackPanel>
 

@@ -21,6 +21,7 @@ public sealed class SshTestServer : IAsyncDisposable
     public const string PublicKeyUsername = "key-user";
     public const string KeyboardInteractiveUsername = "interactive-user";
     public const string KeyboardInteractivePassword = "interactive-secret";
+    public const string EncryptedPrivateKeyPassphrase = "encrypted-key-secret";
 
     private const int _sshPort = 22;
     private const int _stalledPort = 2222;
@@ -120,6 +121,17 @@ public sealed class SshTestServer : IAsyncDisposable
             "/opt/remoteflow/client_keys/id_ed25519",
         ], cancellationToken).ConfigureAwait(false);
         EnsureSuccess(result, "read the fixture SSH private key");
+        return result.Stdout;
+    }
+
+    public async Task<string> GetEncryptedPrivateKeyAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await ExecAsync(
+        [
+            "cat",
+            "/opt/remoteflow/client_keys/id_ed25519_encrypted",
+        ], cancellationToken).ConfigureAwait(false);
+        EnsureSuccess(result, "read the encrypted fixture SSH private key");
         return result.Stdout;
     }
 

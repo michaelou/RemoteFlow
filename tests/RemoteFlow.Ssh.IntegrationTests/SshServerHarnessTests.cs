@@ -182,5 +182,14 @@ public sealed class SshServerHarnessTests(SshServerFixture fixture)
             cancellationToken.ThrowIfCancellationRequested();
             return ValueTask.FromResult(true);
         }
+
+        public ValueTask<HostKeyPromptDecision> PromptAsync(
+            HostKeyTrustPrompt prompt,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(
+                prompt.IsMismatch ? HostKeyPromptDecision.Reject : HostKeyPromptDecision.AcceptAndSave);
+        }
     }
 }

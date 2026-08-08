@@ -29,7 +29,23 @@ public sealed partial class ConnectionEditorView : UserControl
         capture.Text = string.Empty;
         try
         {
-            _ = await owner.SaveEditorAsync(buffer.AsMemory()).ConfigureAwait(true);
+            ReadOnlyMemory<char> secretToStore = buffer.AsMemory();
+            if (editor.AuthMethod == Domain.Enums.AuthMethod.PrivateKey && editor.KeyPicker is { IsEncrypted: true } keyPicker)
+            {
+                if (keyPicker.Sha256Fingerprint is null)
+                {
+                    await keyPicker.InspectAsync(buffer.AsMemory()).ConfigureAwait(true);
+                }
+                if (keyPicker.Sha256Fingerprint is null)
+                {
+                    return;
+                }
+                if (!keyPicker.StorePassphrase)
+                {
+                    secretToStore = ReadOnlyMemory<char>.Empty;
+                }
+            }
+            _ = await owner.SaveEditorAsync(secretToStore).ConfigureAwait(true);
         }
         finally
         {

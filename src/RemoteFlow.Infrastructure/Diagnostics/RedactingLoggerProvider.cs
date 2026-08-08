@@ -25,6 +25,8 @@ public sealed partial class RedactingLoggerProvider : ILoggerProvider
         "sftpfilecontent",
         "sftpcontent",
         "filecontents",
+        "agentresponse",
+        "authenticationresponse",
     ];
 
     private readonly Serilog.ILogger _logger;

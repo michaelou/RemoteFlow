@@ -8,6 +8,7 @@ using RemoteFlow.Infrastructure.Platform;
 using RemoteFlow.Infrastructure.Pty;
 using RemoteFlow.Infrastructure.Security;
 using RemoteFlow.Infrastructure.Ssh;
+using RemoteFlow.Infrastructure.Ssh.Auth;
 using RemoteFlow.Infrastructure.Security.Crypto;
 
 namespace RemoteFlow.Infrastructure;
@@ -28,6 +29,9 @@ public static class DependencyInjection
         services.TryAddSingleton<IProcessRunner, ProcessRunner>();
         services.TryAddSingleton<ISystemTerminalLauncher, SystemTerminalLauncher>();
         services.TryAddSingleton<ISshTransport, TmdsSshTransport>();
+        services.TryAddSingleton<ISshAgentDiscovery, SshAgentDiscovery>();
+        services.TryAddSingleton<ISshKeyService, SshKeyService>();
+        services.TryAddSingleton<ISshAuthenticationMaterialProvider, SshAuthenticationMaterialProvider>();
         services.TryAddSingleton<ISecretRegistry, SecretRegistry>();
         services.TryAddSingleton<IGlobalExceptionHandler, GlobalExceptionHandler>();
         services.TryAddSingleton<WindowsCredentialProvider>();

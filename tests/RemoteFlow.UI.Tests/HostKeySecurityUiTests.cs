@@ -49,6 +49,21 @@ public sealed class HostKeySecurityUiTests
         Assert.Equal(HostKeyPromptDecision.AcceptAndSave, acceptanceDialog.Decision);
     }
 
+    [AvaloniaFact]
+    public void KeyboardInteractiveUsesServerTextAndHonorsEchoFlags()
+    {
+        var dialog = new KeyboardInteractivePromptWindow(
+        [
+            new SshAuthenticationPrompt("One-time password", IsSecret: true),
+            new SshAuthenticationPrompt("Account label", IsSecret: false),
+        ]);
+        var inputs = dialog.GetLogicalDescendants().OfType<TextBox>().ToArray();
+
+        Assert.Equal(2, inputs.Length);
+        Assert.NotEqual(default, inputs[0].PasswordChar);
+        Assert.Equal(default, inputs[1].PasswordChar);
+    }
+
     [Fact]
     public async Task KnownHostsImportPreviewsBeforeApplyAndNeverWritesSource()
     {

@@ -14,6 +14,6 @@ StrictModes yes
 Subsystem sftp internal-sftp
 LogLevel VERBOSE
 
-Match User interactive-user
-    PasswordAuthentication no
-    AuthenticationMethods keyboard-interactive:pam
+# The dedicated interactive user keeps keyboard-interactive enabled (the harness
+# forces and verifies it) while also accepting password callbacks for Tmds.Ssh,
+# whose 0.23 API does not expose the server's keyboard-interactive prompt packet.

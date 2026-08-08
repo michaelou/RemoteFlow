@@ -57,6 +57,8 @@ public static class DependencyInjection
         services.TryAddSingleton<TerminalClipboardController>();
         services.TryAddSingleton<IConfirmationDialogService, ConfirmationDialogService>();
         _ = services.Replace(ServiceDescriptor.Singleton<IHostKeyPrompt, HostKeyPromptService>());
+        services.TryAddSingleton<IKeyboardInteractivePrompt, KeyboardInteractivePromptService>();
+        services.TryAddSingleton<ISshCredentialPrompt, SshCredentialPromptService>();
         services.TryAddSingleton<IConnectionSessionOpener, DeferredConnectionSessionOpener>();
         services.TryAddSingleton<IThemeService>(provider => new ThemeService(
             provider.GetRequiredService<App>(),

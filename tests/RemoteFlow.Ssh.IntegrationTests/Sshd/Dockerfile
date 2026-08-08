@@ -16,6 +16,7 @@ RUN apt-get update \
     && ssh-keygen -q -t ed25519 -N '' -C remoteflow-host-primary -f /opt/remoteflow/host_keys/primary \
     && ssh-keygen -q -t ed25519 -N '' -C remoteflow-host-alternate -f /opt/remoteflow/host_keys/alternate \
     && ssh-keygen -q -t ed25519 -N '' -C remoteflow-key-user -f /opt/remoteflow/client_keys/id_ed25519 \
+    && ssh-keygen -q -t ed25519 -N 'encrypted-key-secret' -C remoteflow-encrypted-key-user -f /opt/remoteflow/client_keys/id_ed25519_encrypted \
     && printf 'RemoteFlow SFTP fixture\n' > /srv/remoteflow-fixtures/documents/readme.txt \
     && printf 'Nested fixture\n' > /srv/remoteflow-fixtures/documents/nested/data.txt
 
@@ -25,9 +26,10 @@ COPY presented-host-key-fingerprint /usr/local/bin/presented-host-key-fingerprin
 
 RUN install -d -m 0700 -o key-user -g key-user /home/key-user/.ssh \
     && cp /opt/remoteflow/client_keys/id_ed25519.pub /home/key-user/.ssh/authorized_keys \
+    && cat /opt/remoteflow/client_keys/id_ed25519_encrypted.pub >> /home/key-user/.ssh/authorized_keys \
     && chown key-user:key-user /home/key-user/.ssh/authorized_keys \
-    && chmod 0600 /home/key-user/.ssh/authorized_keys /opt/remoteflow/client_keys/id_ed25519 \
-    && chmod 0644 /opt/remoteflow/client_keys/id_ed25519.pub \
+    && chmod 0600 /home/key-user/.ssh/authorized_keys /opt/remoteflow/client_keys/id_ed25519 /opt/remoteflow/client_keys/id_ed25519_encrypted \
+    && chmod 0644 /opt/remoteflow/client_keys/id_ed25519.pub /opt/remoteflow/client_keys/id_ed25519_encrypted.pub \
     && chmod 0755 /usr/local/bin/use-host-key /usr/local/bin/presented-host-key-fingerprint \
     && /usr/local/bin/use-host-key primary --no-reload
 

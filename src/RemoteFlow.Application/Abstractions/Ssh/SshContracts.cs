@@ -103,6 +103,13 @@ public abstract class SshAuthMaterial
 
 public sealed record SshAuthenticationPrompt(string Prompt, bool IsSecret);
 
+public interface IKeyboardInteractivePrompt
+{
+    ValueTask<IReadOnlyList<string>> RespondAsync(
+        IReadOnlyList<SshAuthenticationPrompt> prompts,
+        CancellationToken cancellationToken = default);
+}
+
 public sealed record SshConnectRequest
 {
     public required string Host { get; init; }
@@ -112,6 +119,10 @@ public sealed record SshConnectRequest
     public required string Username { get; init; }
 
     public SshAuthMaterial Authentication { get; init; } = new SshAuthMaterial.None();
+
+    public IReadOnlyList<SshAuthMaterial> AuthenticationMethods { get; init; } = [];
+
+    public int MaxAuthenticationAttempts { get; init; } = 3;
 
     public HostKeyPolicy HostKeyPolicy { get; init; } = HostKeyPolicy.Strict;
 

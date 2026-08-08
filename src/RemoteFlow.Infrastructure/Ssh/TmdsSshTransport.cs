@@ -1,13 +1,23 @@
 using System.Net.Sockets;
+using Microsoft.Extensions.Logging;
+using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Ssh;
+using RemoteFlow.Infrastructure.Ssh.Auth;
 using Tmds.Ssh;
 
 namespace RemoteFlow.Infrastructure.Ssh;
 
-public sealed class TmdsSshTransport(IHostKeyVerifier hostKeyVerifier) : ISshTransport
+public sealed class TmdsSshTransport(
+    IHostKeyVerifier hostKeyVerifier,
+    ILogger<TmdsSshTransport>? logger = null,
+    ISshAgentDiscovery? agentDiscovery = null,
+    ISecretRegistry? secretRegistry = null) : ISshTransport
 {
     private readonly IHostKeyVerifier _hostKeyVerifier =
         hostKeyVerifier ?? throw new ArgumentNullException(nameof(hostKeyVerifier));
+    private readonly ILogger<TmdsSshTransport>? _logger = logger;
+    private readonly ISshAgentDiscovery? _agentDiscovery = agentDiscovery;
+    private readonly ISecretRegistry? _secretRegistry = secretRegistry;
 
     public async Task<SshResult<ISshConnection>> ConnectAsync(
         SshConnectRequest request,
@@ -16,12 +26,22 @@ public sealed class TmdsSshTransport(IHostKeyVerifier hostKeyVerifier) : ISshTra
         ArgumentNullException.ThrowIfNull(request);
         Validate(request);
         SshFailure? hostKeyFailure = null;
+        var authenticationMethods = request.AuthenticationMethods.Count > 0
+            ? request.AuthenticationMethods
+            : [request.Authentication];
+        if (authenticationMethods.Any(method => method is SshAuthMaterial.Agent) &&
+            (_agentDiscovery?.Discover().Any(endpoint => endpoint.IsAvailable) == false))
+        {
+            _logger?.LogInformation(
+                "No SSH agent endpoint is available; authentication will continue with the next configured method.");
+        }
+
         var settings = new SshClientSettings
         {
             HostName = request.Host,
             Port = request.Port,
             UserName = request.Username,
-            Credentials = [CreateCredential(request.Authentication)],
+            Credentials = [.. authenticationMethods.Select(method => CreateCredential(method, request.MaxAuthenticationAttempts))],
             ConnectTimeout = request.ConnectTimeout,
             KeepAliveInterval = request.KeepAliveInterval,
             AutoConnect = false,
@@ -72,27 +92,58 @@ public sealed class TmdsSshTransport(IHostKeyVerifier hostKeyVerifier) : ISshTra
         }
     }
 
-    private static Credential CreateCredential(SshAuthMaterial authentication)
+    private Credential CreateCredential(SshAuthMaterial authentication, int maxAttempts)
     {
         return authentication switch
         {
             SshAuthMaterial.None => new NoCredential(),
-            SshAuthMaterial.Password password => new PasswordCredential(password.Value),
-            SshAuthMaterial.PrivateKey privateKey => new PrivateKeyCredential(
-                privateKey.KeyData.ToCharArray(),
-                privateKey.Passphrase ?? string.Empty,
-                "RemoteFlow private key"),
+            SshAuthMaterial.Password password => CreatePasswordCredential(password),
+            SshAuthMaterial.PrivateKey privateKey => CreatePrivateKeyCredential(privateKey),
             SshAuthMaterial.Agent => new SshAgentCredentials(),
             SshAuthMaterial.KeyboardInteractive keyboardInteractive => new PasswordCredential(
-                async (_, token) =>
+                async (context, token) =>
                 {
+                    if (context.Attempt > maxAttempts)
+                    {
+                        return null;
+                    }
+
                     var responses = await keyboardInteractive.RespondAsync(
                         [new SshAuthenticationPrompt("Password:", IsSecret: true)],
                         token).ConfigureAwait(false);
+                    foreach (var response in responses.Where(response => response.Length >= 4))
+                    {
+                        _secretRegistry?.Register(response);
+                    }
                     return responses.Count == 0 ? null : responses[0];
                 }),
             _ => throw new ArgumentOutOfRangeException(nameof(authentication)),
         };
+    }
+
+    private PasswordCredential CreatePasswordCredential(SshAuthMaterial.Password password)
+    {
+        if (password.Value.Length >= 4)
+        {
+            _secretRegistry?.Register(password.Value);
+        }
+        return new PasswordCredential(password.Value);
+    }
+
+    private PrivateKeyCredential CreatePrivateKeyCredential(SshAuthMaterial.PrivateKey privateKey)
+    {
+        if (privateKey.KeyData.Length >= 4)
+        {
+            _secretRegistry?.Register(privateKey.KeyData);
+        }
+        if (privateKey.Passphrase is { Length: >= 4 } passphrase)
+        {
+            _secretRegistry?.Register(passphrase);
+        }
+        return new PrivateKeyCredential(
+            privateKey.KeyData.ToCharArray(),
+            privateKey.Passphrase ?? string.Empty,
+            "RemoteFlow private key");
     }
 
     private static void Validate(SshConnectRequest request)
@@ -102,6 +153,7 @@ public sealed class TmdsSshTransport(IHostKeyVerifier hostKeyVerifier) : ISshTra
         ArgumentOutOfRangeException.ThrowIfGreaterThan(request.Port, 65_535);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Username);
         ArgumentNullException.ThrowIfNull(request.Authentication);
+        ArgumentOutOfRangeException.ThrowIfLessThan(request.MaxAuthenticationAttempts, 1);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(request.ConnectTimeout, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(request.OperationTimeout, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThan(request.KeepAliveInterval, TimeSpan.Zero);
