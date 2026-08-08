@@ -278,6 +278,34 @@ public sealed partial class SftpWorkspace : UserControl
         }
     }
 
+    private async void CurrentPermissions_OnClick(object? sender, RoutedEventArgs e)
+    {
+        await ShowPermissionsAsync(null).ConfigureAwait(true);
+    }
+
+    private async void Permissions_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: SftpItemViewModel item })
+        {
+            await ShowPermissionsAsync(item).ConfigureAwait(true);
+        }
+    }
+
+    private async Task ShowPermissionsAsync(SftpItemViewModel? item)
+    {
+        if (DataContext is not SftpWorkspaceViewModel viewModel ||
+            TopLevel.GetTopLevel(this) is not Window owner)
+        {
+            return;
+        }
+        var editor = await viewModel.CreatePermissionsEditorAsync(item).ConfigureAwait(true);
+        if (editor is not null)
+        {
+            var dialog = new PermissionsDialog(editor);
+            await dialog.ShowDialog(owner).ConfigureAwait(true);
+        }
+    }
+
     private async void CopyPath_OnClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { DataContext: SftpItemViewModel item } &&

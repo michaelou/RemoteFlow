@@ -1,0 +1,73 @@
+<Window
+    x:Class="RemoteFlow.UI.Views.Sftp.PermissionsDialog"
+    x:DataType="viewModels:SftpPermissionsEditorViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Sftp"
+    Title="Remote permissions"
+    Width="620"
+    SizeToContent="Height"
+    CanResize="False"
+    WindowStartupLocation="CenterOwner">
+  <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="14">
+    <StackPanel>
+      <TextBlock FontSize="20" FontWeight="SemiBold" Text="{Binding Target.Name}" />
+      <TextBlock FontFamily="Cascadia Mono,Consolas" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Target.FullPath}" TextWrapping="Wrap" />
+      <TextBlock Margin="0,4,0,0" Text="{Binding OwnerAndGroupLabel}" />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="120,90,90,90" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
+      <TextBlock Grid.Column="1" HorizontalAlignment="Center" FontWeight="SemiBold" Text="Read" />
+      <TextBlock Grid.Column="2" HorizontalAlignment="Center" FontWeight="SemiBold" Text="Write" />
+      <TextBlock Grid.Column="3" HorizontalAlignment="Center" FontWeight="SemiBold" Text="Execute" />
+      <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="User" />
+      <CheckBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding UserRead}" />
+      <CheckBox Grid.Row="1" Grid.Column="2" HorizontalAlignment="Center" IsChecked="{Binding UserWrite}" />
+      <CheckBox Grid.Row="1" Grid.Column="3" HorizontalAlignment="Center" IsChecked="{Binding UserExecute}" />
+      <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Group" />
+      <CheckBox Grid.Row="2" Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding GroupRead}" />
+      <CheckBox Grid.Row="2" Grid.Column="2" HorizontalAlignment="Center" IsChecked="{Binding GroupWrite}" />
+      <CheckBox Grid.Row="2" Grid.Column="3" HorizontalAlignment="Center" IsChecked="{Binding GroupExecute}" />
+      <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="Other" />
+      <CheckBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding OtherRead}" />
+      <CheckBox Grid.Row="3" Grid.Column="2" HorizontalAlignment="Center" IsChecked="{Binding OtherWrite}" />
+      <CheckBox Grid.Row="3" Grid.Column="3" HorizontalAlignment="Center" IsChecked="{Binding OtherExecute}" />
+    </Grid>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="18">
+      <CheckBox Content="setuid" IsChecked="{Binding SetUserId}" />
+      <CheckBox Content="setgid" IsChecked="{Binding SetGroupId}" />
+      <CheckBox Content="sticky" IsChecked="{Binding Sticky}" />
+    </StackPanel>
+
+    <Grid Grid.Row="3" ColumnDefinitions="Auto,110,*" RowDefinitions="Auto,Auto" ColumnSpacing="10">
+      <TextBlock VerticalAlignment="Center" Text="Directory / item mode" />
+      <TextBox Grid.Column="1" FontFamily="Cascadia Mono,Consolas" MaxLength="4" Text="{Binding OctalText}" />
+      <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="#D43B3B" Text="{Binding ValidationMessage}" TextWrapping="Wrap" />
+      <TextBlock Grid.Row="1" Margin="0,8,0,0" VerticalAlignment="Center" IsVisible="{Binding Recursive}" Text="File mode" />
+      <TextBox Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" IsVisible="{Binding Recursive}" FontFamily="Cascadia Mono,Consolas" MaxLength="4" Text="{Binding FileOctalText}" />
+      <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,8,0,0" IsVisible="{Binding Recursive}" VerticalAlignment="Center" Foreground="#D43B3B" Text="{Binding FileValidationMessage}" TextWrapping="Wrap" />
+    </Grid>
+
+    <StackPanel Grid.Row="4">
+      <CheckBox Content="Apply recursively" IsEnabled="{Binding Target.IsDirectory}" IsChecked="{Binding Recursive}" />
+      <TextBlock Margin="24,4,0,0" IsVisible="{Binding Recursive}" Foreground="{DynamicResource Brush.Text.Secondary}" Text="Directories use the grid mode. Files use the separate file mode so execute bits are not added accidentally." TextWrapping="Wrap" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="5" Spacing="6">
+      <TextBlock Text="{Binding ResultMessage}" TextWrapping="Wrap" />
+      <ItemsControl ItemsSource="{Binding Failures}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="viewModels:SftpPermissionFailure">
+            <TextBlock Foreground="#D43B3B" Text="{Binding DisplayMessage}" TextWrapping="Wrap" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+
+    <StackPanel Grid.Row="6" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+      <Button Content="Close" IsDefault="True" Click="Close_OnClick" />
+      <Button Content="Apply" IsEnabled="{Binding CanApply}" Click="Apply_OnClick" />
+    </StackPanel>
+  </Grid>
+</Window>

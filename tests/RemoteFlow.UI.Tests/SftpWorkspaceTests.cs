@@ -262,6 +262,130 @@ public sealed class SftpWorkspaceTests
         Assert.False(fixture.ViewModel.IsMutating);
     }
 
+    [Fact]
+    public void PermissionGridAndOctalStayInSyncIncludingSpecialBitsAndRejectInvalidInput()
+    {
+        var sftp = new FakeSftpService();
+        var target = FileInfoFor("/mode.txt", (UnixFileMode)Convert.ToInt32("0755", 8));
+        var editor = new SftpPermissionsEditorViewModel(
+            target,
+            false,
+            sftp,
+            new RecordingConfirmation(true),
+            _ => Task.CompletedTask)
+        {
+            OctalText = "7754",
+        };
+        Assert.True(editor.SetUserId);
+        Assert.True(editor.SetGroupId);
+        Assert.True(editor.Sticky);
+        Assert.True(editor.UserExecute);
+        Assert.True(editor.GroupExecute);
+        Assert.False(editor.OtherWrite);
+        Assert.False(editor.OtherExecute);
+
+        editor.OtherWrite = true;
+        Assert.Equal("7756", editor.OctalText);
+        var gridBeforeInvalid = (editor.UserRead, editor.GroupExecute, editor.OtherWrite, editor.Sticky);
+        editor.OctalText = "89-no";
+        Assert.NotNull(editor.ValidationMessage);
+        Assert.Equal(gridBeforeInvalid, (editor.UserRead, editor.GroupExecute, editor.OtherWrite, editor.Sticky));
+        Assert.False(editor.CanApply);
+    }
+
+    [Fact]
+    public async Task RecursivePermissionsUseDistinctDirectoryAndFileModesAndContinueAfterFailures()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var inner = new FakeSftpService();
+        _ = await inner.CreateDirectoryAsync("/home/test/tree", token);
+        _ = await inner.CreateDirectoryAsync("/home/test/tree/nested", token);
+        await SeedFileAsync(inner, "/home/test/tree/root.txt", [1], token);
+        await SeedFileAsync(inner, "/home/test/tree/nested/blocked.txt", [2], token);
+        var recording = new RecordingSftpService(inner)
+        {
+            PermissionFailurePath = "/home/test/tree/nested/blocked.txt",
+        };
+        var target = (await inner.StatAsync("/home/test/tree", token)).Value!;
+        var refreshes = 0;
+        var editor = new SftpPermissionsEditorViewModel(
+            target,
+            false,
+            recording,
+            new RecordingConfirmation(true),
+            _ =>
+            {
+                refreshes++;
+                return Task.CompletedTask;
+            })
+        {
+            Recursive = true,
+            OctalText = "0750",
+            FileOctalText = "0640",
+        };
+
+        var applied = await editor.ApplyAsync(token);
+
+        Assert.False(applied);
+        Assert.Equal(4, recording.PermissionCalls);
+        Assert.Equal((UnixFileMode)Convert.ToInt32("0750", 8), recording.PermissionModes["/home/test/tree"]);
+        Assert.Equal((UnixFileMode)Convert.ToInt32("0750", 8), recording.PermissionModes["/home/test/tree/nested"]);
+        Assert.Equal((UnixFileMode)Convert.ToInt32("0640", 8), recording.PermissionModes["/home/test/tree/root.txt"]);
+        Assert.Equal("/home/test/tree", recording.PermissionAttempts[^1]);
+        var failure = Assert.Single(editor.Failures);
+        Assert.Equal("/home/test/tree/nested/blocked.txt", failure.Path);
+        Assert.Contains("Applied 3 of 4", editor.ResultMessage, StringComparison.Ordinal);
+        Assert.Equal(1, refreshes);
+    }
+
+    [Fact]
+    public async Task CurrentDirectoryModeZeroWarnsBeforeSendingChmod()
+    {
+        var inner = new FakeSftpService();
+        var recording = new RecordingSftpService(inner);
+        var confirmation = new RecordingConfirmation(false);
+        var editor = new SftpPermissionsEditorViewModel(
+            FileInfoFor("/home/test", (UnixFileMode)Convert.ToInt32("0755", 8), isDirectory: true),
+            true,
+            recording,
+            confirmation,
+            _ => Task.CompletedTask)
+        {
+            OctalText = "0000",
+        };
+
+        var applied = await editor.ApplyAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(applied);
+        Assert.Equal(0, recording.PermissionCalls);
+        Assert.Contains("lock this workspace out", confirmation.Messages.Single(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("self-lockout", editor.ResultMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task UnsupportedChmodIsClearAndUnchangedModeRoundTrips()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var inner = new FakeSftpService();
+        await SeedFileAsync(inner, "/home/test/file.txt", [1], token);
+        var target = (await inner.StatAsync("/home/test/file.txt", token)).Value!;
+        var unsupported = new RecordingSftpService(inner)
+        {
+            PermissionFailurePath = target.FullPath,
+            PermissionFailureError = SftpError.NotSupported,
+        };
+        var unsupportedEditor = new SftpPermissionsEditorViewModel(
+            target, false, unsupported, new RecordingConfirmation(true), _ => Task.CompletedTask);
+
+        Assert.False(await unsupportedEditor.ApplyAsync(token));
+        Assert.Contains("does not support chmod", unsupportedEditor.ResultMessage, StringComparison.OrdinalIgnoreCase);
+
+        var roundTrip = new SftpPermissionsEditorViewModel(
+            target, false, inner, new RecordingConfirmation(true), _ => Task.CompletedTask);
+        Assert.True(await roundTrip.ApplyAsync(token));
+        Assert.Equal(target.Mode, (await inner.StatAsync(target.FullPath, token)).Value!.Mode);
+    }
+
     [AvaloniaFact]
     public void ViewUsesVirtualizingStackPanel()
     {
@@ -296,6 +420,21 @@ public sealed class SftpWorkspaceTests
         Assert.True(opened.IsSuccess);
         await using var stream = opened.Value;
         await stream.WriteAsync(contents, cancellationToken);
+    }
+
+    private static RemoteFileInfo FileInfoFor(string path, UnixFileMode mode, bool isDirectory = false)
+    {
+        return new RemoteFileInfo(
+            SftpPath.GetName(path),
+            path,
+            0,
+            DateTimeOffset.UnixEpoch,
+            mode,
+            "1000",
+            "1000",
+            isDirectory,
+            false,
+            null);
     }
 
     private static string CreateTempDirectory()
@@ -390,6 +529,16 @@ public sealed class SftpWorkspaceTests
 
         public bool BlockDeletes { get; init; }
 
+        public string? PermissionFailurePath { get; init; }
+
+        public SftpError PermissionFailureError { get; init; } = SftpError.PermissionDenied;
+
+        public int PermissionCalls { get; private set; }
+
+        public Dictionary<string, UnixFileMode> PermissionModes { get; } = new(StringComparer.Ordinal);
+
+        public List<string> PermissionAttempts { get; } = [];
+
         public TaskCompletionSource DeleteStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -446,6 +595,18 @@ public sealed class SftpWorkspaceTests
             UnixFileMode mode,
             CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            PermissionCalls++;
+            PermissionAttempts.Add(path);
+            if (string.Equals(path, PermissionFailurePath, StringComparison.Ordinal))
+            {
+                return Task.FromResult(SftpResult.Fail(
+                    PermissionFailureError,
+                    PermissionFailureError == SftpError.NotSupported
+                        ? "chmod is not supported by this server."
+                        : "Permission denied by the test server."));
+            }
+            PermissionModes[path] = mode;
             return inner.SetPermissionsAsync(path, mode, cancellationToken);
         }
 

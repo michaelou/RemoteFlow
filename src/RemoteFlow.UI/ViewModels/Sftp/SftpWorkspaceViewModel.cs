@@ -645,6 +645,36 @@ public sealed partial class SftpWorkspaceViewModel(
             item.File.SymlinkTarget);
     }
 
+    public async Task<SftpPermissionsEditorViewModel?> CreatePermissionsEditorAsync(
+        SftpItemViewModel? item,
+        CancellationToken cancellationToken = default)
+    {
+        if (_session is null)
+        {
+            return null;
+        }
+        var target = item?.File;
+        var isCurrentDirectory = item is null;
+        if (target is null)
+        {
+            var stat = await _session.Sftp.StatAsync(CurrentPath, cancellationToken).ConfigureAwait(true);
+            if (stat.IsFailure || stat.Value is null)
+            {
+                ErrorMessage = stat.IsFailure
+                    ? stat.Failure.Message
+                    : "The current directory metadata is unavailable.";
+                return null;
+            }
+            target = stat.Value;
+        }
+        return new SftpPermissionsEditorViewModel(
+            target,
+            isCurrentDirectory,
+            _session.Sftp,
+            confirmation,
+            token => NavigateCoreAsync(CurrentPath, addHistory: false, token));
+    }
+
     public async Task CopyPathAsync(SftpItemViewModel item, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(item);
