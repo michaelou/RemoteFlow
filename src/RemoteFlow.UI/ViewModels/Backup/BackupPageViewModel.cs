@@ -6,9 +6,75 @@ using RemoteFlow.UI.Services;
 
 namespace RemoteFlow.UI.ViewModels.Backup;
 
-public sealed class BackupPageViewModel(BackupExportViewModel export) : PageViewModel("Backup")
+public sealed class BackupPageViewModel(
+    BackupExportViewModel export,
+    BackupImportPreviewViewModel import) : PageViewModel("Backup")
 {
     public BackupExportViewModel Export { get; } = export ?? throw new ArgumentNullException(nameof(export));
+
+    public BackupImportPreviewViewModel Import { get; } = import ?? throw new ArgumentNullException(nameof(import));
+}
+
+public sealed partial class BackupImportPreviewViewModel(
+    IBackupService backupService,
+    IFilePickerService filePicker,
+    IErrorDialogService errorDialog) : ObservableObject
+{
+    private readonly IBackupService _backupService = backupService ?? throw new ArgumentNullException(nameof(backupService));
+    private readonly IFilePickerService _filePicker = filePicker ?? throw new ArgumentNullException(nameof(filePicker));
+    private readonly IErrorDialogService _errorDialog = errorDialog ?? throw new ArgumentNullException(nameof(errorDialog));
+
+    [ObservableProperty]
+    public partial string SelectedPath { get; private set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string CountsSummary { get; private set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string CredentialSummary { get; private set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string MergeDescription { get; private set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ReplaceDescription { get; private set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial IReadOnlyList<string> ConflictDescriptions { get; private set; } = [];
+
+    [RelayCommand]
+    private async Task InspectAsync()
+    {
+        var paths = await _filePicker.PickUploadPathsAsync().ConfigureAwait(true);
+        var path = paths.Count == 0 ? null : paths[0];
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var inspection = await _backupService.InspectAsync(path).ConfigureAwait(true);
+            SelectedPath = path;
+            CountsSummary = FormatCounts(inspection.Counts);
+            CredentialSummary = inspection.ContainsCredentials
+                ? "This archive contains encrypted credentials; a passphrase will be required when applying it."
+                : "This archive does not contain credential secrets.";
+            MergeDescription = inspection.MergePreview.Description;
+            ReplaceDescription = inspection.ReplacePreview.Description;
+            ConflictDescriptions = [.. inspection.Conflicts.Select(conflict => conflict.Description)];
+        }
+        catch (BackupArchiveException exception)
+        {
+            await _errorDialog.ShowAsync("Backup inspection failed", exception.Message).ConfigureAwait(true);
+        }
+    }
+
+    private static string FormatCounts(BackupEntityCounts counts)
+    {
+        return $"{counts.Connections} connections, {counts.Folders} folders, {counts.Tags} tags, " +
+            $"{counts.Settings} settings, and {counts.HostKeys} host keys";
+    }
 }
 
 public sealed partial class BackupExportViewModel(

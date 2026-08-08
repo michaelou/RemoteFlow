@@ -1,0 +1,39 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Backup.ImportPreview"
+    x:DataType="viewModels:BackupImportPreviewViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Backup">
+  <ScrollViewer>
+    <StackPanel Margin="28" MaxWidth="760" HorizontalAlignment="Left" Spacing="16">
+      <TextBlock FontSize="28" FontWeight="SemiBold" Text="Inspect backup" />
+      <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Inspection is read-only. Nothing is imported until you review and apply a strategy." TextWrapping="Wrap" />
+      <Button HorizontalAlignment="Left" Content="Choose archive" Command="{Binding InspectCommand}" />
+      <TextBlock FontWeight="SemiBold" Text="{Binding SelectedPath}" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding CountsSummary}" />
+      <TextBlock Text="{Binding CredentialSummary}" TextWrapping="Wrap" />
+
+      <Border Padding="14" Background="{DynamicResource Brush.Surface.1}" CornerRadius="6">
+        <StackPanel Spacing="6">
+          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Merge" />
+          <TextBlock Text="{Binding MergeDescription}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+      <Border Padding="14" Background="#332F1B1B" BorderBrush="#B84A4A" BorderThickness="1" CornerRadius="6">
+        <StackPanel Spacing="6">
+          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Replace (destructive)" />
+          <TextBlock Text="{Binding ReplaceDescription}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <TextBlock FontSize="18" FontWeight="SemiBold" Text="Detected conflicts" />
+      <ItemsControl ItemsSource="{Binding ConflictDescriptions}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Margin="0,0,0,6" Text="{Binding}" TextWrapping="Wrap" />
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

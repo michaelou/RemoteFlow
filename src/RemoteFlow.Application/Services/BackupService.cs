@@ -1,5 +1,6 @@
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Backup;
+using RemoteFlow.Domain.Enums;
 
 namespace RemoteFlow.Application.Services;
 
@@ -13,6 +14,53 @@ public sealed class BackupService(
     private readonly IClock _clock = clock ?? throw new ArgumentNullException(nameof(clock));
 
     public bool CanExportCredentials => false;
+
+    public async Task<BackupInspection> InspectAsync(
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Compatibility and archive integrity are deliberately checked before the local data source is read.
+        // No writer or unit of work is reachable from this service, so inspection cannot mutate persistence.
+        var archive = await _serializer.ReadAsync(path, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        var local = await _dataSource.CaptureAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var conflicts = FindConflicts(archive, local);
+        var mergeAdds = new BackupEntityCounts(
+            archive.Connections.Count - CountConflicts(conflicts, BackupConflictKind.ConnectionIdentity),
+            archive.Folders.Count - CountConflicts(conflicts, BackupConflictKind.FolderPath),
+            archive.Tags.Count - CountConflicts(conflicts, BackupConflictKind.TagName),
+            archive.ConnectionTags.Count,
+            archive.Settings.Count,
+            archive.HostKeys.Count);
+        var localCounts = new BackupEntityCounts(
+            local.Connections.Count,
+            local.Folders.Count,
+            local.Tags.Count,
+            local.ConnectionTags.Count,
+            local.Settings.Count,
+            local.HostKeys.Count);
+        var none = new BackupEntityCounts(0, 0, 0, 0, 0, 0);
+        return new BackupInspection(
+            archive.Manifest.FormatVersion,
+            archive.ActualCounts,
+            archive.EncryptedCredentials is not null,
+            conflicts,
+            new BackupApplyPreview(
+                MergeStrategy.Merge,
+                mergeAdds,
+                conflicts.Count,
+                none,
+                $"Merge adds non-conflicting records and resolves {conflicts.Count} detected conflicts without deleting unrelated local data."),
+            new BackupApplyPreview(
+                MergeStrategy.Replace,
+                archive.ActualCounts,
+                0,
+                localCounts,
+                "Replace removes all current backup-managed data, then loads the archive. Typed confirmation is required."));
+    }
 
     public async Task<BackupExportResult> ExportAsync(
         BackupExportRequest request,
@@ -182,5 +230,68 @@ public sealed class BackupService(
         {
             throw new ArgumentOutOfRangeException(nameof(scope), "The backup scope is invalid.");
         }
+    }
+
+    private static List<BackupConflict> FindConflicts(BackupArchive archive, BackupDataSnapshot local)
+    {
+        var conflicts = new List<BackupConflict>();
+        foreach (var imported in archive.Folders)
+        {
+            var existing = local.Folders.FirstOrDefault(folder =>
+                folder.Id == imported.Id || string.Equals(folder.Path, imported.Path, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null && existing != imported)
+            {
+                conflicts.Add(new BackupConflict(
+                    BackupConflictKind.FolderPath,
+                    $"Folder '{imported.Path}' conflicts with the existing folder at that path.",
+                    imported.Id,
+                    existing.Id));
+            }
+        }
+
+        foreach (var imported in archive.Tags)
+        {
+            var existing = local.Tags.FirstOrDefault(tag =>
+                tag.Id == imported.Id || string.Equals(tag.Name, imported.Name, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null && existing != imported)
+            {
+                conflicts.Add(new BackupConflict(
+                    BackupConflictKind.TagName,
+                    $"Tag '{imported.Name}' conflicts with the existing tag of the same name.",
+                    imported.Id,
+                    existing.Id));
+            }
+        }
+
+        foreach (var imported in archive.Connections)
+        {
+            var existing = local.Connections.FirstOrDefault(connection =>
+                connection.Id == imported.Id || HasSameConnectionIdentity(connection, imported));
+            if (existing is not null && existing != imported)
+            {
+                var username = string.IsNullOrWhiteSpace(imported.Username) ? string.Empty : $"{imported.Username}@";
+                conflicts.Add(new BackupConflict(
+                    BackupConflictKind.ConnectionIdentity,
+                    $"Connection '{imported.Name}' ({username}{imported.Host}:{imported.Port}, {imported.Protocol}) " +
+                    $"conflicts with existing connection '{existing.Name}'.",
+                    imported.Id,
+                    existing.Id));
+            }
+        }
+
+        return conflicts;
+    }
+
+    private static bool HasSameConnectionIdentity(BackupConnection left, BackupConnection right)
+    {
+        return left.Protocol == right.Protocol &&
+            left.Port == right.Port &&
+            string.Equals(left.Host, right.Host, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(left.Username, right.Username, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int CountConflicts(IEnumerable<BackupConflict> conflicts, BackupConflictKind kind)
+    {
+        return conflicts.Count(conflict => conflict.Kind == kind);
     }
 }

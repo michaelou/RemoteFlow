@@ -1,3 +1,5 @@
+using RemoteFlow.Domain.Enums;
+
 namespace RemoteFlow.Application.Abstractions.Backup;
 
 public enum BackupExportScopeKind
@@ -71,4 +73,34 @@ public interface IBackupService
         BackupExportRequest request,
         IProgress<BackupProgress>? progress = null,
         CancellationToken cancellationToken = default);
+
+    Task<BackupInspection> InspectAsync(string path, CancellationToken cancellationToken = default);
 }
+
+public enum BackupConflictKind
+{
+    FolderPath = 1,
+    TagName = 2,
+    ConnectionIdentity = 3,
+}
+
+public sealed record BackupConflict(
+    BackupConflictKind Kind,
+    string Description,
+    Guid ImportedId,
+    Guid LocalId);
+
+public sealed record BackupApplyPreview(
+    MergeStrategy Strategy,
+    BackupEntityCounts Adds,
+    int Replaces,
+    BackupEntityCounts Removes,
+    string Description);
+
+public sealed record BackupInspection(
+    int FormatVersion,
+    BackupEntityCounts Counts,
+    bool ContainsCredentials,
+    IReadOnlyList<BackupConflict> Conflicts,
+    BackupApplyPreview MergePreview,
+    BackupApplyPreview ReplacePreview);

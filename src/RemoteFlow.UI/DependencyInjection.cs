@@ -26,6 +26,7 @@ public static class DependencyInjection
 
         services.TryAddSingleton<ConnectionsPageViewModel>();
         services.TryAddSingleton<BackupExportViewModel>();
+        services.TryAddSingleton<BackupImportPreviewViewModel>();
         services.TryAddSingleton<BackupPageViewModel>();
         services.TryAddSingleton<ConnectionEditorViewModelFactory>();
         services.TryAddSingleton<CommandPaletteViewModel>();

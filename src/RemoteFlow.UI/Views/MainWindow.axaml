@@ -29,7 +29,14 @@
       <connectionViews:ConnectionsView />
     </DataTemplate>
     <DataTemplate DataType="{x:Type backupViewModels:BackupPageViewModel}" x:DataType="backupViewModels:BackupPageViewModel">
-      <backupViews:ExportView DataContext="{Binding Export}" />
+      <TabControl>
+        <TabItem Header="Export">
+          <backupViews:ExportView DataContext="{Binding Export}" />
+        </TabItem>
+        <TabItem Header="Import">
+          <backupViews:ImportPreview DataContext="{Binding Import}" />
+        </TabItem>
+      </TabControl>
     </DataTemplate>
     <DataTemplate DataType="{x:Type terminalViewModels:TerminalsPageViewModel}" x:DataType="terminalViewModels:TerminalsPageViewModel">
       <terminalViews:TerminalWorkspace />
