@@ -317,6 +317,59 @@ public sealed class SftpServiceTests(SshServerFixture fixture)
         }
     }
 
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task RemoteEditSaveReplacesTheExistingFileTheServerRefusesToClobber()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var connection = await ConnectAsync(token);
+        await using var sftp = connection.OpenSftp();
+        var directory = $"/tmp/remoteflow-edit-{Guid.NewGuid():N}";
+        var remotePath = SftpPath.Combine(directory, "deploy.sh");
+        var localRoot = CreateTempDirectory();
+        Assert.True((await sftp.CreateDirectoryAsync(directory, token)).IsSuccess);
+        try
+        {
+            await WriteRemoteAsync(sftp, remotePath, "original", token);
+            var executable = (UnixFileMode)Convert.ToInt32("0755", 8);
+            Assert.True((await sftp.SetPermissionsAsync(remotePath, executable, token)).IsSuccess);
+
+            // The defect this covers: OpenSSH implements SSH_FXP_RENAME with link()+unlink(), so
+            // publishing an upload by renaming it onto a name that already exists is refused.
+            var candidate = SftpPath.Combine(directory, "candidate.part");
+            await WriteRemoteAsync(sftp, candidate, "replacement", token);
+            Assert.True((await sftp.RenameAsync(candidate, remotePath, token)).IsFailure);
+            Assert.True((await sftp.DeleteAsync(candidate, recursive: false, token)).IsSuccess);
+
+            var monitor = new ManualEditMonitor();
+            await using var edits = new RemoteEditService(
+                sftp,
+                new NoOpEditorLauncher(),
+                monitor,
+                new AllowCloseGuard(),
+                localRoot,
+                Guid.NewGuid());
+            var uploads = new List<RemoteEditUploadResult>();
+            edits.UploadCompleted += (_, result) => uploads.Add(result);
+            var edit = await edits.OpenAsync(remotePath, token);
+            await File.WriteAllTextAsync(edit.LocalPath, "edited on the desktop", token);
+
+            Assert.True(await monitor.TriggerAsync(token));
+
+            Assert.Equal("edited on the desktop", await ReadRemoteAsync(sftp, remotePath, token));
+            Assert.Equal(executable, (await sftp.StatAsync(remotePath, token)).Value!.Mode);
+            Assert.False(edit.IsDirty);
+            Assert.True(Assert.Single(uploads).Succeeded);
+            var remaining = await sftp.ListAsync(directory, token);
+            Assert.Equal("deploy.sh", Assert.Single(remaining.Value).Name);
+        }
+        finally
+        {
+            _ = await sftp.DeleteAsync(directory, recursive: true, CancellationToken.None);
+            Directory.Delete(localRoot, recursive: true);
+        }
+    }
+
     private async Task<ISshConnection> ConnectAsync(CancellationToken cancellationToken)
     {
         var verifier = new HostKeyVerifier(

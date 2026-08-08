@@ -93,6 +93,8 @@ public sealed class RemoteEditService : IRemoteEditService
 
     public event EventHandler? ActiveEditsChanged;
 
+    public event EventHandler<RemoteEditUploadResult>? UploadCompleted;
+
     public IReadOnlyList<RemoteEditHandle> ActiveEdits
     {
         get
@@ -285,6 +287,42 @@ public sealed class RemoteEditService : IRemoteEditService
         WatchedFileChange change,
         CancellationToken cancellationToken)
     {
+        try
+        {
+            var (published, message) = await PublishChangedFileAsync(edit, change, cancellationToken)
+                .ConfigureAwait(false);
+            if (published is not null)
+            {
+                UploadCompleted?.Invoke(this, new RemoteEditUploadResult(
+                    edit.RemotePath,
+                    edit.LocalPath,
+                    published.Value,
+                    message));
+            }
+            return published != false;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // A save that cannot reach the server must say so. Letting this escape would leave the
+            // watcher to swallow it and the edit silently unsaved until the user closed it.
+            UploadCompleted?.Invoke(this, new RemoteEditUploadResult(
+                edit.RemotePath,
+                edit.LocalPath,
+                Succeeded: false,
+                exception.Message));
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Returns whether the change was published (<c>null</c> when the conflict resolution meant there
+    /// was nothing to publish) together with the failure reason when it was not.
+    /// </summary>
+    private async Task<(bool? Published, string? Message)> PublishChangedFileAsync(
+        RemoteEditHandle edit,
+        WatchedFileChange change,
+        CancellationToken cancellationToken)
+    {
         edit.IsDirty = true;
         await edit.UploadGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -310,16 +348,16 @@ public sealed class RemoteEditService : IRemoteEditService
                     case RemoteEditConflictResolution.DiscardLocal:
                         if (!current.Exists)
                         {
-                            return true;
+                            return (null, null);
                         }
                         await DownloadAsync(edit.RemotePath, edit.LocalPath, cancellationToken).ConfigureAwait(false);
                         edit.LocalSnapshot = await CaptureLocalSnapshotAsync(edit.LocalPath, cancellationToken)
                             .ConfigureAwait(false);
                         edit.RemoteSnapshot = current;
                         edit.IsDirty = false;
-                        return true;
+                        return (null, null);
                     case RemoteEditConflictResolution.Cancel:
-                        return true;
+                        return (null, null);
                     case RemoteEditConflictResolution.OverwriteRemote:
                         break;
                     default:
@@ -328,9 +366,9 @@ public sealed class RemoteEditService : IRemoteEditService
             }
 
             var uploaded = await UploadAsync(edit.LocalPath, edit.RemotePath, cancellationToken).ConfigureAwait(false);
-            if (!uploaded)
+            if (uploaded.IsFailure)
             {
-                return false;
+                return (false, uploaded.Failure.Message);
             }
             edit.LocalSnapshot = new LocalSnapshot(change.Size, change.MTimeUtc, change.Sha256);
             edit.RemoteSnapshot = await CaptureRemoteSnapshotAsync(
@@ -338,7 +376,7 @@ public sealed class RemoteEditService : IRemoteEditService
                 change.Size <= HashLimitBytes,
                 cancellationToken).ConfigureAwait(false);
             edit.IsDirty = false;
-            return true;
+            return (true, null);
         }
         finally
         {
@@ -444,13 +482,13 @@ public sealed class RemoteEditService : IRemoteEditService
         }
     }
 
-    private async Task<bool> UploadAsync(string localPath, string remotePath, CancellationToken cancellationToken)
+    private async Task<SftpResult> UploadAsync(string localPath, string remotePath, CancellationToken cancellationToken)
     {
         var temporary = remotePath + $".remoteflow-{Guid.NewGuid():N}.part";
         var opened = await _sftp.OpenWriteAsync(temporary, cancellationToken).ConfigureAwait(false);
         if (opened.IsFailure)
         {
-            return false;
+            return SftpResult.Fail(opened.Failure.Error, opened.Failure.Message);
         }
         try
         {
@@ -466,8 +504,8 @@ public sealed class RemoteEditService : IRemoteEditService
                 await source.CopyToAsync(opened.Value, cancellationToken).ConfigureAwait(false);
                 await opened.Value.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
-            var renamed = await _sftp.RenameAsync(temporary, remotePath, cancellationToken).ConfigureAwait(false);
-            return renamed.IsSuccess;
+            return await SftpPublisher.PublishAsync(_sftp, temporary, remotePath, cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {

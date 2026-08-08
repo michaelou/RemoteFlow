@@ -465,10 +465,34 @@ public sealed class SftpWorkspaceTests
         Assert.NotNull(view);
     }
 
+    [Fact]
+    public async Task RemoteEditSaveOutcomesReachTheStatusBar()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var edits = new StubRemoteEditFactory();
+        var fixture = CreateFixture(remoteEdits: edits);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var service = Assert.IsType<StubRemoteEditService>(edits.Service);
+
+        service.RaiseUpload(new RemoteEditUploadResult(
+            "/home/test/app.conf",
+            "/cache/app.conf",
+            Succeeded: false,
+            "Permission was denied by the remote server."));
+
+        Assert.Contains("app.conf", fixture.ViewModel.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("Permission was denied", fixture.ViewModel.ErrorMessage, StringComparison.Ordinal);
+
+        service.RaiseUpload(new RemoteEditUploadResult("/home/test/app.conf", "/cache/app.conf", Succeeded: true));
+
+        Assert.Contains("Saved 'app.conf'", fixture.ViewModel.FeedbackMessage, StringComparison.Ordinal);
+    }
+
     private static Fixture CreateFixture(
         ISftpService? service = null,
         bool confirmationResult = true,
-        TransfersPageViewModel? transferManager = null)
+        TransfersPageViewModel? transferManager = null,
+        IRemoteEditServiceFactory? remoteEdits = null)
     {
         var connection = Connection.Create(SystemGuidProvider.Instance, "Files", "example.test").Value;
         var ssh = new FakeSshConnection();
@@ -485,7 +509,7 @@ public sealed class SftpWorkspaceTests
                 new StubFilePicker(),
                 confirmation,
                 clipboard,
-                null,
+                remoteEdits,
                 transferManager),
             confirmation,
             clipboard);
@@ -540,6 +564,40 @@ public sealed class SftpWorkspaceTests
             Assert.Equal(session.Definition.Id, connectionId);
             return Task.FromResult(session);
         }
+    }
+
+    private sealed class StubRemoteEditFactory : IRemoteEditServiceFactory
+    {
+        public IRemoteEditService? Service { get; private set; }
+
+        public IRemoteEditService Create(ISftpService sftp, Guid sessionId) => Service = new StubRemoteEditService();
+
+        public Task SweepStaleFilesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class StubRemoteEditService : IRemoteEditService
+    {
+        public event EventHandler? ActiveEditsChanged;
+
+        public event EventHandler<RemoteEditUploadResult>? UploadCompleted;
+
+        public IReadOnlyList<RemoteEditHandle> ActiveEdits => [];
+
+        public int ActiveCount => 0;
+
+        public void RaiseUpload(RemoteEditUploadResult result) => UploadCompleted?.Invoke(this, result);
+
+        public void RaiseActiveEditsChanged() => ActiveEditsChanged?.Invoke(this, EventArgs.Empty);
+
+        public Task<RemoteEditHandle> OpenAsync(string remotePath, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<bool> CloseAsync(RemoteEditHandle edit, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
+
+        public Task<bool> CloseAllAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class StubFilePicker : IFilePickerService

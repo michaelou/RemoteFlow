@@ -120,6 +120,9 @@ public sealed class TransferEngineTests
             var overwritten = await engineWithPrompt.UploadAsync(source, "/target.txt", cancellationToken: token);
 
             Assert.True(overwritten.IsSuccess);
+            await using var replacedStream = (await sftp.OpenReadAsync("/target.txt", token)).Value;
+            using var replacedReader = new StreamReader(replacedStream);
+            Assert.Equal("new", await replacedReader.ReadToEndAsync(token));
             var conflict = Assert.Single(resolver.Conflicts);
             Assert.Equal(TransferDirection.Upload, conflict.Direction);
             Assert.Equal("/target.txt", conflict.DestinationPath);

@@ -98,9 +98,21 @@ public sealed class RemoteEditHandle
     internal SemaphoreSlim UploadGate { get; } = new(1, 1);
 }
 
+public sealed record RemoteEditUploadResult(
+    string RemotePath,
+    string LocalPath,
+    bool Succeeded,
+    string? Message = null);
+
 public interface IRemoteEditService : IAsyncDisposable
 {
     event EventHandler? ActiveEditsChanged;
+
+    /// <summary>
+    /// Raised after a saved editing copy has been published to the server, or after publishing it failed.
+    /// Handlers run on the file-watcher's thread.
+    /// </summary>
+    event EventHandler<RemoteEditUploadResult>? UploadCompleted;
 
     IReadOnlyList<RemoteEditHandle> ActiveEdits { get; }
 

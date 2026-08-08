@@ -298,15 +298,33 @@ public sealed class FakeSftpService : ISftpService
         cancellationToken.ThrowIfCancellationRequested();
         var source = SftpPath.Normalize(sourcePath);
         var destination = SftpPath.Normalize(destinationPath);
+
+        // OpenSSH implements SSH_FXP_RENAME with link()+unlink() and refuses an existing destination.
+        // The fake matches that, otherwise it hides publish-over-existing-file bugs.
+        if (_files.ContainsKey(destination) || _directories.ContainsKey(destination))
+        {
+            return Task.FromResult(SftpResult.Fail(
+                SftpError.AlreadyExists,
+                "The scripted remote path already exists."));
+        }
+
         if (_files.TryRemove(source, out var contents))
         {
             _files[destination] = contents;
+            if (_modes.TryRemove(source, out var fileMode))
+            {
+                _modes[destination] = fileMode;
+            }
             return Task.FromResult(SftpResult.Success());
         }
 
         if (_directories.TryRemove(source, out _))
         {
             _directories[destination] = 0;
+            if (_modes.TryRemove(source, out var directoryMode))
+            {
+                _modes[destination] = directoryMode;
+            }
             return Task.FromResult(SftpResult.Success());
         }
 

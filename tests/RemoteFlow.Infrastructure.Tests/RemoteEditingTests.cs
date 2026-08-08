@@ -161,6 +161,101 @@ public sealed class RemoteEditingTests
     }
 
     [Fact]
+    public async Task SaveOverAnExistingFileKeepsItsPermissionsAndReportsTheUpload()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var sftp = new FakeSftpService();
+        await SeedAsync(sftp, "/home/test/deploy.sh", "original", token);
+        var executable = (UnixFileMode)Convert.ToInt32("0755", 8);
+        Assert.True((await sftp.SetPermissionsAsync("/home/test/deploy.sh", executable, token)).IsSuccess);
+        var root = CreateTempDirectory();
+        var monitor = new ManualMonitor();
+        var service = new RemoteEditService(
+            sftp,
+            new RecordingEditorLauncher(),
+            monitor,
+            new CloseGuard(true),
+            root,
+            Guid.NewGuid());
+        var uploads = new List<RemoteEditUploadResult>();
+        service.UploadCompleted += (_, result) => uploads.Add(result);
+        try
+        {
+            var edit = await service.OpenAsync("/home/test/deploy.sh", token);
+            await File.WriteAllTextAsync(edit.LocalPath, "changed", token);
+
+            Assert.True(await monitor.TriggerAsync(token));
+
+            var opened = await sftp.OpenReadAsync("/home/test/deploy.sh", token);
+            Assert.True(opened.IsSuccess);
+            using (var reader = new StreamReader(opened.Value))
+            {
+                Assert.Equal("changed", await reader.ReadToEndAsync(token));
+            }
+            var stat = await sftp.StatAsync("/home/test/deploy.sh", token);
+            Assert.Equal(executable, stat.Value!.Mode);
+            Assert.False(edit.IsDirty);
+            var upload = Assert.Single(uploads);
+            Assert.True(upload.Succeeded);
+            Assert.Equal("/home/test/deploy.sh", upload.RemotePath);
+
+            var listed = await sftp.ListAsync("/home/test", token);
+            Assert.Equal("deploy.sh", Assert.Single(listed.Value).Name);
+        }
+        finally
+        {
+            await service.DisposeAsync();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AFailedSaveIsReportedAndLeavesTheEditDirtyWithTheServerContentIntact()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var inner = new FakeSftpService();
+        await SeedAsync(inner, "/home/test/notes.txt", "original", token);
+        var sftp = new RefusingRenameSftpService(inner);
+        var root = CreateTempDirectory();
+        var monitor = new ManualMonitor();
+        var service = new RemoteEditService(
+            sftp,
+            new RecordingEditorLauncher(),
+            monitor,
+            new CloseGuard(true),
+            root,
+            Guid.NewGuid());
+        var uploads = new List<RemoteEditUploadResult>();
+        service.UploadCompleted += (_, result) => uploads.Add(result);
+        try
+        {
+            var edit = await service.OpenAsync("/home/test/notes.txt", token);
+            await File.WriteAllTextAsync(edit.LocalPath, "changed", token);
+
+            Assert.False(await monitor.TriggerAsync(token));
+
+            var upload = Assert.Single(uploads);
+            Assert.False(upload.Succeeded);
+            Assert.Contains("refused", upload.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.True(edit.IsDirty);
+            var opened = await inner.OpenReadAsync("/home/test/notes.txt", token);
+            using var reader = new StreamReader(opened.Value);
+            Assert.Equal("original", await reader.ReadToEndAsync(token));
+        }
+        finally
+        {
+            await service.DisposeAsync();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void ConflictComparisonDoesNotTrustSameSecondMtimeOrRequireHashForLargeFiles()
     {
         var sameSecond = new DateTimeOffset(2026, 8, 8, 12, 0, 0, TimeSpan.Zero);
@@ -311,6 +406,52 @@ public sealed class RemoteEditingTests
                 snapshot.MTimeUtc,
                 snapshot.Sha256), cancellationToken);
         }
+    }
+
+    /// <summary>A server that never allows a rename, so nothing can be published.</summary>
+    private sealed class RefusingRenameSftpService(ISftpService inner) : ISftpService
+    {
+        public Task<SftpResult> RenameAsync(
+            string sourcePath,
+            string destinationPath,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(SftpResult.Fail(SftpError.PermissionDenied, "The scripted server refused the rename."));
+
+        public Task<SftpResult<IReadOnlyList<RemoteFileInfo>>> ListAsync(
+            string path,
+            CancellationToken cancellationToken = default) => inner.ListAsync(path, cancellationToken);
+
+        public Task<SftpResult<RemoteFileInfo?>> StatAsync(
+            string path,
+            CancellationToken cancellationToken = default) => inner.StatAsync(path, cancellationToken);
+
+        public Task<SftpResult> CreateDirectoryAsync(
+            string path,
+            CancellationToken cancellationToken = default) => inner.CreateDirectoryAsync(path, cancellationToken);
+
+        public Task<SftpResult> DeleteAsync(
+            string path,
+            bool recursive,
+            CancellationToken cancellationToken = default) => inner.DeleteAsync(path, recursive, cancellationToken);
+
+        public Task<SftpResult> SetPermissionsAsync(
+            string path,
+            UnixFileMode mode,
+            CancellationToken cancellationToken = default) => inner.SetPermissionsAsync(path, mode, cancellationToken);
+
+        public Task<SftpResult<string>> GetRealPathAsync(
+            string path,
+            CancellationToken cancellationToken = default) => inner.GetRealPathAsync(path, cancellationToken);
+
+        public Task<SftpResult<Stream>> OpenReadAsync(
+            string path,
+            CancellationToken cancellationToken = default) => inner.OpenReadAsync(path, cancellationToken);
+
+        public Task<SftpResult<Stream>> OpenWriteAsync(
+            string path,
+            CancellationToken cancellationToken = default) => inner.OpenWriteAsync(path, cancellationToken);
+
+        public ValueTask DisposeAsync() => inner.DisposeAsync();
     }
 
     private sealed class RecordingEditorLauncher : IFileEditorLauncher

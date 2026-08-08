@@ -287,7 +287,7 @@ public sealed class TransferEngine : IDisposable
                         cancellationToken).ConfigureAwait(false);
                 }
 
-                var renamed = await _sftp.RenameAsync(temporaryPath, remotePath, cancellationToken)
+                var renamed = await SftpPublisher.PublishAsync(_sftp, temporaryPath, remotePath, cancellationToken)
                     .ConfigureAwait(false);
                 if (renamed.IsSuccess)
                 {

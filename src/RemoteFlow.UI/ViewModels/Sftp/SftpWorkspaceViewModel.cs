@@ -84,7 +84,8 @@ public sealed partial class SftpWorkspaceViewModel(
     IConfirmationDialogService confirmation,
     IClipboardService clipboard,
     IRemoteEditServiceFactory? remoteEditFactory = null,
-    TransfersPageViewModel? transferManager = null) : PageViewModel("SFTP"), IAsyncDisposable
+    TransfersPageViewModel? transferManager = null,
+    IUiDispatcher? dispatcher = null) : PageViewModel("SFTP"), IAsyncDisposable
 {
     private readonly List<string> _backHistory = [];
     private readonly List<string> _forwardHistory = [];
@@ -183,6 +184,7 @@ public sealed partial class SftpWorkspaceViewModel(
             if (_remoteEdits is { } activeRemoteEdits)
             {
                 activeRemoteEdits.ActiveEditsChanged += OnActiveEditsChanged;
+                activeRemoteEdits.UploadCompleted += OnRemoteEditUploadCompleted;
             }
             ConnectionTitle = next.Definition.Name;
             ShowHiddenFiles = next.Definition.Sftp.ShowHiddenFiles;
@@ -1005,6 +1007,7 @@ public sealed partial class SftpWorkspaceViewModel(
                 return false;
             }
             _remoteEdits.ActiveEditsChanged -= OnActiveEditsChanged;
+            _remoteEdits.UploadCompleted -= OnRemoteEditUploadCompleted;
             await _remoteEdits.DisposeAsync().ConfigureAwait(false);
             _remoteEdits = null;
         }
@@ -1023,9 +1026,39 @@ public sealed partial class SftpWorkspaceViewModel(
 
     private void OnActiveEditsChanged(object? sender, EventArgs args)
     {
-        OnPropertyChanged(nameof(ActiveRemoteEditCount));
-        OnPropertyChanged(nameof(HasActiveRemoteEdits));
-        OnPropertyChanged(nameof(RemoteEditIndicator));
+        OnUiThread(() =>
+        {
+            OnPropertyChanged(nameof(ActiveRemoteEditCount));
+            OnPropertyChanged(nameof(HasActiveRemoteEdits));
+            OnPropertyChanged(nameof(RemoteEditIndicator));
+        });
+    }
+
+    private void OnRemoteEditUploadCompleted(object? sender, RemoteEditUploadResult result)
+    {
+        var name = SftpPath.GetName(result.RemotePath);
+        OnUiThread(() =>
+        {
+            if (result.Succeeded)
+            {
+                FeedbackMessage = $"Saved '{name}' to {result.RemotePath}.";
+            }
+            else
+            {
+                ErrorMessage = $"'{name}' could not be saved to {result.RemotePath}: {result.Message}";
+            }
+        });
+    }
+
+    private void OnUiThread(Action action)
+    {
+        // Watcher callbacks arrive on a background thread; bound state has to change on the UI thread.
+        if (dispatcher is null)
+        {
+            action();
+            return;
+        }
+        _ = dispatcher.InvokeAsync(action).AsTask();
     }
 
     private async Task<bool> BuildDeletePlanAsync(
