@@ -163,7 +163,7 @@
       <Button
           HorizontalAlignment="Left"
           Command="{Binding SelectedSession.RetryCommand}"
-          Content="Retry"
+          Content="{Binding SelectedSession.RecoveryActionLabel}"
           IsVisible="{Binding SelectedSession.IsEnded}" />
     </StackPanel>
   </Grid>

@@ -144,6 +144,8 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     public bool IsEnded => !IsLive;
 
+    public string RecoveryActionLabel => State == SessionState.Disconnected ? "Reconnect" : "Retry";
+
     public bool ApplicationCursorKeys { get; set; }
 
     [ObservableProperty]
@@ -544,6 +546,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     {
         OnPropertyChanged(nameof(IsLive));
         OnPropertyChanged(nameof(IsEnded));
+        OnPropertyChanged(nameof(RecoveryActionLabel));
         RetryCommand.NotifyCanExecuteChanged();
     }
 

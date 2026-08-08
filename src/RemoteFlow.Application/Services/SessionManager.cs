@@ -15,11 +15,14 @@ public sealed class SessionManager(
     ISshTransport transport,
     IRecentConnectionStore recent,
     IClock clock,
-    IGuidProvider guidProvider) : ISessionManager
+    IGuidProvider guidProvider,
+    INetworkChangeMonitor? networkChangeMonitor = null) : ISessionManager
 {
     private static readonly TimeSpan _defaultOperationTimeout = TimeSpan.FromSeconds(30);
     private readonly ConcurrentDictionary<Guid, SessionResources> _sessions = [];
+    private readonly INetworkChangeMonitor? _networkChangeMonitor = networkChangeMonitor;
     private int _shutdown;
+    private int _networkMonitorSubscribed;
 
     public event EventHandler<ManagedSshSession>? SessionAdded;
     public event EventHandler<ManagedSshSession>? SessionRemoved;
@@ -33,6 +36,7 @@ public sealed class SessionManager(
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _shutdown) != 0, this);
+        EnsureNetworkMonitorSubscribed();
         var connection = await connections.GetByIdAsync(connectionId, cancellationToken).ConfigureAwait(false)
             ?? throw new KeyNotFoundException($"Connection '{connectionId}' was not found.");
         if (connection.Protocol is not ProtocolType.Ssh and not ProtocolType.Sftp)
@@ -142,6 +146,10 @@ public sealed class SessionManager(
     public async ValueTask DisposeAsync()
     {
         await ShutdownAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        if (_networkChangeMonitor is not null && Interlocked.Exchange(ref _networkMonitorSubscribed, 0) != 0)
+        {
+            _networkChangeMonitor.NetworkChanged -= OnNetworkChanged;
+        }
         GC.SuppressFinalize(this);
     }
 
@@ -173,6 +181,8 @@ public sealed class SessionManager(
                 return;
             }
             resources.ConnectionHandle = connected.Value;
+            resources.DisconnectedHandler = (_, eventArgs) => OnConnectionDisconnected(resources, eventArgs);
+            connected.Value.Disconnected += resources.DisconnectedHandler;
             var shell = await connected.Value.OpenShellAsync(new TerminalSpec
             {
                 TerminalType = connection.Ssh.TerminalType,
@@ -250,6 +260,53 @@ public sealed class SessionManager(
         SessionChanged?.Invoke(this, e);
     }
 
+    private void EnsureNetworkMonitorSubscribed()
+    {
+        if (_networkChangeMonitor is not null && Interlocked.Exchange(ref _networkMonitorSubscribed, 1) == 0)
+        {
+            _networkChangeMonitor.NetworkChanged += OnNetworkChanged;
+        }
+    }
+
+    private void OnNetworkChanged(object? sender, EventArgs e)
+    {
+        var message = SshErrorMessages.ToUserMessage(SshError.NetworkChanged);
+        foreach (var resources in _sessions.Values.Where(item => item.Session.State == SessionState.Connected))
+        {
+            resources.Channel.ReportMessage(message);
+            resources.Session.TransitionTo(SessionState.Disconnected, message);
+            resources.ConnectCancellation.Cancel();
+            _ = DisposeAfterNetworkChangeAsync(resources);
+        }
+    }
+
+    private static async Task DisposeAfterNetworkChangeAsync(SessionResources resources)
+    {
+        await resources.Gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await resources.DisposeConnectionAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _ = resources.Gate.Release();
+        }
+    }
+
+    private static void OnConnectionDisconnected(
+        SessionResources resources,
+        SshDisconnectedEventArgs eventArgs)
+    {
+        if (resources.Session.State != SessionState.Connected)
+        {
+            return;
+        }
+        var error = eventArgs.Error ?? SshError.ChannelClosed;
+        var message = SshErrorMessages.ToUserMessage(error);
+        resources.Channel.ReportMessage(message);
+        resources.Session.TransitionTo(SessionState.Disconnected, message);
+    }
+
     private SessionResources GetRequired(Guid sessionId)
     {
         return _sessions.TryGetValue(sessionId, out var resources)
@@ -269,6 +326,7 @@ public sealed class SessionManager(
         public CancellationTokenSource ConnectCancellation { get; private set; } = new();
         public ISshConnection? ConnectionHandle { get; set; }
         public ISshShell? Shell { get; set; }
+        public EventHandler<SshDisconnectedEventArgs>? DisconnectedHandler { get; set; }
 
         public void ResetCancellation(CancellationToken cancellationToken)
         {
@@ -285,6 +343,11 @@ public sealed class SessionManager(
             }
             if (ConnectionHandle is not null)
             {
+                if (DisconnectedHandler is not null)
+                {
+                    ConnectionHandle.Disconnected -= DisconnectedHandler;
+                    DisconnectedHandler = null;
+                }
                 await ConnectionHandle.DisposeAsync().ConfigureAwait(false);
                 ConnectionHandle = null;
             }

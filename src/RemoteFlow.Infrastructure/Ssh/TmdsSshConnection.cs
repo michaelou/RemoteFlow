@@ -19,8 +19,8 @@ internal sealed class TmdsSshConnection : ISshConnection
         _operationTimeout = operationTimeout;
         _disconnectedRegistration = client.Disconnected.Register(
             static state => ((TmdsSshConnection)state!).SignalDisconnected(
-                SshError.NetworkChanged,
-                "The SSH peer closed the connection."),
+                SshError.ChannelClosed,
+                SshErrorMessages.ToUserMessage(SshError.ChannelClosed)),
             this);
     }
 

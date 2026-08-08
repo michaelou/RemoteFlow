@@ -227,19 +227,6 @@ internal static class SshErrorMapper
 
     private static string Message(SshError error)
     {
-        return error switch
-        {
-            SshError.DnsFailure => "The SSH host name could not be resolved.",
-            SshError.ConnectionRefused => "The SSH server refused the connection.",
-            SshError.Timeout => "The SSH connection timed out.",
-            SshError.AuthFailed => "The SSH server rejected the supplied credentials.",
-            SshError.HostKeyUnknown => "The SSH host key is not trusted.",
-            SshError.HostKeyMismatch => "The SSH host key does not match the trusted key.",
-            SshError.HostKeyRevoked => "The SSH host key is revoked.",
-            SshError.ChannelClosed => "The SSH channel is closed.",
-            SshError.NetworkChanged => "The SSH connection was interrupted by a network change.",
-            SshError.Cancelled => "The SSH operation was cancelled.",
-            _ => throw new ArgumentOutOfRangeException(nameof(error)),
-        };
+        return SshErrorMessages.ToUserMessage(error);
     }
 }

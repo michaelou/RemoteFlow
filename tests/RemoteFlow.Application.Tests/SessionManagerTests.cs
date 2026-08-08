@@ -101,6 +101,48 @@ public sealed class SessionManagerTests
         Assert.All(fixture.Transport.Connections, connection => Assert.True(connection.IsDisconnected));
     }
 
+    [Fact]
+    public async Task DisconnectWaitsForManualReconnectAndPreservesSessionAndTitle()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = CreateFixture();
+        var session = await fixture.Manager.OpenAsync(fixture.Connection.Id, token);
+        var originalId = session.SessionId;
+        var originalTitle = session.Title;
+
+        await fixture.Transport.LastConnection!.DisconnectAsync();
+
+        Assert.Equal(SessionState.Disconnected, session.State);
+        _ = Assert.Single(fixture.Transport.ConnectRequests);
+
+        await fixture.Manager.RetryAsync(session.SessionId, token);
+
+        Assert.Equal(SessionState.Connected, session.State);
+        Assert.Equal(originalId, session.SessionId);
+        Assert.Equal(originalTitle, session.Title);
+        Assert.Equal(2, fixture.Transport.ConnectRequests.Count);
+        await fixture.Manager.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task NetworkChangeUsesSpecificReasonAndHostMismatchStillFailsOnReconnect()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = CreateFixture();
+        var session = await fixture.Manager.OpenAsync(fixture.Connection.Id, token);
+
+        fixture.Network.RaiseChanged();
+
+        Assert.Equal(SessionState.Disconnected, session.State);
+        Assert.Equal(SshErrorMessages.ToUserMessage(SshError.NetworkChanged), session.FailureReason);
+        fixture.Transport.FailNextConnect(SshError.HostKeyMismatch, SshErrorMessages.ToUserMessage(SshError.HostKeyMismatch));
+        await fixture.Manager.RetryAsync(session.SessionId, token);
+
+        Assert.Equal(SessionState.Failed, session.State);
+        Assert.Equal(SshErrorMessages.ToUserMessage(SshError.HostKeyMismatch), session.FailureReason);
+        await fixture.Manager.DisposeAsync();
+    }
+
     private static Fixture CreateFixture(string? startupDirectory = null, string? initialCommand = null)
     {
         var entityGuids = new FakeGuidProvider();
@@ -120,21 +162,34 @@ public sealed class SessionManagerTests
         var repository = new SingleConnectionRepository(connection);
         var transport = new FakeSshTransport();
         var recent = new RecordingRecentStore();
+        var network = new FakeNetworkChangeMonitor();
         var manager = new SessionManager(
             repository,
             new StaticAuthentication(),
             transport,
             recent,
             new FakeClock(new DateTimeOffset(2026, 8, 8, 1, 2, 3, TimeSpan.Zero)),
-            new FakeGuidProvider());
-        return new(connection, transport, recent, manager);
+            new FakeGuidProvider(),
+            network);
+        return new(connection, transport, recent, network, manager);
     }
 
     private sealed record Fixture(
         Connection Connection,
         FakeSshTransport Transport,
         RecordingRecentStore Recent,
+        FakeNetworkChangeMonitor Network,
         SessionManager Manager);
+
+    private sealed class FakeNetworkChangeMonitor : INetworkChangeMonitor
+    {
+        public event EventHandler? NetworkChanged;
+
+        public void RaiseChanged()
+        {
+            NetworkChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
 
     private sealed class StaticAuthentication : ISshAuthenticationMaterialProvider
     {

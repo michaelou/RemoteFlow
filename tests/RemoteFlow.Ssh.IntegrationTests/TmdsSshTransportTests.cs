@@ -286,6 +286,39 @@ public sealed class TmdsSshTransportTests(SshServerFixture fixture)
         await using var connection = await ConnectAsync(PasswordRequest(), token);
     }
 
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task ConnectTimeoutUsesConfiguredValueInsteadOfOperatingSystemDefault()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var request = PasswordRequest() with
+        {
+            Port = fixture.Server.StalledPort,
+            ConnectTimeout = TimeSpan.FromMilliseconds(300),
+        };
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        var result = await CreateTransport().ConnectAsync(request, token);
+
+        Assert.Equal(SshError.Timeout, result.Failure.Error);
+        Assert.InRange(started.Elapsed, TimeSpan.FromMilliseconds(200), TimeSpan.FromSeconds(3));
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task IdleSessionRemainsUsableWhenKeepAliveIsEnabled()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var request = PasswordRequest() with { KeepAliveInterval = TimeSpan.FromSeconds(1) };
+        await using var connection = await ConnectAsync(request, token);
+
+        await Task.Delay(TimeSpan.FromSeconds(3), token);
+        var result = await connection.ExecuteAsync("printf kept-alive", token);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("kept-alive", result.Value.StandardOutput);
+    }
+
     private static async Task<ISshConnection> ConnectAsync(
         SshConnectRequest request,
         CancellationToken cancellationToken)
