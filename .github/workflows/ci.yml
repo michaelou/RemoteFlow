@@ -79,17 +79,19 @@ jobs:
         run: dotnet build --no-restore -c Release
 
       # The default run excludes Category=Integration on every project, so this is the same command
-      # contributors run locally, plus trx and coverage reports.
+      # contributors run locally, plus trx and coverage reports. The report names are fixed because the
+      # default embeds the runner's user and host, which on macOS is long enough to push the extracted
+      # artefact past the Windows path limit.
       - name: Unit tests
         run: >
           dotnet test --no-build -c Release
-          -p:ExtraTestingPlatformCommandLineArguments="--report-trx --coverage --coverage-output-format cobertura"
+          -p:ExtraTestingPlatformCommandLineArguments="--report-xunit-trx --report-xunit-trx-filename unit.trx --coverage --coverage-output-format cobertura"
 
       - name: Integration tests (SSH, Docker)
         if: matrix.integration
         run: >
           dotnet test tests/RemoteFlow.Ssh.IntegrationTests --no-build -c Release --filter Category=Integration
-          -p:ExtraTestingPlatformCommandLineArguments="--report-trx --coverage --coverage-output-format cobertura"
+          -p:ExtraTestingPlatformCommandLineArguments="--report-xunit-trx --report-xunit-trx-filename integration.trx --coverage --coverage-output-format cobertura"
 
       # Without this note a green Windows or macOS leg reads as "integration tests passed here".
       - name: Note skipped integration tests
