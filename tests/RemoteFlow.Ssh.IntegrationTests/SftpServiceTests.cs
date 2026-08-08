@@ -157,6 +157,77 @@ public sealed class SftpServiceTests(SshServerFixture fixture)
         }
     }
 
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task TransferEngineReportsLargeProgressAndCancelsWithoutFinalOrPartFile()
+    {
+        const long length = 200L * 1024 * 1024;
+        var token = TestContext.Current.CancellationToken;
+        await using var connection = await ConnectAsync(token);
+        await using var sftp = connection.OpenSftp();
+        using var engine = new TransferEngine(sftp);
+        var remotePath = $"/tmp/remoteflow-transfer-{Guid.NewGuid():N}.bin";
+        var localDirectory = Path.Combine(Path.GetTempPath(), $"remoteflow-transfer-{Guid.NewGuid():N}");
+        _ = Directory.CreateDirectory(localDirectory);
+        try
+        {
+            var created = await connection.ExecuteAsync(
+                $"truncate -s {length} {SftpPath.ToShellLiteral(remotePath)}",
+                token);
+            Assert.True(created.IsSuccess);
+            Assert.Equal(0, created.Value.ExitCode);
+            var destination = Path.Combine(localDirectory, "complete.bin");
+            var updates = new List<TransferProgress>();
+
+            var completed = await engine.DownloadAsync(
+                remotePath,
+                destination,
+                new InlineProgress<TransferProgress>(updates.Add),
+                token);
+
+            Assert.True(completed.IsSuccess);
+            Assert.Equal(length, new FileInfo(destination).Length);
+            Assert.True(updates.Count > 10);
+            var final = updates[^1];
+            Assert.True(final.IsCompleted);
+            Assert.Equal(length, final.BytesTransferred);
+            Assert.True(final.BytesPerSecond > 0);
+            Assert.Contains(updates, update =>
+                !update.IsCompleted && update.BytesPerSecond > 0 && update.EstimatedRemaining is not null);
+
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
+            var cancelledDestination = Path.Combine(localDirectory, "cancelled.bin");
+            var cancellationLatency = new Stopwatch();
+            var cancellationStarted = 0;
+            var cancelled = await engine.DownloadAsync(
+                remotePath,
+                cancelledDestination,
+                new InlineProgress<TransferProgress>(update =>
+                {
+                    if (update.BytesTransferred > 0 &&
+                        !update.IsCompleted &&
+                        Interlocked.Exchange(ref cancellationStarted, 1) == 0)
+                    {
+                        cancellationLatency.Start();
+                        cancellation.Cancel();
+                    }
+                }),
+                cancellation.Token);
+            cancellationLatency.Stop();
+
+            Assert.True(cancelled.IsCancelled);
+            Assert.True(cancellationLatency.Elapsed < TimeSpan.FromSeconds(1));
+            Assert.False(File.Exists(cancelledDestination));
+            Assert.False(File.Exists(cancelledDestination + ".part"));
+            Assert.True((await sftp.StatAsync(remotePath, token)).IsSuccess);
+        }
+        finally
+        {
+            _ = await sftp.DeleteAsync(remotePath, recursive: false, CancellationToken.None);
+            Directory.Delete(localDirectory, recursive: true);
+        }
+    }
+
     private async Task<ISshConnection> ConnectAsync(CancellationToken cancellationToken)
     {
         var verifier = new HostKeyVerifier(
@@ -193,6 +264,14 @@ public sealed class SftpServiceTests(SshServerFixture fixture)
             cancellationToken.ThrowIfCancellationRequested();
             return ValueTask.FromResult(
                 prompt.IsMismatch ? HostKeyPromptDecision.Reject : HostKeyPromptDecision.AcceptAndSave);
+        }
+    }
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value)
+        {
+            report(value);
         }
     }
 }
