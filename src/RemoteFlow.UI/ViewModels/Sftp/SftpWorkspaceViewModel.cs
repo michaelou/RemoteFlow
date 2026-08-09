@@ -156,10 +156,30 @@ public sealed partial class SftpWorkspaceViewModel(
     public partial string? DropTargetMessage { get; private set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NameSortGlyph))]
+    [NotifyPropertyChangedFor(nameof(SizeSortGlyph))]
+    [NotifyPropertyChangedFor(nameof(ModifiedSortGlyph))]
+    [NotifyPropertyChangedFor(nameof(PermissionsSortGlyph))]
+    [NotifyPropertyChangedFor(nameof(OwnerSortGlyph))]
     public partial SftpSortColumn SortColumn { get; private set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NameSortGlyph))]
+    [NotifyPropertyChangedFor(nameof(SizeSortGlyph))]
+    [NotifyPropertyChangedFor(nameof(ModifiedSortGlyph))]
+    [NotifyPropertyChangedFor(nameof(PermissionsSortGlyph))]
+    [NotifyPropertyChangedFor(nameof(OwnerSortGlyph))]
     public partial bool SortDescending { get; private set; }
+
+    public string NameSortGlyph => SortGlyph(SftpSortColumn.Name);
+
+    public string SizeSortGlyph => SortGlyph(SftpSortColumn.Size);
+
+    public string ModifiedSortGlyph => SortGlyph(SftpSortColumn.Modified);
+
+    public string PermissionsSortGlyph => SortGlyph(SftpSortColumn.Permissions);
+
+    public string OwnerSortGlyph => SortGlyph(SftpSortColumn.Owner);
 
     public bool CanGoBack => _backHistory.Count > 0;
 
@@ -363,6 +383,15 @@ public sealed partial class SftpWorkspaceViewModel(
             _forwardHistory.Add(target);
         }
         NotifyHistoryChanged();
+    }
+
+    /// <summary>
+    /// The arrow shown beside a column heading. Only the sorted column has one, and the direction is a
+    /// shape rather than a shade, so which column is sorted survives being read in greyscale.
+    /// </summary>
+    private string SortGlyph(SftpSortColumn column)
+    {
+        return SortColumn != column ? string.Empty : SortDescending ? "▼" : "▲";
     }
 
     public void SortBy(SftpSortColumn column)

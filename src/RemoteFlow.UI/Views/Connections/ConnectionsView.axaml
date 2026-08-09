@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
     xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
+    xmlns:converters="using:RemoteFlow.UI.Converters"
     Loaded="ConnectionsView_OnLoaded"
     Unloaded="ConnectionsView_OnUnloaded">
   <UserControl.DataTemplates>
@@ -41,88 +42,96 @@
     </Border>
 
     <Grid Grid.Row="3" ColumnDefinitions="*,500" ColumnSpacing="16">
-      <TreeView
-          x:Name="ConnectionTree"
-          DragDrop.AllowDrop="True"
-          ItemsSource="{Binding RootNodes}"
-          DragDrop.DragOver="ConnectionTree_OnDragOver"
-          DragDrop.Drop="ConnectionTree_OnDrop"
-          KeyDown="ConnectionTree_OnKeyDown"
-          DoubleTapped="ConnectionTree_OnDoubleTapped"
-          SelectionChanged="ConnectionTree_OnSelectionChanged"
-          SelectionMode="Multiple">
-        <TreeView.Styles>
-          <Style Selector="TreeViewItem">
-            <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded, Mode=TwoWay}" />
-          </Style>
-        </TreeView.Styles>
-        <TreeView.ItemsPanel>
-          <ItemsPanelTemplate>
-            <VirtualizingStackPanel />
-          </ItemsPanelTemplate>
-        </TreeView.ItemsPanel>
-        <TreeView.DataTemplates>
-          <TreeDataTemplate
-              DataType="{x:Type connectionViewModels:ExplorerNodeViewModel}"
-              ItemsSource="{Binding Children}"
-              x:DataType="connectionViewModels:ExplorerNodeViewModel">
-            <Grid ColumnDefinitions="24,Auto,Auto" Margin="2" PointerPressed="Node_OnPointerPressed">
-              <TextBlock VerticalAlignment="Center" Text="{Binding Icon}" />
-              <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <Grid>
-                  <TextBlock IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" />
-                  <TextBox
-                      x:Name="InlineRenameBox"
-                      AutomationProperties.Name="Rename"
-                      IsVisible="{Binding IsRenaming}"
-                      KeyDown="InlineRename_OnKeyDown"
-                      MinWidth="140"
-                      Text="{Binding EditName}" />
-                </Grid>
-                <TextBlock
-                    FontSize="11"
-                    Foreground="{DynamicResource Brush.Text.Muted}"
-                    IsVisible="{Binding SecondaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                    Text="{Binding SecondaryText}" />
-              </StackPanel>
-              <Border
-                  Grid.Column="2"
-                  Margin="8,0,0,0"
-                  Padding="5,1"
-                  VerticalAlignment="Center"
-                  Background="{DynamicResource Brush.Badge.Background}"
-                  CornerRadius="3"
-                  IsVisible="{Binding Badge, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <StackPanel Orientation="Horizontal" Spacing="3">
-                  <TextBlock FontSize="9" FontWeight="Bold" Foreground="{DynamicResource Brush.Badge.Text}" Text="{Binding Badge.Icon}" />
-                  <TextBlock FontSize="9" FontWeight="Bold" Foreground="{DynamicResource Brush.Badge.Text}" Text="{Binding Badge.Text}" />
+      <!-- Both halves of the page sit on their own card, so the tree and whatever is open beside it read
+           as two panels rather than as content poured straight onto the window. -->
+      <Border Classes="panel" Padding="8" IsVisible="{Binding !IsEmpty}">
+        <TreeView
+            x:Name="ConnectionTree"
+            Background="Transparent"
+            BorderThickness="0"
+            DragDrop.AllowDrop="True"
+            ItemsSource="{Binding RootNodes}"
+            DragDrop.DragOver="ConnectionTree_OnDragOver"
+            DragDrop.Drop="ConnectionTree_OnDrop"
+            KeyDown="ConnectionTree_OnKeyDown"
+            DoubleTapped="ConnectionTree_OnDoubleTapped"
+            SelectionChanged="ConnectionTree_OnSelectionChanged"
+            SelectionMode="Multiple">
+          <TreeView.Styles>
+            <Style Selector="TreeViewItem">
+              <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded, Mode=TwoWay}" />
+            </Style>
+          </TreeView.Styles>
+          <TreeView.ItemsPanel>
+            <ItemsPanelTemplate>
+              <VirtualizingStackPanel />
+            </ItemsPanelTemplate>
+          </TreeView.ItemsPanel>
+          <TreeView.DataTemplates>
+            <TreeDataTemplate
+                DataType="{x:Type connectionViewModels:ExplorerNodeViewModel}"
+                ItemsSource="{Binding Children}"
+                x:DataType="connectionViewModels:ExplorerNodeViewModel">
+              <Grid ColumnDefinitions="24,Auto,Auto" Margin="2" PointerPressed="Node_OnPointerPressed">
+                <!-- No Foreground: the glyph inherits the row's, so it turns with the text when the row
+                     is selected instead of staying grey against the highlight. -->
+                <PathIcon
+                    Width="15"
+                    Height="15"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Data="{Binding IconKey, Converter={x:Static converters:ResourceKeyConverter.Instance}}" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                  <Grid>
+                    <TextBlock IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" />
+                    <TextBox
+                        x:Name="InlineRenameBox"
+                        AutomationProperties.Name="Rename"
+                        IsVisible="{Binding IsRenaming}"
+                        KeyDown="InlineRename_OnKeyDown"
+                        MinWidth="140"
+                        Text="{Binding EditName}" />
+                  </Grid>
+                  <TextBlock
+                      FontSize="11"
+                      Foreground="{DynamicResource Brush.Text.Muted}"
+                      IsVisible="{Binding SecondaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                      Text="{Binding SecondaryText}" />
                 </StackPanel>
-              </Border>
-              <Grid.ContextMenu>
-                <ContextMenu>
-                  <MenuItem Command="{Binding ConnectCommand}" Header="Connect" />
-                  <MenuItem Command="{Binding OpenSftpCommand}" Header="Open SFTP" />
-                  <MenuItem Command="{Binding OpenRdpCommand}" Header="Launch RDP" />
-                  <Separator />
-                  <MenuItem Command="{Binding EditCommand}" Header="Edit" />
-                  <MenuItem Command="{Binding DuplicateCommand}" Header="Duplicate" />
-                  <MenuItem Command="{Binding DeleteCommand}" Header="Delete" />
-                  <Separator />
-                  <MenuItem Command="{Binding NewFolderCommand}" Header="New subfolder" />
-                  <MenuItem Command="{Binding BeginRenameCommand}" Header="Rename (F2)" />
-                </ContextMenu>
-              </Grid.ContextMenu>
-            </Grid>
-          </TreeDataTemplate>
-        </TreeView.DataTemplates>
-      </TreeView>
+                <Border
+                    Grid.Column="2"
+                    Margin="8,0,0,0"
+                    Padding="5,1"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource Brush.Badge.Background}"
+                    CornerRadius="{DynamicResource Radius.Small}"
+                    IsVisible="{Binding Badge, Converter={x:Static ObjectConverters.IsNotNull}}">
+                  <StackPanel Orientation="Horizontal" Spacing="3">
+                    <TextBlock FontSize="9" FontWeight="Bold" Foreground="{DynamicResource Brush.Badge.Text}" Text="{Binding Badge.Icon}" />
+                    <TextBlock FontSize="9" FontWeight="Bold" Foreground="{DynamicResource Brush.Badge.Text}" Text="{Binding Badge.Text}" />
+                  </StackPanel>
+                </Border>
+                <Grid.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Command="{Binding ConnectCommand}" Header="Connect" />
+                    <MenuItem Command="{Binding OpenSftpCommand}" Header="Open SFTP" />
+                    <MenuItem Command="{Binding OpenRdpCommand}" Header="Launch RDP" />
+                    <Separator />
+                    <MenuItem Command="{Binding EditCommand}" Header="Edit" />
+                    <MenuItem Command="{Binding DuplicateCommand}" Header="Duplicate" />
+                    <MenuItem Command="{Binding DeleteCommand}" Header="Delete" />
+                    <Separator />
+                    <MenuItem Command="{Binding NewFolderCommand}" Header="New subfolder" />
+                    <MenuItem Command="{Binding BeginRenameCommand}" Header="Rename (F2)" />
+                  </ContextMenu>
+                </Grid.ContextMenu>
+              </Grid>
+            </TreeDataTemplate>
+          </TreeView.DataTemplates>
+        </TreeView>
+      </Border>
 
-      <Border
-          Grid.Column="0"
-          Padding="40"
-          Background="{DynamicResource Brush.Surface.1}"
-          CornerRadius="{DynamicResource Radius.Control}"
-          IsVisible="{Binding IsEmpty}">
+      <Border Classes="panel" Grid.Column="0" Padding="40" IsVisible="{Binding IsEmpty}">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
           <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="{Binding EmptyStateTitle}" />
           <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding EmptyStateMessage}" />

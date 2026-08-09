@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RemoteFlow.Application.Abstractions;
@@ -470,6 +471,91 @@ public sealed class SftpWorkspaceTests
     {
         var view = new SftpWorkspace();
         Assert.NotNull(view);
+    }
+
+    /// <summary>
+    /// The column headings live in a different grid from the rows they label, so nothing but matching
+    /// geometry keeps "Size" over the sizes. Both grids declare the same columns; this checks they are
+    /// also laid out from the same left edge and to the same width, which is what makes the columns line
+    /// up. Padding differences between a heading and its rows are deliberate and sit inside the cell.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ColumnHeadingsLineUpWithTheRowsBelowThem()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = CreateFixture();
+        await SeedFileAsync(fixture.Sftp, "/home/test/app.conf", [1], token);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var window = new Window
+        {
+            Width = 1200,
+            Height = 700,
+            Content = new SftpWorkspace { DataContext = fixture.ViewModel },
+        };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var headings = window.GetVisualDescendants()
+            .OfType<Grid>()
+            .First(grid => grid.Children.OfType<Button>().Any(button => button.Classes.Contains("column")));
+        var row = window.GetVisualDescendants()
+            .OfType<Grid>()
+            .First(grid => grid.DataContext is SftpItemViewModel && grid.ContextFlyout is not null);
+
+        var headingsLeft = headings.TranslatePoint(default, window);
+        var rowLeft = row.TranslatePoint(default, window);
+        Assert.True(headingsLeft.HasValue && rowLeft.HasValue);
+        Assert.Equal(headingsLeft.Value.X, rowLeft.Value.X, 1.0);
+        Assert.Equal(headings.Bounds.Width, row.Bounds.Width, 1.0);
+        Assert.True(row.Bounds.Width > 400, $"the listing was not laid out: {row.Bounds}");
+        window.Close();
+    }
+
+    /// <summary>A folder and a file have to be told apart at a glance, which is the row glyph's whole job.</summary>
+    [AvaloniaFact]
+    public async Task RowsCarryAFolderOrFileGlyph()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = CreateFixture();
+        await SeedFileAsync(fixture.Sftp, "/home/test/app.conf", [1], token);
+        _ = await fixture.Sftp.CreateDirectoryAsync("/home/test/logs", token);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var window = new Window
+        {
+            Width = 1200,
+            Height = 700,
+            Content = new SftpWorkspace { DataContext = fixture.ViewModel },
+        };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        Assert.Equal(Glyph(window, "logs"), Resource("Icon.Folder"));
+        Assert.Equal(Glyph(window, "app.conf"), Resource("Icon.File"));
+        window.Close();
+    }
+
+    private static object? Resource(string key)
+    {
+        Assert.True(global::Avalonia.Application.Current!.TryFindResource(key, out var value), $"{key} is missing.");
+        return value;
+    }
+
+    /// <summary>The one glyph actually shown on the row for the named item.</summary>
+    private static Geometry? Glyph(Window window, string name)
+    {
+        var row = window.GetVisualDescendants()
+            .OfType<Grid>()
+            .First(grid => grid.DataContext is SftpItemViewModel item &&
+                item.Name == name &&
+                grid.ContextFlyout is not null);
+        var shown = row.GetVisualDescendants()
+            .OfType<PathIcon>()
+            .Where(icon => icon.IsVisible)
+            .ToArray();
+
+        return Assert.Single(shown).Data;
     }
 
     [AvaloniaFact]

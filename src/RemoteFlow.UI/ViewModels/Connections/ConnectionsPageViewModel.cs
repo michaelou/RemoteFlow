@@ -603,14 +603,14 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     {
         RootNodes.Clear();
         SelectedNodes.Clear();
-        var favoriteRoot = CreateNode(ExplorerNodeKind.Favorites, "Favorites", icon: "★");
+        var favoriteRoot = CreateNode(ExplorerNodeKind.Favorites, "Favorites", iconKey: "Icon.Favorite");
         foreach (var item in items.Where(item => item.IsFavorite))
         {
             favoriteRoot.Children.Add(CreateConnectionNode(item));
         }
 
         var itemById = items.ToDictionary(item => item.Id);
-        var recentRoot = CreateNode(ExplorerNodeKind.Recent, "Recent", icon: "◷");
+        var recentRoot = CreateNode(ExplorerNodeKind.Recent, "Recent", iconKey: "Icon.Recent");
         foreach (var recentItem in recent)
         {
             if (itemById.TryGetValue(recentItem.ConnectionId, out var item))
@@ -724,7 +724,7 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
             folder.Name,
             folder.Id,
             folder,
-            icon: "▸");
+            iconKey: "Icon.Folder");
         node.ExpansionChanged += OnFolderExpansionChanged;
         return node;
     }
@@ -736,11 +736,12 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
             item.Name,
             item.Id,
             connection: item,
-            icon: item.Protocol switch
+            // A connection is drawn as the thing it opens: a shell, a file browser, or a screen.
+            iconKey: item.Protocol switch
             {
-                ProtocolType.Ssh => "⌘",
-                ProtocolType.Sftp => "⇅",
-                ProtocolType.Rdp => "▣",
+                ProtocolType.Ssh => "Icon.Terminals",
+                ProtocolType.Sftp => "Icon.Sftp",
+                ProtocolType.Rdp => "Icon.RemoteDesktop",
                 _ => throw new ArgumentOutOfRangeException(nameof(item)),
             });
     }
@@ -751,9 +752,9 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         Guid? id = null,
         Folder? folder = null,
         ConnectionListItem? connection = null,
-        string icon = "")
+        string iconKey = "")
     {
-        return new ExplorerNodeViewModel(kind, name, ExecuteActionAsync, RenameAsync, id, folder, connection, icon);
+        return new ExplorerNodeViewModel(kind, name, ExecuteActionAsync, RenameAsync, id, folder, connection, iconKey);
     }
 
     private async Task ExecuteActionAsync(ExplorerNodeViewModel node, ExplorerAction action)

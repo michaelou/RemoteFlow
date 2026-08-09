@@ -5,174 +5,298 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Sftp"
     Loaded="Workspace_OnLoaded">
+  <UserControl.Styles>
+    <!-- The column headings are labels first and buttons second: they read as part of the table until
+         they are pointed at, which is when the flat class gives them a box. -->
+    <Style Selector="Button.column">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="TextBlock.sort">
+      <Setter Property="FontSize" Value="9" />
+      <Setter Property="Margin" Value="4,0,0,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
   <Grid RowDefinitions="*,Auto">
-  <Grid Margin="20,20,20,10" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*">
+  <Grid Margin="20,20,20,10" RowDefinitions="Auto,Auto,Auto,*">
     <!-- Connection picker: the workspace can be opened straight from here, not only by connecting
          from the explorer. -->
-    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,0,0,10">
-      <TextBlock
-          Margin="0,0,8,0"
-          VerticalAlignment="Center"
-          Foreground="{DynamicResource Brush.Text.Secondary}"
-          Text="Connection" />
-      <ComboBox
-          x:Name="ConnectionPicker"
-          Grid.Column="1"
-          AutomationProperties.Name="Connection"
-          HorizontalAlignment="Stretch"
-          ItemsSource="{Binding AvailableConnections}"
-          SelectedItem="{Binding SelectedConnection}"
-          PlaceholderText="Select a connection…">
-        <ComboBox.ItemTemplate>
-          <DataTemplate x:DataType="viewModels:SftpConnectionChoice">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBlock Text="{Binding Name}" />
-              <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Endpoint}" />
-            </StackPanel>
-          </DataTemplate>
-        </ComboBox.ItemTemplate>
-      </ComboBox>
-      <Button
-          Grid.Column="2"
-          Margin="8,0,0,0"
-          Classes="accent"
-          Content="Connect"
-          Command="{Binding ConnectSelectedCommand}" />
-      <Button
-          Grid.Column="3"
-          AutomationProperties.Name="Reload the connection list"
-          Margin="6,0,0,0"
-          Content="↻"
-          Command="{Binding LoadConnectionsCommand}"
-          ToolTip.Tip="Reload the connection list" />
-      <TextBlock
-          Grid.Column="4"
-          Margin="12,0,0,0"
-          VerticalAlignment="Center"
-          FontWeight="SemiBold"
-          IsVisible="{Binding IsConnected}"
-          Text="{Binding ConnectionTitle}" />
-    </Grid>
+    <Border Classes="panel" Margin="0,0,0,10" Padding="12,10">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+        <TextBlock
+            Margin="0,0,8,0"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="Connection" />
+        <ComboBox
+            x:Name="ConnectionPicker"
+            Grid.Column="1"
+            AutomationProperties.Name="Connection"
+            HorizontalAlignment="Stretch"
+            ItemsSource="{Binding AvailableConnections}"
+            SelectedItem="{Binding SelectedConnection}"
+            PlaceholderText="Select a connection…">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="viewModels:SftpConnectionChoice">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding Name}" />
+                <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Endpoint}" />
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button
+            Grid.Column="2"
+            Margin="8,0,0,0"
+            Classes="accent"
+            Content="Connect"
+            Command="{Binding ConnectSelectedCommand}" />
+        <Button
+            Grid.Column="3"
+            AutomationProperties.Name="Reload the connection list"
+            Classes="icon"
+            Margin="6,0,0,0"
+            Command="{Binding LoadConnectionsCommand}"
+            ToolTip.Tip="Reload the connection list">
+          <PathIcon Data="{DynamicResource Icon.Refresh}" />
+        </Button>
+        <TextBlock
+            Grid.Column="4"
+            Margin="12,0,0,0"
+            VerticalAlignment="Center"
+            FontWeight="SemiBold"
+            IsVisible="{Binding IsConnected}"
+            Text="{Binding ConnectionTitle}" />
+      </Grid>
+    </Border>
 
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding IsConnected}">
-      <StackPanel Orientation="Horizontal" Spacing="6">
-        <Button AutomationProperties.Name="Back" Content="←" IsEnabled="{Binding CanGoBack}" Command="{Binding BackCommand}" ToolTip.Tip="Back" />
-        <Button AutomationProperties.Name="Forward" Content="→" IsEnabled="{Binding CanGoForward}" Command="{Binding ForwardCommand}" ToolTip.Tip="Forward" />
-        <Button AutomationProperties.Name="Up one folder" Content="↑" Command="{Binding UpCommand}" ToolTip.Tip="Up" />
-        <Button AutomationProperties.Name="Refresh this folder" Content="↻" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh" />
-      </StackPanel>
-      <TextBox
-          x:Name="PathEditor"
-          Grid.Column="1"
-          AutomationProperties.Name="Remote path"
-          Margin="10,0"
-          Text="{Binding PathText}"
-          KeyDown="PathEditor_OnKeyDown"
-          PlaceholderText="/absolute/remote/path" />
-      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-        <CheckBox Content="Hidden files" IsChecked="{Binding ShowHiddenFiles}" />
-        <Button Content="New folder" Click="NewFolder_OnClick" />
-        <Button Content="Current permissions…" Click="CurrentPermissions_OnClick" />
-        <Button Content="Upload…" Command="{Binding ChooseAndUploadCommand}" />
-        <Button Content="Download…" Command="{Binding ChooseAndDownloadCommand}" />
-        <Button Content="Cancel operation" IsVisible="{Binding IsMutating}" Command="{Binding CancelOperationCommand}" />
-      </StackPanel>
-    </Grid>
+    <!-- Navigation and actions share one card: where you are, how to move, and what you can do to this
+         folder, in that reading order. -->
+    <Border Grid.Row="1" Classes="panel" Margin="0,0,0,10" Padding="12,10" IsVisible="{Binding IsConnected}">
+      <StackPanel Spacing="10">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <Button AutomationProperties.Name="Back" Classes="icon" IsEnabled="{Binding CanGoBack}" Command="{Binding BackCommand}" ToolTip.Tip="Back">
+              <PathIcon Data="{DynamicResource Icon.Back}" />
+            </Button>
+            <Button AutomationProperties.Name="Forward" Classes="icon" IsEnabled="{Binding CanGoForward}" Command="{Binding ForwardCommand}" ToolTip.Tip="Forward">
+              <PathIcon Data="{DynamicResource Icon.Forward}" />
+            </Button>
+            <Button AutomationProperties.Name="Up one folder" Classes="icon" Command="{Binding UpCommand}" ToolTip.Tip="Up">
+              <PathIcon Data="{DynamicResource Icon.Up}" />
+            </Button>
+            <Button AutomationProperties.Name="Refresh this folder" Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh">
+              <PathIcon Data="{DynamicResource Icon.Refresh}" />
+            </Button>
+          </StackPanel>
+          <TextBox
+              x:Name="PathEditor"
+              Grid.Column="1"
+              AutomationProperties.Name="Remote path"
+              Margin="10,0"
+              Text="{Binding PathText}"
+              KeyDown="PathEditor_OnKeyDown"
+              PlaceholderText="/absolute/remote/path" />
+          <CheckBox Grid.Column="2" Content="Hidden files" IsChecked="{Binding ShowHiddenFiles}" />
+        </Grid>
 
-    <Grid Grid.Row="2" Margin="0,10,0,6" ColumnDefinitions="*,Auto" IsVisible="{Binding IsConnected}">
-      <ItemsControl ItemsSource="{Binding Breadcrumbs}">
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="viewModels:SftpBreadcrumb">
-            <StackPanel Orientation="Horizontal">
-              <Button Classes="flat" Content="{Binding Label}" Click="Breadcrumb_OnClick" />
-              <TextBlock Margin="3,0" VerticalAlignment="Center" Text="/" Foreground="{DynamicResource Brush.Text.Secondary}" />
-            </StackPanel>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsCreatingFolder}">
-        <TextBox x:Name="NewFolderEditor" AutomationProperties.Name="New folder name" Width="220" Text="{Binding NewFolderName}" KeyDown="NewFolderEditor_OnKeyDown" />
-        <Button Content="Create" Click="CreateFolder_OnClick" />
-        <Button Content="Cancel" Click="CancelCreateFolder_OnClick" />
-      </StackPanel>
-    </Grid>
+        <Grid ColumnDefinitions="*,Auto">
+          <ItemsControl ClipToBounds="True" ItemsSource="{Binding Breadcrumbs}" VerticalAlignment="Center">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="viewModels:SftpBreadcrumb">
+                <StackPanel Orientation="Horizontal">
+                  <Button Classes="flat" Content="{Binding Label}" Click="Breadcrumb_OnClick" />
+                  <TextBlock Margin="3,0" VerticalAlignment="Center" Text="/" Foreground="{DynamicResource Brush.Text.Muted}" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+            <Button AutomationProperties.Name="New folder" Click="NewFolder_OnClick" ToolTip.Tip="Create a folder here">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.NewFolder}" />
+                <TextBlock Text="New folder" />
+              </StackPanel>
+            </Button>
+            <Button AutomationProperties.Name="Current permissions" Click="CurrentPermissions_OnClick" ToolTip.Tip="Permissions of the folder being shown">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Permissions}" />
+                <TextBlock Text="Permissions…" />
+              </StackPanel>
+            </Button>
+            <Button AutomationProperties.Name="Upload" Command="{Binding ChooseAndUploadCommand}" ToolTip.Tip="Upload files into this folder">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Upload}" />
+                <TextBlock Text="Upload…" />
+              </StackPanel>
+            </Button>
+            <Button AutomationProperties.Name="Download" Command="{Binding ChooseAndDownloadCommand}" ToolTip.Tip="Download the selected items">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Download}" />
+                <TextBlock Text="Download…" />
+              </StackPanel>
+            </Button>
+            <Button
+                AutomationProperties.Name="Cancel operation"
+                Command="{Binding CancelOperationCommand}"
+                IsVisible="{Binding IsMutating}"
+                ToolTip.Tip="Cancel the operation in progress">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Cancel}" />
+                <TextBlock Text="Cancel" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </Grid>
 
-    <Border Grid.Row="3" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Padding="10" Background="#33D43B3B">
+        <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsCreatingFolder}">
+          <TextBox
+              x:Name="NewFolderEditor"
+              AutomationProperties.Name="New folder name"
+              Width="260"
+              Text="{Binding NewFolderName}"
+              KeyDown="NewFolderEditor_OnKeyDown" />
+          <Button Classes="accent" Content="Create" Click="CreateFolder_OnClick" />
+          <Button Content="Cancel" Click="CancelCreateFolder_OnClick" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <Border
+        Grid.Row="2"
+        Margin="0,0,0,10"
+        Padding="12,8"
+        Background="#33D43B3B"
+        CornerRadius="{DynamicResource Radius.Control}"
+        IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
       <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
     </Border>
 
-    <Grid Grid.Row="4" ColumnDefinitions="3*,110,180,120,160" Margin="0,8,0,0" IsVisible="{Binding IsConnected}">
-      <Button Classes="flat" HorizontalContentAlignment="Left" Content="Name" Click="SortName_OnClick" />
-      <Button Grid.Column="1" Classes="flat" HorizontalContentAlignment="Right" Content="Size" Click="SortSize_OnClick" />
-      <Button Grid.Column="2" Classes="flat" HorizontalContentAlignment="Left" Content="Modified" Click="SortModified_OnClick" />
-      <Button Grid.Column="3" Classes="flat" HorizontalContentAlignment="Left" Content="Permissions" Click="SortPermissions_OnClick" />
-      <Button Grid.Column="4" Classes="flat" HorizontalContentAlignment="Left" Content="Owner" Click="SortOwner_OnClick" />
-    </Grid>
-
-    <ListBox
-        x:Name="FileList"
-        Grid.Row="5"
-        IsVisible="{Binding IsConnected}"
-        SelectionMode="Multiple"
-        ItemsSource="{Binding Items}"
-        SelectionChanged="FileList_OnSelectionChanged"
-        DoubleTapped="FileList_OnDoubleTapped"
-        KeyDown="FileList_OnKeyDown"
-        TextInput="FileList_OnTextInput"
-        PointerPressed="FileList_OnPointerPressed"
-        DragDrop.AllowDrop="True"
-        DragDrop.DragOver="FileList_OnDragOver"
-        DragDrop.DragLeave="FileList_OnDragLeave"
-        DragDrop.Drop="FileList_OnDrop">
-      <ListBox.Styles>
-        <Style Selector="ListBoxItem">
-          <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-        </Style>
-      </ListBox.Styles>
-      <ListBox.ItemsPanel>
-        <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
-      </ListBox.ItemsPanel>
-      <ListBox.ItemTemplate>
-        <DataTemplate x:DataType="viewModels:SftpItemViewModel">
-          <!-- The transparent background is what makes the gaps between the columns hit-testable, so
-               the context menu opens anywhere on the row rather than only over the file name. -->
-          <Grid ColumnDefinitions="3*,110,180,120,160" MinHeight="30" Background="Transparent">
-            <Grid>
-              <TextBlock VerticalAlignment="Center" IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-              <TextBox AutomationProperties.Name="Rename" IsVisible="{Binding IsRenaming}" Text="{Binding RenameText}" KeyDown="RenameEditor_OnKeyDown" />
-            </Grid>
-            <TextBlock Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Text="{Binding SizeText}" />
-            <TextBlock Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center" Text="{Binding Modified, StringFormat={}{0:g}}" />
-            <TextBlock Grid.Column="3" VerticalAlignment="Center" FontFamily="Cascadia Mono,Consolas" Text="{Binding Permissions}" />
-            <TextBlock Grid.Column="4" VerticalAlignment="Center" Text="{Binding Owner}" TextTrimming="CharacterEllipsis" />
-            <Grid.ContextFlyout>
-              <MenuFlyout>
-                <MenuItem Header="Edit remotely" Click="EditRemote_OnClick" />
-                <MenuItem Header="Stop remote editing" Click="StopRemoteEdit_OnClick" />
-                <Separator />
-                <MenuItem Header="Rename" Click="Rename_OnClick" />
-                <MenuItem Header="Delete…" Click="Delete_OnClick" />
-                <Separator />
-                <MenuItem Header="Properties" Click="Properties_OnClick" />
-                <MenuItem Header="Permissions…" Click="Permissions_OnClick" />
-                <MenuItem Header="Copy shell-safe path" Click="CopyPath_OnClick" />
-              </MenuFlyout>
-            </Grid.ContextFlyout>
+    <!-- The listing and its column headings are one card, clipped so the rows stop at the rounded
+         corners instead of squaring them off. -->
+    <Border Grid.Row="3" Classes="panel" ClipToBounds="True" IsVisible="{Binding IsConnected}">
+      <Grid RowDefinitions="Auto,*">
+        <Border
+            Padding="12,6"
+            BorderBrush="{DynamicResource Brush.Border}"
+            BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="3*,110,180,120,160">
+            <Button AutomationProperties.Name="Sort by name" Classes="flat column" HorizontalContentAlignment="Left" Padding="24,4,8,4" Click="SortName_OnClick">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Name" />
+                <TextBlock Classes="sort" Text="{Binding NameSortGlyph}" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="1" AutomationProperties.Name="Sort by size" Classes="flat column" HorizontalContentAlignment="Right" Click="SortSize_OnClick">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Size" />
+                <TextBlock Classes="sort" Text="{Binding SizeSortGlyph}" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="2" AutomationProperties.Name="Sort by modified date" Classes="flat column" HorizontalContentAlignment="Left" Padding="12,4,8,4" Click="SortModified_OnClick">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Modified" />
+                <TextBlock Classes="sort" Text="{Binding ModifiedSortGlyph}" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="3" AutomationProperties.Name="Sort by permissions" Classes="flat column" HorizontalContentAlignment="Left" Click="SortPermissions_OnClick">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Permissions" />
+                <TextBlock Classes="sort" Text="{Binding PermissionsSortGlyph}" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="4" AutomationProperties.Name="Sort by owner" Classes="flat column" HorizontalContentAlignment="Left" Click="SortOwner_OnClick">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Owner" />
+                <TextBlock Classes="sort" Text="{Binding OwnerSortGlyph}" />
+              </StackPanel>
+            </Button>
           </Grid>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
+        </Border>
 
-    <Border
-        Grid.Row="5"
-        Margin="0,8,0,0"
-        Padding="40"
-        Background="{DynamicResource Brush.Surface.1}"
-        CornerRadius="{DynamicResource Radius.Control}"
-        IsVisible="{Binding !IsConnected}">
+        <ListBox
+            x:Name="FileList"
+            Grid.Row="1"
+            Background="Transparent"
+            Padding="6,4"
+            SelectionMode="Multiple"
+            ItemsSource="{Binding Items}"
+            SelectionChanged="FileList_OnSelectionChanged"
+            DoubleTapped="FileList_OnDoubleTapped"
+            KeyDown="FileList_OnKeyDown"
+            TextInput="FileList_OnTextInput"
+            PointerPressed="FileList_OnPointerPressed"
+            DragDrop.AllowDrop="True"
+            DragDrop.DragOver="FileList_OnDragOver"
+            DragDrop.DragLeave="FileList_OnDragLeave"
+            DragDrop.Drop="FileList_OnDrop">
+          <ListBox.Styles>
+            <Style Selector="ListBoxItem">
+              <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+              <Setter Property="Padding" Value="6,0" />
+            </Style>
+          </ListBox.Styles>
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="viewModels:SftpItemViewModel">
+              <!-- The transparent background is what makes the gaps between the columns hit-testable, so
+                   the context menu opens anywhere on the row rather than only over the file name. -->
+              <Grid ColumnDefinitions="3*,110,180,120,160" MinHeight="32" Background="Transparent">
+                <Grid ColumnDefinitions="24,*">
+                  <!-- Two glyphs rather than one bound to a converter: a folder is the accent colour and a
+                       file is not, and picking that with IsVisible keeps the choice in the view. -->
+                  <PathIcon
+                      Width="15"
+                      Height="15"
+                      HorizontalAlignment="Left"
+                      VerticalAlignment="Center"
+                      Data="{DynamicResource Icon.Folder}"
+                      Foreground="{DynamicResource Brush.Accent}"
+                      IsVisible="{Binding IsDirectory}" />
+                  <PathIcon
+                      Width="15"
+                      Height="15"
+                      HorizontalAlignment="Left"
+                      VerticalAlignment="Center"
+                      Data="{DynamicResource Icon.File}"
+                      Foreground="{DynamicResource Brush.Text.Secondary}"
+                      IsVisible="{Binding !IsDirectory}" />
+                  <Grid Grid.Column="1">
+                    <TextBlock VerticalAlignment="Center" IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    <TextBox AutomationProperties.Name="Rename" IsVisible="{Binding IsRenaming}" Text="{Binding RenameText}" KeyDown="RenameEditor_OnKeyDown" />
+                  </Grid>
+                </Grid>
+                <TextBlock Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding SizeText}" />
+                <TextBlock Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Modified, StringFormat={}{0:g}}" />
+                <TextBlock Grid.Column="3" VerticalAlignment="Center" FontFamily="Cascadia Mono,Consolas" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Permissions}" />
+                <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Owner}" TextTrimming="CharacterEllipsis" />
+                <Grid.ContextFlyout>
+                  <MenuFlyout>
+                    <MenuItem Header="Edit remotely" Click="EditRemote_OnClick" />
+                    <MenuItem Header="Stop remote editing" Click="StopRemoteEdit_OnClick" />
+                    <Separator />
+                    <MenuItem Header="Rename" Click="Rename_OnClick" />
+                    <MenuItem Header="Delete…" Click="Delete_OnClick" />
+                    <Separator />
+                    <MenuItem Header="Properties" Click="Properties_OnClick" />
+                    <MenuItem Header="Permissions…" Click="Permissions_OnClick" />
+                    <MenuItem Header="Copy shell-safe path" Click="CopyPath_OnClick" />
+                  </MenuFlyout>
+                </Grid.ContextFlyout>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="3" Classes="panel" Padding="40" IsVisible="{Binding !IsConnected}">
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
         <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="Not connected" />
         <TextBlock

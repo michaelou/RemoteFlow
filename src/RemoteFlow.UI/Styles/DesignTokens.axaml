@@ -89,5 +89,12 @@
   <x:Double x:Key="Space.2">8</x:Double>
   <x:Double x:Key="Space.3">12</x:Double>
   <x:Double x:Key="Space.4">16</x:Double>
-  <CornerRadius x:Key="Radius.Control">6</CornerRadius>
+  <!-- Rounding is a token rather than a per-control decision, and the three sizes nest: a badge inside a
+       control inside a panel keeps its corners concentric instead of fighting them. Radius.Focus is
+       Radius.Control plus the two pixels the focus ring sits outside the control it marks, so the ring
+       stays parallel to the edge it traces. -->
+  <CornerRadius x:Key="Radius.Small">4</CornerRadius>
+  <CornerRadius x:Key="Radius.Control">10</CornerRadius>
+  <CornerRadius x:Key="Radius.Focus">12</CornerRadius>
+  <CornerRadius x:Key="Radius.Panel">14</CornerRadius>
 </ResourceDictionary>

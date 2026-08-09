@@ -4,7 +4,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections">
-  <Border Padding="20" Background="{DynamicResource Brush.Surface.1}" CornerRadius="8">
+  <Border Classes="panel" Padding="20">
     <ScrollViewer>
       <StackPanel Spacing="12">
         <TextBlock FontSize="22" FontWeight="SemiBold" Text="{Binding Name}" />
@@ -13,14 +13,14 @@
           <Button Margin="0,0,8,8" Command="{Binding OpenSftpCommand}" Content="Open SFTP" />
           <Button Margin="0,0,8,8" Command="{Binding LaunchRdpCommand}" Content="Launch RDP" />
           <Button Margin="0,0,8,8" Command="{Binding OpenSystemTerminalCommand}" Content="Open in system terminal" />
-          <Button AutomationProperties.Name="Edit connection" Margin="0,0,8,8" Command="{Binding EditCommand}" ToolTip.Tip="Edit">
-            <PathIcon Width="16" Height="16" Data="{DynamicResource Icon.Edit}" />
+          <Button AutomationProperties.Name="Edit connection" Classes="icon" Margin="0,0,8,8" Command="{Binding EditCommand}" ToolTip.Tip="Edit">
+            <PathIcon Data="{DynamicResource Icon.Edit}" />
           </Button>
-          <Button AutomationProperties.Name="Duplicate connection" Margin="0,0,8,8" Command="{Binding DuplicateCommand}" ToolTip.Tip="Duplicate">
-            <PathIcon Width="16" Height="16" Data="{DynamicResource Icon.Duplicate}" />
+          <Button AutomationProperties.Name="Duplicate connection" Classes="icon" Margin="0,0,8,8" Command="{Binding DuplicateCommand}" ToolTip.Tip="Duplicate">
+            <PathIcon Data="{DynamicResource Icon.Duplicate}" />
           </Button>
-          <Button AutomationProperties.Name="Delete connection" Margin="0,0,8,8" Command="{Binding DeleteCommand}" ToolTip.Tip="Delete">
-            <PathIcon Width="16" Height="16" Data="{DynamicResource Icon.Delete}" />
+          <Button AutomationProperties.Name="Delete connection" Classes="icon" Margin="0,0,8,8" Command="{Binding DeleteCommand}" ToolTip.Tip="Delete">
+            <PathIcon Data="{DynamicResource Icon.Delete}" />
           </Button>
         </WrapPanel>
         <TextBlock

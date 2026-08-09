@@ -42,7 +42,7 @@ public sealed partial class ExplorerNodeViewModel : ObservableObject
         Guid? id = null,
         Folder? folder = null,
         ConnectionListItem? connection = null,
-        string icon = "")
+        string iconKey = "")
     {
         Kind = kind;
         Name = name;
@@ -52,7 +52,7 @@ public sealed partial class ExplorerNodeViewModel : ObservableObject
         Id = id;
         Folder = folder;
         Connection = connection;
-        Icon = icon;
+        IconKey = iconKey;
         IsExpanded = folder?.IsExpanded ?? kind is ExplorerNodeKind.Favorites or ExplorerNodeKind.Recent;
         Badge = connection is null ? null : CreateBadge(connection.Environment, connection.ColorOverrideHex);
         SecondaryText = connection is null ? null : $"{connection.Host}:{connection.Port}";
@@ -92,7 +92,8 @@ public sealed partial class ExplorerNodeViewModel : ObservableObject
 
     public ConnectionListItem? Connection { get; }
 
-    public string Icon { get; }
+    /// <summary>Names the glyph resource the row draws, so the geometry stays declared in XAML.</summary>
+    public string IconKey { get; }
 
     public string? SecondaryText { get; }
 

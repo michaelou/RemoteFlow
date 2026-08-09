@@ -31,7 +31,7 @@
     </Style>
   </UserControl.Styles>
 
-  <Border Padding="20" Background="{DynamicResource Brush.Surface.1}" CornerRadius="8">
+  <Border Classes="panel" Padding="20">
     <Grid RowDefinitions="Auto,*,Auto">
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock FontSize="22" FontWeight="SemiBold" Text="{Binding Title}" />

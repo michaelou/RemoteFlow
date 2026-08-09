@@ -7,6 +7,22 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Changed
+
+- Rounded corners throughout. Buttons, text boxes, drop-downs, and list and tree rows share one radius,
+  and the panels they sit on share a larger one. Nothing moved; everything is a little softer.
+- **Connections is two panels.** The tree and the details or editor beside it each sit on their own card,
+  instead of the tree sitting straight on the window background.
+- **The connection tree draws real icons.** Favorites is a star, Recent a clock, a folder a folder, and a
+  connection the thing it opens — a shell, a file browser, or a screen — in place of the text characters
+  that stood in for them and rendered differently on every machine.
+- **The SFTP browser has been rebuilt around icons and cards.** New folder, permissions, upload, and
+  download are icons with their words beside them; back, forward, up, and refresh are icons in place of
+  arrow characters. Every row shows a folder or file glyph, folders in the accent colour. The connection
+  picker, the toolbar, and the listing are three cards, and the column headings show which column is
+  sorted and in which direction — as an arrow, not a shade. The toolbar now reads in two lines,
+  navigation then actions, so nothing is squeezed on a narrow window.
+
 ## [0.1.0] - 2026-08-09
 
 The first tagged release. RemoteFlow is a local-first desktop workspace for the machines you administer:

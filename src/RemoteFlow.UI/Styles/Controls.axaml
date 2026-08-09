@@ -12,7 +12,7 @@
         <Border
             BorderBrush="{DynamicResource Brush.Focus}"
             BorderThickness="2"
-            CornerRadius="{DynamicResource Radius.Control}"
+            CornerRadius="{DynamicResource Radius.Focus}"
             Margin="-2" />
       </FocusAdornerTemplate>
     </Setter>
@@ -40,6 +40,66 @@
     <Setter Property="FontFamily" Value="{DynamicResource Font.Family.Default}" />
     <Setter Property="Background" Value="{DynamicResource Brush.Surface.0}" />
     <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+  </Style>
+
+  <!-- Everything that draws its own box takes Radius.Control, so a toolbar or a dialog full of mixed
+       control types still reads as one set of shapes. The Fluent templates pass their own CornerRadius
+       through to the part that paints, so setting it on the control is enough. -->
+  <Style Selector=":is(Button)">
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+  </Style>
+  <Style Selector="TextBox">
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+  </Style>
+  <Style Selector="ComboBox">
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+  </Style>
+  <Style Selector="ListBoxItem">
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+  </Style>
+  <Style Selector="TreeViewItem">
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Control}" />
+  </Style>
+  <!-- The spinner's up and down buttons sit flush inside the text box they belong to. Rounding them
+       would open a gap between the button and the box edge on every numeric field. -->
+  <Style Selector="ButtonSpinner :is(Button)">
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <!-- A card: the surface a page's content sits on. One class rather than a background and a radius
+       repeated in each view, so no two panels can drift apart. Padding stays with the view, which is the
+       only thing that knows what it is holding. -->
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{DynamicResource Brush.Surface.1}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Panel}" />
+  </Style>
+
+  <!-- A button that carries no chrome until it is pointed at: column headers, breadcrumbs, and other
+       places where a full button box would draw more attention than the action deserves. -->
+  <Style Selector="Button.flat">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+    <Setter Property="Padding" Value="8,4" />
+  </Style>
+  <Style Selector="Button.flat:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.Surface.2}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+  </Style>
+  <Style Selector="Button.flat:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Brush.Surface.2}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+  </Style>
+
+  <!-- A button whose content is a single glyph. Equal padding on all four sides keeps it square
+       instead of stretching into the width a word would need. -->
+  <Style Selector="Button.icon">
+    <Setter Property="Padding" Value="8" />
+    <Setter Property="MinWidth" Value="0" />
+  </Style>
+  <Style Selector="Button.icon PathIcon">
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="14" />
   </Style>
   <Style Selector="ListBox.navigation">
     <Setter Property="Background" Value="{DynamicResource Brush.Surface.1}" />
