@@ -161,12 +161,39 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TabTitle))]
+    [NotifyPropertyChangedFor(nameof(TabAccessibleName))]
+    [NotifyPropertyChangedFor(nameof(TerminalAccessibleName))]
+    [NotifyPropertyChangedFor(nameof(CloseTabAccessibleName))]
     public partial string Title { get; private set; }
 
     /// <summary>
     /// The tab-strip form of <see cref="Title" />.
     /// </summary>
     public string TabTitle => CondenseTitle(Title);
+
+    /// <summary>
+    /// What a screen reader reads for the tab's close button. Every tab has one, so "Close" alone would
+    /// announce the same thing on all of them; the title is what tells them apart.
+    /// </summary>
+    public string CloseTabAccessibleName => $"Close terminal {TabTitle}";
+
+    /// <summary>
+    /// What a screen reader reads for the tab itself: the title, plus the environment the session runs
+    /// against, which the tab otherwise conveys through its colour.
+    /// </summary>
+    public string TabAccessibleName => $"{TabTitle}, {EnvironmentDescription}";
+
+    /// <summary>What a screen reader reads on entering the terminal surface itself.</summary>
+    public string TerminalAccessibleName => $"Terminal, {TabAccessibleName}";
+
+    private string EnvironmentDescription => Environment switch
+    {
+        EnvironmentKind.Development => "development",
+        EnvironmentKind.Staging => "staging",
+        EnvironmentKind.Production => "production",
+        EnvironmentKind.Unspecified => "local",
+        _ => throw new ArgumentOutOfRangeException(nameof(Environment)),
+    };
 
     [ObservableProperty]
     public partial string? UserTitleOverride { get; private set; }

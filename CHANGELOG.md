@@ -9,6 +9,16 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ### Added
 
+- An accessibility and keyboard-only pass. Every button, box, and list now tells a screen reader what it
+  is — including the icon-only ones, which previously announced an arrow or nothing at all. The terminal
+  announces as a text area named for its session and environment, its tabs take focus and say which
+  session they are, and **`F6` moves focus out of the terminal**, which until now consumed `Tab` and had
+  no way out. `Enter` presses the button the keyboard is on, opening the connection editor puts the caret
+  in the first field, closing it returns the keyboard to the explorer, and committing a navigation hands
+  the keyboard to the page rather than leaving it in the sidebar. The keyboard focus ring is a two-pixel
+  light outline that stays visible on every surface, including the accent-filled primary button, where the
+  previous accent-coloured ring was effectively invisible. See
+  [docs/accessibility.md](docs/accessibility.md).
 - User documentation. The README now walks a new user from download to a connected session, with dark-mode
   screenshots, and states the security posture plainly: no telemetry, no cloud, no accounts, no update
   ping — and exactly what is stored where, what is **never** stored, how credentials are held on each
@@ -58,6 +68,8 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ### Fixed
 
+- Disabled text and failed-transfer messages were below the contrast floor on the darkest surfaces. Both
+  now use palette colours that are measured, and the measurement is a test.
 - The terminal workspace shows its arrows again. The shell-profile dropdown, the find bar's next and
   previous buttons, and its close button were each rendering two or three garbled letters instead of a
   symbol: the characters had been saved once through a Windows-1252 decode and kept the damage.

@@ -104,6 +104,7 @@ public enum KeymapCommand
     SwitchToTerminal8,
     SwitchToTerminal9,
     ToggleFullscreen,
+    LeaveTerminal,
 }
 
 public enum KeymapResultKind
@@ -243,6 +244,11 @@ public sealed class KeymapService
             App("Ctrl+Tab", TerminalKey.Tab, TerminalModifiers.Control, KeymapCommand.CycleTerminal, "Select the next terminal"),
             App("Ctrl+Shift+Tab", TerminalKey.Tab, TerminalModifiers.Control | TerminalModifiers.Shift, KeymapCommand.CycleTerminalBackward, "Select the previous terminal"),
             App("F11", TerminalKey.F11, TerminalModifiers.None, KeymapCommand.ToggleFullscreen, "Toggle full screen"),
+            // Without this the terminal is a keyboard trap: it consumes Tab as a byte, so once focus is
+            // inside there is no way back out to the rest of the application. F6 is the platform
+            // convention for moving between panes, and Shift+F6 still sends the terminal its own F6 —
+            // the same arrangement F11 already uses.
+            App("F6", TerminalKey.F6, TerminalModifiers.None, KeymapCommand.LeaveTerminal, "Move focus out of the terminal"),
             App("Ctrl+Shift+C", TerminalKey.C, TerminalModifiers.Control | TerminalModifiers.Shift, KeymapCommand.Copy, "Copy selection", KeymapPlatform.WindowsLinux),
             App("Ctrl+Insert", TerminalKey.Insert, TerminalModifiers.Control, KeymapCommand.Copy, "Copy selection", KeymapPlatform.WindowsLinux),
             App("Ctrl+Shift+V", TerminalKey.V, TerminalModifiers.Control | TerminalModifiers.Shift, KeymapCommand.Paste, "Paste", KeymapPlatform.WindowsLinux),
@@ -263,7 +269,7 @@ public sealed class KeymapService
             Pty("F3", TerminalKey.F3, TerminalModifiers.None, Esc("OR"), "F3"),
             Pty("F4", TerminalKey.F4, TerminalModifiers.None, Esc("OS"), "F4"),
             Pty("F5", TerminalKey.F5, TerminalModifiers.None, Esc("[15~"), "F5"),
-            Pty("F6", TerminalKey.F6, TerminalModifiers.None, Esc("[17~"), "F6"),
+            Pty("F6 (terminal)", TerminalKey.F6, TerminalModifiers.Shift, Esc("[17~"), "Send terminal F6 (Shift avoids the app shortcut)"),
             Pty("F7", TerminalKey.F7, TerminalModifiers.None, Esc("[18~"), "F7"),
             Pty("F8", TerminalKey.F8, TerminalModifiers.None, Esc("[19~"), "F8"),
             Pty("F9", TerminalKey.F9, TerminalModifiers.None, Esc("[20~"), "F9"),

@@ -29,7 +29,9 @@ dotnet test tests/RemoteFlow.Ssh.IntegrationTests --filter Category=Integration
 
 Changes to the terminal stack also need the manual pass in
 [docs/manual-test-terminal.md](docs/manual-test-terminal.md): the keyboard, resize, and TUI behaviour that
-no automated test covers. Building and running on macOS or Linux is documented in
+no automated test covers. UI changes are held to
+[docs/accessibility.md](docs/accessibility.md) — every actionable control needs an accessible name, and
+the audit test fails the build without one. Building and running on macOS or Linux is documented in
 [docs/building.md](docs/building.md), and user-facing failures belong in
 [docs/troubleshooting.md](docs/troubleshooting.md).
 

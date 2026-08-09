@@ -1,4 +1,6 @@
 using System.Reflection;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Microsoft.EntityFrameworkCore;
 using RemoteFlow.Application.Abstractions;
@@ -12,12 +14,36 @@ using RemoteFlow.Persistence.Queries;
 using RemoteFlow.TestSupport;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels.Connections;
+using RemoteFlow.UI.Views.Connections;
 using Xunit;
 
 namespace RemoteFlow.UI.Tests;
 
 public sealed class ConnectionEditorTests
 {
+    /// <summary>
+    /// The editor opens beside the button that opened it. Someone working by keyboard has already
+    /// pressed Enter on "New connection"; if focus stays on that button they have to tab through the
+    /// whole page to reach the first field, which is the difference between a usable form and a
+    /// theoretical one.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task OpeningTheEditorPutsTheKeyboardInTheFirstField()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var view = new ConnectionEditorView { DataContext = await fixture.CreateEditorAsync(null, token) };
+        var window = new Window { Content = view };
+
+        window.Show();
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var nameBox = view.FindControl<TextBox>("NameBox");
+        Assert.NotNull(nameBox);
+        Assert.True(nameBox.IsFocused, "The editor opened without putting the keyboard in the Name field.");
+        window.Close();
+    }
+
     [Fact]
     public async Task ProtocolSwitchesSectionsAndOnlyReplacesThePreviousDefaultPort()
     {

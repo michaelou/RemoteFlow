@@ -10,9 +10,9 @@
       <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Create a portable ZIP archive of your RemoteFlow data." />
 
       <TextBlock FontWeight="SemiBold" Text="Scope" />
-      <ComboBox ItemsSource="{Binding ScopeKinds}" SelectedItem="{Binding SelectedScopeKind}" />
-      <TextBox PlaceholderText="Folder ID for subtree export" Text="{Binding SelectedFolderId}" />
-      <TextBox PlaceholderText="Connection IDs separated by commas" Text="{Binding SelectedConnectionIds}" />
+      <ComboBox AutomationProperties.Name="Scope" ItemsSource="{Binding ScopeKinds}" SelectedItem="{Binding SelectedScopeKind}" />
+      <TextBox AutomationProperties.Name="Folder ID for subtree export" PlaceholderText="Folder ID for subtree export" Text="{Binding SelectedFolderId}" />
+      <TextBox AutomationProperties.Name="Connection IDs, separated by commas" PlaceholderText="Connection IDs separated by commas" Text="{Binding SelectedConnectionIds}" />
 
       <CheckBox Content="Include settings" IsChecked="{Binding IncludeSettings}" />
       <CheckBox Content="Include trusted host keys" IsChecked="{Binding IncludeHostKeys}" />
@@ -20,8 +20,8 @@
           Content="Include encrypted credentials"
           IsChecked="{Binding IncludeCredentials}"
           IsEnabled="{Binding CanExportCredentials}" />
-      <TextBlock Foreground="#C47F00" Text="{Binding CredentialWarning}" TextWrapping="Wrap" />
-      <TextBox PasswordChar="•" PlaceholderText="Credential encryption passphrase" Text="{Binding CredentialPassphrase}" />
+      <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding CredentialWarning}" TextWrapping="Wrap" />
+      <TextBox AutomationProperties.Name="Credential encryption passphrase" PasswordChar="•" PlaceholderText="Credential encryption passphrase" Text="{Binding CredentialPassphrase}" />
       <CheckBox Content="I understand the risk and want to allow a weak passphrase" IsChecked="{Binding AllowWeakPassphrase}" />
 
       <ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" />

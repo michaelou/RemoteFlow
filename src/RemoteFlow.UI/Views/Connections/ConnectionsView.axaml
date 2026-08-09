@@ -73,6 +73,7 @@
                   <TextBlock IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" />
                   <TextBox
                       x:Name="InlineRenameBox"
+                      AutomationProperties.Name="Rename"
                       IsVisible="{Binding IsRenaming}"
                       KeyDown="InlineRename_OnKeyDown"
                       MinWidth="140"

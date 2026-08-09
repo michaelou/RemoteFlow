@@ -137,7 +137,7 @@ public sealed partial class ExplorerNodeViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsRenaming { get; private set; }
 
-    private static EnvironmentBadgeViewModel? CreateBadge(
+    internal static EnvironmentBadgeViewModel? CreateBadge(
         EnvironmentKind environment,
         string? colorOverrideHex)
     {

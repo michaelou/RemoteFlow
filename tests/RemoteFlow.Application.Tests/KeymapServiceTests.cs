@@ -151,6 +151,24 @@ public sealed class KeymapServiceTests
         Assert.Equal(new byte[] { 0x1B, 0xC3, 0xB8 }, result.Bytes.ToArray());
     }
 
+    /// <summary>
+    /// A terminal consumes Tab, so without an escape hatch focus that enters it can never leave — a
+    /// keyboard trap. F6 is the way out, and Shift+F6 still reaches the remote program.
+    /// </summary>
+    [Fact]
+    public void F6LeavesTheTerminalAndShiftF6StillReachesIt()
+    {
+        var leave = _keymap.Resolve(
+            new TerminalKeyStroke(TerminalKey.F6),
+            KeymapPlatform.WindowsLinux);
+        var passthrough = _keymap.Resolve(
+            new TerminalKeyStroke(TerminalKey.F6, TerminalModifiers.Shift),
+            KeymapPlatform.WindowsLinux);
+
+        Assert.Equal(KeymapCommand.LeaveTerminal, leave.Command);
+        Assert.Equal(Escape("[17~"), passthrough.Bytes.ToArray());
+    }
+
     [Fact]
     public void GeneratedDocumentationCannotDriftFromTheKeymapTable()
     {

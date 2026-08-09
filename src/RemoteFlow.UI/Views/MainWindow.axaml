@@ -67,6 +67,7 @@
         <TextBlock Grid.Row="1" Margin="0,8,0,24" Foreground="{DynamicResource Brush.Text.Secondary}" Text="This page is ready for its feature content." />
         <TextBox
             Grid.Row="2"
+            AutomationProperties.Name="Temporary page state"
             VerticalAlignment="Top"
             MaxWidth="560"
             HorizontalAlignment="Left"
@@ -80,6 +81,7 @@
       <Grid RowDefinitions="*,Auto">
       <ListBox
         x:Name="NavigationList"
+        AutomationProperties.Name="Main navigation"
         Classes="navigation"
         ItemsSource="{Binding NavigationItems}"
         KeyDown="NavigationList_OnKeyDown"
@@ -105,15 +107,26 @@
             Background="{DynamicResource Brush.Surface.1}"
             BorderBrush="{DynamicResource Brush.Border}"
             BorderThickness="0,1,1,0">
+          <!-- Transfers finish while the user is somewhere else entirely, so this is a live region:
+               the change is announced without stealing focus from whatever they are doing. -->
           <TextBlock
+              AutomationProperties.LiveSetting="Polite"
+              AutomationProperties.Name="Transfer status"
               VerticalAlignment="Center"
               TextTrimming="CharacterEllipsis"
               Foreground="{DynamicResource Brush.Text.Secondary}"
               Text="{Binding Transfers.AggregateStatus, FallbackValue=No active transfers}" />
         </Border>
       </Grid>
+      <!-- Named and focusable so that committing a navigation can put focus here: the screen reader
+           then announces which page was opened, and a keyboard user lands in the page instead of
+           tabbing through the whole sidebar to reach it. -->
       <Border Grid.Column="1" Background="{DynamicResource Brush.Surface.0}">
-        <ContentControl Content="{Binding CurrentPage}" />
+        <ContentControl
+            x:Name="PageHost"
+            AutomationProperties.Name="{Binding CurrentNavigationItem.Title, FallbackValue=Page}"
+            Content="{Binding CurrentPage}"
+            Focusable="True" />
       </Border>
     </Grid>
 

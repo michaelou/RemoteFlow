@@ -18,6 +18,7 @@
       <ComboBox
           x:Name="ConnectionPicker"
           Grid.Column="1"
+          AutomationProperties.Name="Connection"
           HorizontalAlignment="Stretch"
           ItemsSource="{Binding AvailableConnections}"
           SelectedItem="{Binding SelectedConnection}"
@@ -39,6 +40,7 @@
           Command="{Binding ConnectSelectedCommand}" />
       <Button
           Grid.Column="3"
+          AutomationProperties.Name="Reload the connection list"
           Margin="6,0,0,0"
           Content="↻"
           Command="{Binding LoadConnectionsCommand}"
@@ -54,14 +56,15 @@
 
     <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding IsConnected}">
       <StackPanel Orientation="Horizontal" Spacing="6">
-        <Button Content="←" IsEnabled="{Binding CanGoBack}" Command="{Binding BackCommand}" ToolTip.Tip="Back" />
-        <Button Content="→" IsEnabled="{Binding CanGoForward}" Command="{Binding ForwardCommand}" ToolTip.Tip="Forward" />
-        <Button Content="↑" Command="{Binding UpCommand}" ToolTip.Tip="Up" />
-        <Button Content="↻" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh" />
+        <Button AutomationProperties.Name="Back" Content="←" IsEnabled="{Binding CanGoBack}" Command="{Binding BackCommand}" ToolTip.Tip="Back" />
+        <Button AutomationProperties.Name="Forward" Content="→" IsEnabled="{Binding CanGoForward}" Command="{Binding ForwardCommand}" ToolTip.Tip="Forward" />
+        <Button AutomationProperties.Name="Up one folder" Content="↑" Command="{Binding UpCommand}" ToolTip.Tip="Up" />
+        <Button AutomationProperties.Name="Refresh this folder" Content="↻" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh" />
       </StackPanel>
       <TextBox
           x:Name="PathEditor"
           Grid.Column="1"
+          AutomationProperties.Name="Remote path"
           Margin="10,0"
           Text="{Binding PathText}"
           KeyDown="PathEditor_OnKeyDown"
@@ -91,7 +94,7 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsCreatingFolder}">
-        <TextBox x:Name="NewFolderEditor" Width="220" Text="{Binding NewFolderName}" KeyDown="NewFolderEditor_OnKeyDown" />
+        <TextBox x:Name="NewFolderEditor" AutomationProperties.Name="New folder name" Width="220" Text="{Binding NewFolderName}" KeyDown="NewFolderEditor_OnKeyDown" />
         <Button Content="Create" Click="CreateFolder_OnClick" />
         <Button Content="Cancel" Click="CancelCreateFolder_OnClick" />
       </StackPanel>
@@ -139,7 +142,7 @@
           <Grid ColumnDefinitions="3*,110,180,120,160" MinHeight="30" Background="Transparent">
             <Grid>
               <TextBlock VerticalAlignment="Center" IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-              <TextBox IsVisible="{Binding IsRenaming}" Text="{Binding RenameText}" KeyDown="RenameEditor_OnKeyDown" />
+              <TextBox AutomationProperties.Name="Rename" IsVisible="{Binding IsRenaming}" Text="{Binding RenameText}" KeyDown="RenameEditor_OnKeyDown" />
             </Grid>
             <TextBlock Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right" Text="{Binding SizeText}" />
             <TextBlock Grid.Column="2" Margin="12,0,0,0" VerticalAlignment="Center" Text="{Binding Modified, StringFormat={}{0:g}}" />

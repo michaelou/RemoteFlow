@@ -8,6 +8,7 @@
     <Grid ColumnDefinitions="*,Auto">
       <TextBox
           x:Name="SearchTextBox"
+          AutomationProperties.Name="Search connections"
           PlaceholderText="Search name, host, user, notes, or tags"
           Text="{Binding SearchText, Mode=TwoWay}" />
       <Button

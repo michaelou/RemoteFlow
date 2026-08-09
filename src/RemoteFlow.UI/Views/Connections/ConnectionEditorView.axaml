@@ -53,7 +53,7 @@
         <StackPanel Spacing="12">
           <StackPanel>
             <TextBlock Classes="label" Text="Name" />
-            <TextBox TabIndex="1" Text="{Binding Name, Mode=TwoWay}" />
+            <TextBox x:Name="NameBox" AutomationProperties.Name="Name" TabIndex="1" Text="{Binding Name, Mode=TwoWay}" />
             <TextBlock
                 Classes="error"
                 IsVisible="{Binding NameError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -63,7 +63,7 @@
           <Grid ColumnDefinitions="*,110" ColumnSpacing="10">
             <StackPanel>
               <TextBlock Classes="label" Text="Host" />
-              <TextBox TabIndex="2" Text="{Binding Host, Mode=TwoWay}" />
+              <TextBox AutomationProperties.Name="Host" TabIndex="2" Text="{Binding Host, Mode=TwoWay}" />
               <TextBlock
                   Classes="error"
                   IsVisible="{Binding HostError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -71,7 +71,7 @@
             </StackPanel>
             <StackPanel Grid.Column="1">
               <TextBlock Classes="label" Text="Port" />
-              <NumericUpDown TabIndex="4" Minimum="1" Maximum="65535" Value="{Binding Port, Mode=TwoWay}" />
+              <NumericUpDown AutomationProperties.Name="Port" TabIndex="4" Minimum="1" Maximum="65535" Value="{Binding Port, Mode=TwoWay}" />
               <TextBlock
                   Classes="error"
                   IsVisible="{Binding PortError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -83,6 +83,7 @@
             <StackPanel>
               <TextBlock Classes="label" Text="Protocol" />
               <ComboBox
+                  AutomationProperties.Name="Protocol"
                   TabIndex="3"
                   HorizontalAlignment="Stretch"
                   ItemsSource="{Binding Protocols}"
@@ -90,7 +91,7 @@
             </StackPanel>
             <StackPanel Grid.Column="1">
               <TextBlock Classes="label" Text="Username" />
-              <TextBox TabIndex="5" Text="{Binding Username, Mode=TwoWay}" />
+              <TextBox AutomationProperties.Name="Username" TabIndex="5" Text="{Binding Username, Mode=TwoWay}" />
               <TextBlock
                   Classes="error"
                   IsVisible="{Binding UsernameError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -101,6 +102,7 @@
           <StackPanel>
             <TextBlock Classes="label" Text="Authentication" />
             <ComboBox
+                AutomationProperties.Name="Authentication"
                 TabIndex="6"
                 HorizontalAlignment="Stretch"
                 ItemsSource="{Binding AuthMethods}"
@@ -123,6 +125,7 @@
           <StackPanel IsVisible="{Binding IsSshSectionVisible}">
             <TextBlock Classes="label" Text="Host key policy" />
             <ComboBox
+                AutomationProperties.Name="Host key policy"
                 TabIndex="7"
                 HorizontalAlignment="Stretch"
                 ItemsSource="{Binding HostKeyPolicies}"
@@ -150,13 +153,13 @@
 
           <StackPanel IsVisible="{Binding !IsPrivateKeyPassphraseVisible}">
             <TextBlock Classes="label" Text="Password" />
-            <TextBox x:Name="PasswordCapture" TabIndex="8" PasswordChar="●" />
+            <TextBox x:Name="PasswordCapture" AutomationProperties.Name="Password" TabIndex="8" PasswordChar="●" />
             <TextBlock Classes="hint" Text="Leave blank to keep the current credential." />
             <TextBlock Classes="hint" Text="{Binding CredentialActionLabel}" />
           </StackPanel>
           <StackPanel IsVisible="{Binding IsPrivateKeyPassphraseVisible}">
             <TextBlock Classes="label" Text="Private-key passphrase" />
-            <TextBox x:Name="PassphraseCapture" TabIndex="8" PasswordChar="●" />
+            <TextBox x:Name="PassphraseCapture" AutomationProperties.Name="Private-key passphrase" TabIndex="8" PasswordChar="●" />
             <TextBlock Classes="hint" Text="Leave blank to keep the current credential." />
             <TextBlock Classes="hint" Text="{Binding CredentialActionLabel}" />
           </StackPanel>
@@ -172,6 +175,7 @@
             <StackPanel>
               <TextBlock Classes="label" Text="Folder" />
               <ComboBox
+                  AutomationProperties.Name="Folder"
                   TabIndex="17"
                   DisplayMemberBinding="{Binding Path}"
                   HorizontalAlignment="Stretch"
@@ -182,6 +186,7 @@
               <TextBlock Classes="label" Text="Environment" />
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                 <ComboBox
+                    AutomationProperties.Name="Environment"
                     TabIndex="19"
                     HorizontalAlignment="Stretch"
                     ItemsSource="{Binding Environments}"
@@ -202,6 +207,7 @@
           <StackPanel>
             <TextBlock Classes="label" Text="Environment colour override" />
             <ComboBox
+                AutomationProperties.Name="Environment colour override"
                 TabIndex="20"
                 HorizontalAlignment="Stretch"
                 ItemsSource="{x:Static connectionViewModels:ConnectionEditorViewModel.ColorOverrideChoices}"
@@ -222,6 +228,7 @@
               </ComboBox.ItemTemplate>
             </ComboBox>
             <TextBox
+                AutomationProperties.Name="Custom environment colour, as a hex value"
                 Margin="0,6,0,0"
                 IsVisible="{Binding IsCustomColorVisible}"
                 PlaceholderText="#RRGGBB"
@@ -234,7 +241,7 @@
 
           <StackPanel>
             <TextBlock Classes="label" Text="Tags" />
-            <TextBox TabIndex="18" PlaceholderText="Add tags, separated by commas" Text="{Binding TagInput, Mode=TwoWay}" />
+            <TextBox AutomationProperties.Name="Tags" TabIndex="18" PlaceholderText="Add tags, separated by commas" Text="{Binding TagInput, Mode=TwoWay}" />
             <ItemsControl ItemsSource="{Binding TagChoices}" Margin="0,6,0,0">
               <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
@@ -250,6 +257,7 @@
           <StackPanel>
             <TextBlock Classes="label" Text="Notes" />
             <TextBox
+                AutomationProperties.Name="Notes"
                 TabIndex="22"
                 AcceptsReturn="True"
                 MinHeight="72"
