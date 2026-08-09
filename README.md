@@ -3,7 +3,9 @@
 RemoteFlow is a desktop workspace for the machines you administer: SSH sessions, SFTP browsing and
 transfers, and Remote Desktop, organised in one place. Connections live in folders with tags and
 favourites, terminals open as tabs beside them, and everything stays on your own computer — there is no
-account to create, no server to talk to, and nothing is ever sent anywhere.
+account to create and no server behind it. Nothing about you is ever sent anywhere; the only request
+RemoteFlow makes that you did not configure is an optional update check, which reads a version number and
+is described in [Security posture](#no-telemetry-no-cloud-no-accounts).
 
 It is built with .NET 10 and Avalonia, and runs on Windows, macOS, and Linux. RemoteFlow has not had a
 tagged release yet; until it does, see [Install](#install) for how to build one.
@@ -89,10 +91,28 @@ does with them.
 
 ### No telemetry, no cloud, no accounts
 
-There is no analytics, no crash reporting, no licence check, no sign-in, and no update ping. RemoteFlow
-opens network connections to the hosts *you* configure and to nothing else. The update check setting
-exists and defaults to off; there is no auto-updater. Diagnostics stay on your machine: the About tab in
-Settings shows the log folder and opens it for you.
+There is no analytics, no crash reporting, no licence check, and no sign-in. RemoteFlow opens network
+connections to the hosts *you* configure, and makes exactly one other request — the update check, and only
+when you ask for it. Diagnostics stay on your machine: the About tab in Settings shows the log folder and
+opens it for you.
+
+#### The update check
+
+It is off until you turn it on, and it is the whole of RemoteFlow's contact with the outside world.
+
+- **It only runs when asked.** Pressing **Check for updates** on the About tab runs one check. Ticking
+  **Check automatically** runs one more each time RemoteFlow starts, and nothing in between — there is no
+  timer and no background poll. Untick it and RemoteFlow makes no unprompted request ever again.
+- **What it sends.** One HTTPS GET to `api.github.com` for this project's newest release. The request
+  carries a `User-Agent` of `RemoteFlow/<version>`, which names the software. There is no account, no
+  licence key, no installation identifier, and nothing describing your machine, your connections, or your
+  use of the application. GitHub sees a request from your IP address, as any website you visit does.
+- **What it does with the answer.** Reads the version number, compares it with this build, and puts a
+  sentence on screen. If a newer release exists you get a button that opens the release page in your
+  browser.
+- **There is no auto-updater.** RemoteFlow never downloads, installs, or replaces anything. Updating is
+  you, deliberately, from the [Releases](../../releases) page — which also means you keep the chance to
+  check the release against `checksums.txt` before running it.
 
 ### What is stored, and where
 

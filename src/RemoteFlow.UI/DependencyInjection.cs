@@ -106,6 +106,10 @@ public static class DependencyInjection
                     .SweepStaleFilesAsync().ConfigureAwait(true);
                 await provider.GetRequiredService<IRdpLauncher>()
                     .SweepStaleFilesAsync().ConfigureAwait(true);
+                // Reads the update opt-in and, only if it is on, starts one check. This awaits the
+                // settings read, not the network call — see AboutViewModel.InitializeAsync.
+                await provider.GetRequiredService<AboutViewModel>()
+                    .InitializeAsync().ConfigureAwait(true);
             },
             StartupErrorAction = exception => provider.GetRequiredService<IGlobalExceptionHandler>()
                 .HandleAsync(exception, "application startup"),

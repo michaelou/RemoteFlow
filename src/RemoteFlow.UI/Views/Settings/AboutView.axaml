@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings">
   <ScrollViewer>
-    <Grid Margin="28" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
+    <Grid Margin="28" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
       <StackPanel Spacing="5">
         <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding ProductName}" />
         <TextBlock
@@ -51,9 +51,48 @@
         </StackPanel>
       </StackPanel>
 
+      <!-- The one place in RemoteFlow that contacts a host the user did not configure, so it says exactly
+           what it does before offering to do it, and the button is what starts it. -->
+      <StackPanel Grid.Row="2" IsVisible="{Binding CanCheckForUpdates}" Margin="0,28,0,0" Spacing="12">
+        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Updates" />
+        <TextBlock
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="RemoteFlow does not update itself. A check asks github.com for the version number of the newest release and nothing else: no account, no identifier, nothing about this machine, and nothing is downloaded or installed."
+            TextWrapping="Wrap" />
+
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Button
+              x:Name="CheckForUpdatesButton"
+              Command="{Binding CheckForUpdatesCommand}"
+              Content="Check for updates"
+              IsEnabled="{Binding !IsCheckingForUpdates}" />
+          <!-- Only appears when there is somewhere useful to go. Sending someone who is already current
+               to a download page invites them to reinstall what they are running. -->
+          <Button
+              x:Name="OpenReleasePageButton"
+              Command="{Binding OpenReleasePageCommand}"
+              Content="Open the release page"
+              IsVisible="{Binding IsUpdateAvailable}" />
+        </StackPanel>
+
+        <!-- The whole result is in the sentence. Nothing here is carried by a colour or an icon, so it
+             reads the same to a screen reader as it does on screen. -->
+        <SelectableTextBlock
+            x:Name="UpdateStatusText"
+            Foreground="{DynamicResource Brush.Text.Primary}"
+            IsVisible="{Binding HasUpdateStatus}"
+            Text="{Binding UpdateStatus}"
+            TextWrapping="Wrap" />
+
+        <CheckBox
+            x:Name="AutomaticUpdateCheckToggle"
+            Content="Check automatically, once each time RemoteFlow starts"
+            IsChecked="{Binding AutomaticUpdateCheckEnabled, Mode=TwoWay}" />
+      </StackPanel>
+
       <!-- The diagnostics half. Paths are shown as well as opened: a path can be read out over a support
            conversation, and it is the answer when the file manager itself will not start. -->
-      <StackPanel Grid.Row="2" Margin="0,28,0,0" Spacing="14">
+      <StackPanel Grid.Row="3" Margin="0,28,0,0" Spacing="14">
         <TextBlock FontSize="18" FontWeight="SemiBold" Text="Your files" />
 
         <StackPanel Spacing="5">
@@ -103,7 +142,7 @@
       <!-- Hidden until something goes wrong, which is the normal case. Local only: it names the error and
            opens the folder the logs are already in. Nothing leaves the machine. -->
       <Border
-          Grid.Row="3"
+          Grid.Row="4"
           x:Name="LastErrorPanel"
           Background="{DynamicResource Brush.Surface.1}"
           BorderBrush="{DynamicResource Brush.Border}"
@@ -136,7 +175,7 @@
         </StackPanel>
       </Border>
 
-      <StackPanel Grid.Row="4" Margin="0,28,0,0" Spacing="8">
+      <StackPanel Grid.Row="5" Margin="0,28,0,0" Spacing="8">
         <TextBlock FontSize="18" FontWeight="SemiBold" Text="Third-party notices" />
         <TextBlock
             Foreground="{DynamicResource Brush.Text.Secondary}"
