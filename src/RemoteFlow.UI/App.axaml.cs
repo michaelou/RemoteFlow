@@ -1,5 +1,6 @@
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using RemoteFlow.UI.Input;
 using RemoteFlow.UI.Views;
 
 namespace RemoteFlow.UI;
@@ -15,6 +16,7 @@ public sealed class App : global::Avalonia.Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        EnterActivatesFocusedButton.Install();
     }
 
     public override void OnFrameworkInitializationCompleted()

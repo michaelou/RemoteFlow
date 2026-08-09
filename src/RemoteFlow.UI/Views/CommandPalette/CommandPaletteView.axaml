@@ -15,6 +15,7 @@
     <Grid RowDefinitions="Auto,Auto,*">
       <TextBox
           x:Name="PaletteSearchBox"
+          AutomationProperties.Name="Quick connect"
           KeyDown="PaletteSearchBox_OnKeyDown"
           PlaceholderText="Quick connect…"
           Text="{Binding SearchText, Mode=TwoWay}" />

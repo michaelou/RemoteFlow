@@ -196,7 +196,11 @@ public sealed partial class MainWindow : Window
         }
         else if (e.Key == Key.Enter && list.SelectedItem is NavigationItemViewModel item)
         {
+            // Arrow keys move the highlight and the page with it; Enter is the commit, and the commit
+            // is what hands the keyboard over to the page. Moving focus on every arrow key would make
+            // the sidebar impossible to walk.
             _viewModel.Navigate(item);
+            _ = PageHost.Focus(NavigationMethod.Tab);
             e.Handled = true;
         }
     }

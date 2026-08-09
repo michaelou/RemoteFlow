@@ -1,4 +1,41 @@
-<Styles xmlns="https://github.com/avaloniaui">
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Keyboard focus has to be findable at a glance on a near-black surface. The default adorner is a
+       thin dotted outline in the foreground colour; this is a 2px accent ring at 7.4:1 or better against
+       every surface, sitting just outside the control so it never overlaps the content it marks.
+       Avalonia only shows the adorner for focus that arrived from the keyboard, so nothing changes for
+       someone using a mouse. -->
+  <Style Selector=":is(Control)">
+    <Setter Property="FocusAdorner">
+      <FocusAdornerTemplate>
+        <Border
+            BorderBrush="{DynamicResource Brush.Focus}"
+            BorderThickness="2"
+            CornerRadius="{DynamicResource Radius.Control}"
+            Margin="-2" />
+      </FocusAdornerTemplate>
+    </Setter>
+  </Style>
+  <!-- Themed controls draw their own focus visual from their template rather than through the adorner
+       above, and Fluent's is a one-pixel hairline that is easy to lose on a near-black surface. These
+       repaint it in the accent, two pixels wide, for the controls a keyboard user actually lands on. -->
+  <Style Selector=":is(Button):focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Focus}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+  <Style Selector="ComboBox:focus-visible /template/ Border#Background">
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Focus}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+  <Style Selector="ListBoxItem:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Focus}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
+  <Style Selector="TreeViewItem:focus-visible /template/ Border#PART_LayoutRoot">
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Focus}" />
+    <Setter Property="BorderThickness" Value="2" />
+  </Style>
   <Style Selector="Window">
     <Setter Property="FontFamily" Value="{DynamicResource Font.Family.Default}" />
     <Setter Property="Background" Value="{DynamicResource Brush.Surface.0}" />

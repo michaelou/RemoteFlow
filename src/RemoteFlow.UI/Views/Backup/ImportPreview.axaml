@@ -36,10 +36,10 @@
       </ItemsControl>
 
       <TextBlock FontSize="18" FontWeight="SemiBold" Text="Apply import" />
-      <ComboBox ItemsSource="{Binding Strategies}" SelectedItem="{Binding SelectedStrategy}" />
-      <ComboBox ItemsSource="{Binding ConflictPolicies}" SelectedItem="{Binding SelectedConflictPolicy}" />
-      <TextBox PlaceholderText="Type REPLACE for destructive replacement" Text="{Binding ReplaceConfirmation}" />
-      <TextBox PasswordChar="•" PlaceholderText="Credential passphrase (when present)" Text="{Binding CredentialPassphrase}" />
+      <ComboBox AutomationProperties.Name="Import strategy" ItemsSource="{Binding Strategies}" SelectedItem="{Binding SelectedStrategy}" />
+      <ComboBox AutomationProperties.Name="Conflict policy" ItemsSource="{Binding ConflictPolicies}" SelectedItem="{Binding SelectedConflictPolicy}" />
+      <TextBox AutomationProperties.Name="Type REPLACE to confirm a destructive replacement" PlaceholderText="Type REPLACE for destructive replacement" Text="{Binding ReplaceConfirmation}" />
+      <TextBox AutomationProperties.Name="Credential passphrase" PasswordChar="•" PlaceholderText="Credential passphrase (when present)" Text="{Binding CredentialPassphrase}" />
       <Button HorizontalAlignment="Left" Content="Apply selected strategy" Command="{Binding ApplyCommand}" />
       <TextBlock Text="{Binding ApplySummary}" TextWrapping="Wrap" />
     </StackPanel>

@@ -158,6 +158,7 @@ Security issues go through [SECURITY.md](SECURITY.md), privately, not through a 
 | --- | --- |
 | [docs/keybindings.md](docs/keybindings.md) | Every terminal keybinding, generated from the keymap the application actually uses. |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Concrete symptoms and concrete fixes. |
+| [docs/accessibility.md](docs/accessibility.md) | Working without a mouse, what a screen reader hears, and the contrast floors. |
 | [docs/building.md](docs/building.md) | Building and running from source on Windows, macOS, and Linux. |
 | [docs/backup-format.md](docs/backup-format.md) | The v1 backup archive format. |
 | [docs/packaging-windows.md](docs/packaging-windows.md) | How the Windows artefacts are produced and signed. |

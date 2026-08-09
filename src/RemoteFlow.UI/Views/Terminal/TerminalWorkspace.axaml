@@ -18,13 +18,17 @@
             Click="AddTab_OnClick"
             Content="+ New terminal"
             IsEnabled="{Binding !IsStarting}" />
-        <Button Content="▾" ToolTip.Tip="New terminal with profile">
+        <Button AutomationProperties.Name="New terminal with profile" Content="▾" ToolTip.Tip="New terminal with profile">
           <Button.Flyout>
             <Flyout Placement="BottomEdgeAlignedRight">
               <ItemsControl ItemsSource="{Binding ShellProfiles}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="terminalViewModels:ShellProfileMenuItemViewModel">
-                    <Button Command="{Binding OpenCommand}" HorizontalContentAlignment="Left" MinWidth="220">
+                    <Button
+                        AutomationProperties.Name="{Binding DisplayName}"
+                        Command="{Binding OpenCommand}"
+                        HorizontalContentAlignment="Left"
+                        MinWidth="220">
                       <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="{Binding Icon}" />
                         <TextBlock Text="{Binding DisplayName}" />
@@ -52,12 +56,18 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="terminalViewModels:TerminalSessionViewModel">
+              <!-- A tab is a control, not decoration: it takes keyboard focus, announces which session
+                   and environment it is, and activates with Enter or Space. Without this the strip is
+                   reachable only through the close buttons inside it. -->
               <Border
+                  AutomationProperties.Name="{Binding TabAccessibleName}"
                   Background="{Binding TabBackgroundHex}"
                   BorderBrush="{Binding AccentColorHex}"
                   BorderThickness="0,0,0,3"
                   ClipToBounds="True"
                   CornerRadius="6,6,0,0"
+                  Focusable="True"
+                  KeyDown="Tab_OnKeyDown"
                   Margin="0,0,2,0"
                   MinWidth="150"
                   MaxWidth="240"
@@ -82,11 +92,15 @@
                   <!-- A star column (not a StackPanel) so the title is measured against the tab
                        width and actually trims instead of overflowing the close button. -->
                   <Grid Grid.Column="1" ColumnDefinitions="Auto,*">
+                    <!-- The dot says "this session has ended". Its colour is not what carries that —
+                         its presence is — but a reader needs the words. -->
                     <TextBlock
+                        AutomationProperties.Name="Session ended"
                         IsVisible="{Binding IsEnded}"
                         Foreground="{DynamicResource Brush.Warning}"
                         Margin="0,0,5,0"
                         Text="●"
+                        ToolTip.Tip="This session has ended"
                         VerticalAlignment="Center" />
                     <TextBlock
                         Grid.Column="1"
@@ -96,6 +110,7 @@
                   </Grid>
                   <Button
                       Grid.Column="2"
+                      AutomationProperties.Name="{Binding CloseTabAccessibleName}"
                       Click="CloseTab_OnClick"
                       Content="×"
                       FontSize="13"
@@ -131,17 +146,23 @@
                 <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="6">
                   <TextBox
                       x:Name="FindTextBox"
+                      AutomationProperties.Name="Find in scrollback"
                       PlaceholderText="Find in scrollback"
                       Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
                   <CheckBox Grid.Column="1" Content="Case" IsChecked="{Binding IsSearchCaseSensitive}" VerticalAlignment="Center" />
                   <CheckBox Grid.Column="2" Content="Regex" IsChecked="{Binding IsSearchRegex}" VerticalAlignment="Center" />
-                  <Button Grid.Column="3" Command="{Binding FindPreviousCommand}" Content="↑" ToolTip.Tip="Previous match (Shift+Enter)" />
-                  <Button Grid.Column="4" Command="{Binding FindNextCommand}" Content="↓" ToolTip.Tip="Next match (Enter)" />
-                  <Button Grid.Column="5" Command="{Binding CloseFindCommand}" Content="×" ToolTip.Tip="Close find (Esc)" />
+                  <Button Grid.Column="3" AutomationProperties.Name="Previous match" Command="{Binding FindPreviousCommand}" Content="↑" ToolTip.Tip="Previous match (Shift+Enter)" />
+                  <Button Grid.Column="4" AutomationProperties.Name="Next match" Command="{Binding FindNextCommand}" Content="↓" ToolTip.Tip="Next match (Enter)" />
+                  <Button Grid.Column="5" AutomationProperties.Name="Close find" Command="{Binding CloseFindCommand}" Content="×" ToolTip.Tip="Close find (Esc)" />
                 </Grid>
               </Border>
               <Grid Grid.Row="1">
+                <!-- Without an override this announces as an unlabelled custom control. It is a text
+                     surface, and the name says which session a reader has landed in. -->
                 <terminal:TerminalControl
+                    AutomationProperties.ControlTypeOverride="Text"
+                    AutomationProperties.Name="{Binding TerminalAccessibleName}"
+                    AutomationProperties.HelpText="Terminal output and input. Ctrl+Shift+F searches the scrollback; F6 leaves the terminal."
                     Background="{Binding TerminalBackground}"
                     FontFamily="{Binding FontFamilyName}"
                     FontSize="{Binding TerminalFontSize}"

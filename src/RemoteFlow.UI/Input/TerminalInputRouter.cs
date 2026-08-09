@@ -103,6 +103,10 @@ public sealed class TerminalInputRouter(KeymapService keymap)
             case KeymapCommand.FindTerminal:
                 selected?.OpenFind();
                 break;
+            case KeymapCommand.LeaveTerminal:
+                // Purely a focus move, which is the view's business; it is handled before the command
+                // ever reaches here. Listed so the switch stays exhaustive rather than throwing.
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(command));
         }

@@ -28,7 +28,7 @@
               Grid.Row="3"
               Grid.ColumnSpan="2"
               IsVisible="{Binding FailureReason, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-              Foreground="#D43B3B"
+              Foreground="{DynamicResource Brush.Danger}"
               Text="{Binding FailureReason}"
               TextWrapping="Wrap" />
         </Grid>

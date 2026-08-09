@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RemoteFlow.UI.ViewModels.Connections;
 
@@ -13,6 +14,11 @@ public sealed partial class ConnectionEditorView : UserControl
     public ConnectionEditorView()
     {
         InitializeComponent();
+        // The editor opens beside the button that opened it, so without this the keyboard is still on
+        // that button and the first field is a dozen tab stops away. Opening a form means being in it.
+        // Posted rather than called inline: at Loaded the window may not be active yet, and a focus
+        // request to an inactive window is dropped.
+        Loaded += (_, _) => Dispatcher.UIThread.Post(() => NameBox.Focus(NavigationMethod.Tab));
     }
 
     private async void Save_OnClick(object? sender, RoutedEventArgs e)

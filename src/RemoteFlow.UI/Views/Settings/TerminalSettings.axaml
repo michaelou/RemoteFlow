@@ -16,23 +16,23 @@
         <StackPanel Spacing="14">
           <StackPanel Spacing="5">
             <TextBlock FontWeight="SemiBold" Text="Monospace font" />
-            <ComboBox ItemsSource="{Binding FontFamilies}" SelectedItem="{Binding SelectedFontFamily}" />
+            <ComboBox AutomationProperties.Name="Monospace font" ItemsSource="{Binding FontFamilies}" SelectedItem="{Binding SelectedFontFamily}" />
           </StackPanel>
 
           <Grid ColumnDefinitions="*,16,*">
             <StackPanel Spacing="5">
               <TextBlock FontWeight="SemiBold" Text="Font size" />
-              <NumericUpDown Minimum="6" Maximum="72" Value="{Binding FontSize}" />
+              <NumericUpDown AutomationProperties.Name="Font size" Minimum="6" Maximum="72" Value="{Binding FontSize}" />
             </StackPanel>
             <StackPanel Grid.Column="2" Spacing="5">
               <TextBlock FontWeight="SemiBold" Text="Scrollback lines" />
-              <NumericUpDown Minimum="0" Maximum="100000" Increment="1000" Value="{Binding Scrollback}" />
+              <NumericUpDown AutomationProperties.Name="Scrollback lines" Minimum="0" Maximum="100000" Increment="1000" Value="{Binding Scrollback}" />
             </StackPanel>
           </Grid>
 
           <StackPanel Spacing="5">
             <TextBlock FontWeight="SemiBold" Text="Colour scheme" />
-            <ComboBox ItemsSource="{Binding ColorSchemes}" SelectedItem="{Binding SelectedColorScheme}">
+            <ComboBox AutomationProperties.Name="Colour scheme" ItemsSource="{Binding ColorSchemes}" SelectedItem="{Binding SelectedColorScheme}">
               <ComboBox.ItemTemplate>
                 <DataTemplate x:DataType="settingsViewModels:TerminalColorScheme">
                   <StackPanel Orientation="Horizontal" Spacing="8">
@@ -47,17 +47,17 @@
           <Grid ColumnDefinitions="*,16,*">
             <StackPanel Spacing="5">
               <TextBlock FontWeight="SemiBold" Text="Cursor style" />
-              <ComboBox ItemsSource="{Binding CursorStyles}" SelectedItem="{Binding CursorStyle}" />
+              <ComboBox AutomationProperties.Name="Cursor style" ItemsSource="{Binding CursorStyles}" SelectedItem="{Binding CursorStyle}" />
             </StackPanel>
             <StackPanel Grid.Column="2" Spacing="5">
               <TextBlock FontWeight="SemiBold" Text="Bell" />
-              <ComboBox ItemsSource="{Binding BellModes}" SelectedItem="{Binding BellMode}" />
+              <ComboBox AutomationProperties.Name="Bell" ItemsSource="{Binding BellModes}" SelectedItem="{Binding BellMode}" />
             </StackPanel>
           </Grid>
 
           <StackPanel Spacing="5">
             <TextBlock FontWeight="SemiBold" Text="SSH transport" />
-            <ComboBox ItemsSource="{Binding SshTransports}" SelectedItem="{Binding SelectedSshTransport}">
+            <ComboBox AutomationProperties.Name="SSH transport" ItemsSource="{Binding SshTransports}" SelectedItem="{Binding SelectedSshTransport}">
               <ComboBox.ItemTemplate>
                 <DataTemplate x:DataType="settingsViewModels:SshTransportOption">
                   <TextBlock Text="{Binding DisplayName}" />
@@ -102,7 +102,7 @@
         </Grid>
         <Grid ColumnDefinitions="180,*" ColumnSpacing="12">
           <TextBlock FontWeight="SemiBold" Text="Default profile" VerticalAlignment="Center" />
-          <ComboBox Grid.Column="1" ItemsSource="{Binding ShellProfiles}" SelectedItem="{Binding DefaultShellProfile}">
+          <ComboBox Grid.Column="1" AutomationProperties.Name="Default shell profile" ItemsSource="{Binding ShellProfiles}" SelectedItem="{Binding DefaultShellProfile}">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="settingsViewModels:ShellProfileEditorViewModel">
                 <TextBlock Text="{Binding DisplayName}" />
@@ -116,21 +116,21 @@
               <Border Background="{DynamicResource Brush.Surface.1}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,10" Padding="12">
                 <Grid ColumnDefinitions="90,*,16,90,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
                   <TextBlock Text="Name" VerticalAlignment="Center" />
-                  <TextBox Grid.Column="1" Text="{Binding DisplayName}" />
+                  <TextBox Grid.Column="1" AutomationProperties.Name="Profile name" Text="{Binding DisplayName}" />
                   <TextBlock Grid.Column="3" Text="Icon" VerticalAlignment="Center" />
-                  <TextBox Grid.Column="4" Text="{Binding Icon}" />
+                  <TextBox Grid.Column="4" AutomationProperties.Name="Profile icon" Text="{Binding Icon}" />
 
                   <TextBlock Grid.Row="1" Text="Executable" VerticalAlignment="Center" />
-                  <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4" Text="{Binding ShellPath}" />
+                  <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4" AutomationProperties.Name="Profile executable" Text="{Binding ShellPath}" />
 
                   <TextBlock Grid.Row="2" Text="Working dir" VerticalAlignment="Center" />
-                  <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="4" Text="{Binding WorkingDirectory}" />
+                  <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="4" AutomationProperties.Name="Profile working directory" Text="{Binding WorkingDirectory}" />
 
                   <TextBlock Grid.Row="3" Text="Arguments" VerticalAlignment="Top" />
-                  <TextBox Grid.Row="3" Grid.Column="1" AcceptsReturn="True" Height="74" Text="{Binding ArgumentsText}" TextWrapping="NoWrap" />
+                  <TextBox Grid.Row="3" Grid.Column="1" AcceptsReturn="True" AutomationProperties.Name="Profile arguments, one per line" Height="74" Text="{Binding ArgumentsText}" TextWrapping="NoWrap" />
                   <TextBlock Grid.Row="3" Grid.Column="3" Text="Environment" VerticalAlignment="Top" />
                   <Grid Grid.Row="3" Grid.Column="4" RowDefinitions="*,Auto">
-                    <TextBox AcceptsReturn="True" Height="74" Text="{Binding EnvironmentText}" TextWrapping="NoWrap" />
+                    <TextBox AcceptsReturn="True" AutomationProperties.Name="Profile environment variables, one per line" Height="74" Text="{Binding EnvironmentText}" TextWrapping="NoWrap" />
                     <Button Grid.Row="1" Click="RemoveShellProfile_OnClick" Content="Remove" HorizontalAlignment="Right" Margin="0,8,0,0" />
                   </Grid>
                 </Grid>

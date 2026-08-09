@@ -9,11 +9,17 @@
       <Color x:Key="Color.Border">#344052</Color>
       <Color x:Key="Color.Text.Primary">#F2F5F7</Color>
       <Color x:Key="Color.Text.Secondary">#B8C2CF</Color>
-      <Color x:Key="Color.Text.Disabled">#7E8998</Color>
+      <!-- 4.7:1 on Surface.2, the lightest surface disabled text ever sits on. The previous value read
+           as disabled at 4.46:1 and failed the 4.5:1 floor by a hair. -->
+      <Color x:Key="Color.Text.Disabled">#828D9C</Color>
       <Color x:Key="Color.Text.Muted">#8D97A5</Color>
       <Color x:Key="Color.Badge.Background">#A6D4F7</Color>
       <Color x:Key="Color.Badge.Text">#0B2032</Color>
       <Color x:Key="Color.Accent">#6CB6FF</Color>
+      <!-- The keyboard focus ring, deliberately not the accent: a blue ring on the accent-blue primary
+           button is 2.1:1 and effectively invisible. Near-white clears 3:1 against every surface *and*
+           against the accent button it can land on — 4.1:1 at worst, 17.6:1 at best. -->
+      <Color x:Key="Color.Focus">#F2F5F7</Color>
       <Color x:Key="Color.Success">#5DE28C</Color>
       <Color x:Key="Color.Warning">#FFCA58</Color>
       <Color x:Key="Color.Danger">#FF7B72</Color>
@@ -31,6 +37,7 @@
       <SolidColorBrush x:Key="Brush.Badge.Background" Color="{DynamicResource Color.Badge.Background}" />
       <SolidColorBrush x:Key="Brush.Badge.Text" Color="{DynamicResource Color.Badge.Text}" />
       <SolidColorBrush x:Key="Brush.Accent" Color="{DynamicResource Color.Accent}" />
+      <SolidColorBrush x:Key="Brush.Focus" Color="{DynamicResource Color.Focus}" />
       <SolidColorBrush x:Key="Brush.Success" Color="{DynamicResource Color.Success}" />
       <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />
       <SolidColorBrush x:Key="Brush.Danger" Color="{DynamicResource Color.Danger}" />
@@ -50,6 +57,7 @@
       <Color x:Key="Color.Badge.Background">#D7EBFB</Color>
       <Color x:Key="Color.Badge.Text">#134A75</Color>
       <Color x:Key="Color.Accent">#0969DA</Color>
+      <Color x:Key="Color.Focus">#0B1017</Color>
       <Color x:Key="Color.Success">#137333</Color>
       <Color x:Key="Color.Warning">#8A5A00</Color>
       <Color x:Key="Color.Danger">#B42318</Color>
@@ -67,6 +75,7 @@
       <SolidColorBrush x:Key="Brush.Badge.Background" Color="{DynamicResource Color.Badge.Background}" />
       <SolidColorBrush x:Key="Brush.Badge.Text" Color="{DynamicResource Color.Badge.Text}" />
       <SolidColorBrush x:Key="Brush.Accent" Color="{DynamicResource Color.Accent}" />
+      <SolidColorBrush x:Key="Brush.Focus" Color="{DynamicResource Color.Focus}" />
       <SolidColorBrush x:Key="Brush.Success" Color="{DynamicResource Color.Success}" />
       <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />
       <SolidColorBrush x:Key="Brush.Danger" Color="{DynamicResource Color.Danger}" />

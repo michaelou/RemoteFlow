@@ -21,17 +21,17 @@
       <TextBlock Grid.Column="2" HorizontalAlignment="Center" FontWeight="SemiBold" Text="Write" />
       <TextBlock Grid.Column="3" HorizontalAlignment="Center" FontWeight="SemiBold" Text="Execute" />
       <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="User" />
-      <CheckBox Grid.Row="1" Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding UserRead}" />
-      <CheckBox Grid.Row="1" Grid.Column="2" HorizontalAlignment="Center" IsChecked="{Binding UserWrite}" />
-      <CheckBox Grid.Row="1" Grid.Column="3" HorizontalAlignment="Center" IsChecked="{Binding UserExecute}" />
+      <CheckBox Grid.Row="1" Grid.Column="1" AutomationProperties.Name="User read" HorizontalAlignment="Center" IsChecked="{Binding UserRead}" />
+      <CheckBox Grid.Row="1" Grid.Column="2" AutomationProperties.Name="User write" HorizontalAlignment="Center" IsChecked="{Binding UserWrite}" />
+      <CheckBox Grid.Row="1" Grid.Column="3" AutomationProperties.Name="User execute" HorizontalAlignment="Center" IsChecked="{Binding UserExecute}" />
       <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="Group" />
-      <CheckBox Grid.Row="2" Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding GroupRead}" />
-      <CheckBox Grid.Row="2" Grid.Column="2" HorizontalAlignment="Center" IsChecked="{Binding GroupWrite}" />
-      <CheckBox Grid.Row="2" Grid.Column="3" HorizontalAlignment="Center" IsChecked="{Binding GroupExecute}" />
+      <CheckBox Grid.Row="2" Grid.Column="1" AutomationProperties.Name="Group read" HorizontalAlignment="Center" IsChecked="{Binding GroupRead}" />
+      <CheckBox Grid.Row="2" Grid.Column="2" AutomationProperties.Name="Group write" HorizontalAlignment="Center" IsChecked="{Binding GroupWrite}" />
+      <CheckBox Grid.Row="2" Grid.Column="3" AutomationProperties.Name="Group execute" HorizontalAlignment="Center" IsChecked="{Binding GroupExecute}" />
       <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="Other" />
-      <CheckBox Grid.Row="3" Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding OtherRead}" />
-      <CheckBox Grid.Row="3" Grid.Column="2" HorizontalAlignment="Center" IsChecked="{Binding OtherWrite}" />
-      <CheckBox Grid.Row="3" Grid.Column="3" HorizontalAlignment="Center" IsChecked="{Binding OtherExecute}" />
+      <CheckBox Grid.Row="3" Grid.Column="1" AutomationProperties.Name="Other read" HorizontalAlignment="Center" IsChecked="{Binding OtherRead}" />
+      <CheckBox Grid.Row="3" Grid.Column="2" AutomationProperties.Name="Other write" HorizontalAlignment="Center" IsChecked="{Binding OtherWrite}" />
+      <CheckBox Grid.Row="3" Grid.Column="3" AutomationProperties.Name="Other execute" HorizontalAlignment="Center" IsChecked="{Binding OtherExecute}" />
     </Grid>
 
     <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="18">
@@ -42,11 +42,11 @@
 
     <Grid Grid.Row="3" ColumnDefinitions="Auto,110,*" RowDefinitions="Auto,Auto" ColumnSpacing="10">
       <TextBlock VerticalAlignment="Center" Text="Directory / item mode" />
-      <TextBox Grid.Column="1" FontFamily="Cascadia Mono,Consolas" MaxLength="4" Text="{Binding OctalText}" />
-      <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="#D43B3B" Text="{Binding ValidationMessage}" TextWrapping="Wrap" />
+      <TextBox Grid.Column="1" AutomationProperties.Name="Directory or item mode, octal" FontFamily="Cascadia Mono,Consolas" MaxLength="4" Text="{Binding OctalText}" />
+      <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Danger}" Text="{Binding ValidationMessage}" TextWrapping="Wrap" />
       <TextBlock Grid.Row="1" Margin="0,8,0,0" VerticalAlignment="Center" IsVisible="{Binding Recursive}" Text="File mode" />
-      <TextBox Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" IsVisible="{Binding Recursive}" FontFamily="Cascadia Mono,Consolas" MaxLength="4" Text="{Binding FileOctalText}" />
-      <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,8,0,0" IsVisible="{Binding Recursive}" VerticalAlignment="Center" Foreground="#D43B3B" Text="{Binding FileValidationMessage}" TextWrapping="Wrap" />
+      <TextBox Grid.Row="1" Grid.Column="1" AutomationProperties.Name="File mode, octal" Margin="0,8,0,0" IsVisible="{Binding Recursive}" FontFamily="Cascadia Mono,Consolas" MaxLength="4" Text="{Binding FileOctalText}" />
+      <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,8,0,0" IsVisible="{Binding Recursive}" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Danger}" Text="{Binding FileValidationMessage}" TextWrapping="Wrap" />
     </Grid>
 
     <StackPanel Grid.Row="4">
@@ -59,7 +59,7 @@
       <ItemsControl ItemsSource="{Binding Failures}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="viewModels:SftpPermissionFailure">
-            <TextBlock Foreground="#D43B3B" Text="{Binding DisplayMessage}" TextWrapping="Wrap" />
+            <TextBlock Foreground="{DynamicResource Brush.Danger}" Text="{Binding DisplayMessage}" TextWrapping="Wrap" />
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -22,6 +23,8 @@ public sealed partial class ConnectionsView : UserControl
         {
             viewModel.RenameStarted -= OnRenameStarted;
             viewModel.RenameStarted += OnRenameStarted;
+            viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            viewModel.PropertyChanged += OnViewModelPropertyChanged;
             await viewModel.InitializeAsync().ConfigureAwait(true);
         }
     }
@@ -31,6 +34,18 @@ public sealed partial class ConnectionsView : UserControl
         if (DataContext is ConnectionsPageViewModel viewModel)
         {
             viewModel.RenameStarted -= OnRenameStarted;
+            viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        }
+    }
+
+    /// <summary>Closing the editor removes the control the keyboard was in. Something has to catch the
+    /// focus, or it lands on the window and the next Tab starts again from the top of the page.</summary>
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ConnectionsPageViewModel.IsEditorOpen) &&
+            sender is ConnectionsPageViewModel { IsEditorOpen: false })
+        {
+            _ = ConnectionTree.Focus(NavigationMethod.Tab);
         }
     }
 

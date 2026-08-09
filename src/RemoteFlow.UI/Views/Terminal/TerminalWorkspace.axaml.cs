@@ -103,6 +103,30 @@ public sealed partial class TerminalWorkspace : UserControl
         FocusTerminal();
     }
 
+    /// <summary>Enter or Space selects the focused tab; Delete closes it. The tab keeps focus after a
+    /// selection so a keyboard user can keep moving along the strip, and hands focus to the terminal
+    /// only when they ask for the session itself.</summary>
+    private async void Tab_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not Control { DataContext: TerminalSessionViewModel session } ||
+            DataContext is not TerminalsPageViewModel viewModel)
+        {
+            return;
+        }
+
+        if (e.Key is Key.Enter or Key.Space)
+        {
+            viewModel.SelectSession(session);
+            e.Handled = true;
+            FocusTerminal();
+        }
+        else if (e.Key == Key.Delete)
+        {
+            _ = await viewModel.CloseSessionAsync(session).ConfigureAwait(true);
+            e.Handled = true;
+        }
+    }
+
     private void Tab_OnPointerMoved(object? sender, PointerEventArgs e)
     {
         if (_pressedTab is null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
@@ -180,6 +204,14 @@ public sealed partial class TerminalWorkspace : UserControl
 
     private async Task RunCommandAsync(KeymapCommand command, TerminalsPageViewModel viewModel)
     {
+        // The terminal swallows Tab as a byte, so this is the only way back out to the rest of the
+        // application. The tab strip is the nearest stop, and Tab continues from there.
+        if (command == KeymapCommand.LeaveTerminal)
+        {
+            FocusTabStrip();
+            return;
+        }
+
         await TerminalInputRouter.ExecuteAsync(command, viewModel, ToggleFullscreen).ConfigureAwait(true);
         if (viewModel.SelectedSession?.IsFindOpen == true)
         {
@@ -205,6 +237,17 @@ public sealed partial class TerminalWorkspace : UserControl
     {
         var terminal = this.GetVisualDescendants().OfType<TerminalControl>().FirstOrDefault();
         _ = terminal?.Focus();
+    }
+
+    /// <summary>Focus the tab of the session on screen, falling back to the workspace itself when there
+    /// are no sessions at all.</summary>
+    private void FocusTabStrip()
+    {
+        var selected = (DataContext as TerminalsPageViewModel)?.SelectedSession;
+        var tab = TabScroller.GetVisualDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(border => border.Focusable && ReferenceEquals(border.DataContext, selected));
+        _ = tab?.Focus(NavigationMethod.Tab) ?? Focus(NavigationMethod.Tab);
     }
 
     private void FocusFindBox()

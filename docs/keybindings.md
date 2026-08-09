@@ -21,6 +21,7 @@ This file is generated from `KeymapService.Bindings`. Changes must be made in th
 | All | `Alt+8` | Select terminal 8 |
 | All | `Alt+9` | Select terminal 9 |
 | All | `F11` | Toggle full screen |
+| All | `F6` | Move focus out of the terminal |
 | Windows/Linux | `Ctrl+Shift+C` | Copy selection |
 | Windows/Linux | `Ctrl+Insert` | Copy selection |
 | Windows/Linux | `Ctrl+Shift+V` | Paste |
@@ -41,7 +42,7 @@ This file is generated from `KeymapService.Bindings`. Changes must be made in th
 | All | `F3` | F3 |
 | All | `F4` | F4 |
 | All | `F5` | F5 |
-| All | `F6` | F6 |
+| All | `F6 (terminal)` | Send terminal F6 (Shift avoids the app shortcut) |
 | All | `F7` | F7 |
 | All | `F8` | F8 |
 | All | `F9` | F9 |
