@@ -215,6 +215,12 @@ The holder is a normal hidden `WS_POPUP` window, not a message-only window. A me
 desktop lineage, and moving a live RDP control's window tree off the desktop is a larger gamble than a
 window that is simply never shown.
 
+**Embedded sessions always occupy one RemoteFlow viewport.** The stored `FullScreen` and `Multimon`
+options remain external-client requests: the mapper does not apply either to the ActiveX control, and it
+retains both requests in `IgnoredExternalRdpDisplayOptions` so the editor can explain the limitation.
+Embedded fullscreen continues to mean making the RemoteFlow window fullscreen, and multi-monitor RDP is
+out of scope for this milestone.
+
 **`RemoteFlow.Desktop` must gain an application manifest with a `supportedOS` list.** This is not optional
 and it is not currently there. Without it, Avalonia's Win32 `NativeControlHost` throws on the first
 attach:
