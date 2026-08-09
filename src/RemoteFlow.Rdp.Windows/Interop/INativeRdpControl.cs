@@ -19,9 +19,27 @@ internal interface INativeRdpControl : IAsyncDisposable
 
     void ResetPassword();
 
+    NativeRdpResizeResult UpdateSessionDisplaySettings(
+        int width,
+        int height,
+        uint desktopScaleFactor,
+        uint deviceScaleFactor);
+
+    NativeRdpResizeResult SetSmartSizing(bool enabled);
+
     string DescribeDisconnect(uint disconnectReason, uint extendedDisconnectReason);
 
     uint ExtendedDisconnectReason { get; }
+}
+
+internal readonly record struct NativeRdpResizeResult(bool Succeeded, string? FailureReason)
+{
+    public static NativeRdpResizeResult Success { get; } = new(true, null);
+
+    public static NativeRdpResizeResult Failure(string reason)
+    {
+        return new(false, reason);
+    }
 }
 
 internal sealed class NativeRdpEventArgs(int dispatchId, IReadOnlyList<object?> arguments) : EventArgs

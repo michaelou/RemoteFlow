@@ -10,19 +10,27 @@ namespace RemoteFlow.Rdp.Windows;
 
 internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
 {
+    internal static readonly TimeSpan ResizeDebounce = TimeSpan.FromMilliseconds(150);
+
+    private readonly Lock _resizeLock = new();
     private readonly Lock _stateLock = new();
+    private CancellationTokenSource? _resizeCancellation;
+    private RdpViewportSize? _lastAppliedSize;
+    private bool _smartSizingFallback;
     private int _disposed;
 
     public WindowsEmbeddedRdpSession(
         INativeRdpControl control,
         IUiDispatcher dispatcher,
         IEmbeddedRdpCredentialSource? credentialSource = null,
-        ILogger<WindowsEmbeddedRdpSession>? logger = null)
+        ILogger<WindowsEmbeddedRdpSession>? logger = null,
+        TimeProvider? timeProvider = null)
     {
         Control = control ?? throw new ArgumentNullException(nameof(control));
         Dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         CredentialSource = credentialSource ?? NoEmbeddedRdpCredentialSource.Instance;
         Logger = logger ?? NullLogger<WindowsEmbeddedRdpSession>.Instance;
+        TimeProvider = timeProvider ?? TimeProvider.System;
         Control.EventReceived += OnNativeEventReceived;
     }
 
@@ -59,6 +67,8 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
     private IEmbeddedRdpCredentialSource CredentialSource { get; }
 
     private ILogger<WindowsEmbeddedRdpSession> Logger { get; }
+
+    private TimeProvider TimeProvider { get; }
 
     private EmbeddedRdpSessionState CurrentState { get; set; } = EmbeddedRdpSessionState.Created;
 
@@ -142,10 +152,31 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
     public void Resize(int width, int height, double scaling)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        if (State != EmbeddedRdpSessionState.Connected)
+        {
+            return;
+        }
+
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(scaling);
-        // The native resize policy is added in #87. Until then, accepting a valid size is deliberately a no-op.
+
+        var size = new RdpViewportSize(width, height, RdpControlSettingsMapper.MapScaleFactor(scaling));
+        CancellationTokenSource cancellation;
+        lock (_resizeLock)
+        {
+            if (_smartSizingFallback || size == _lastAppliedSize)
+            {
+                return;
+            }
+
+            _resizeCancellation?.Cancel();
+            _resizeCancellation?.Dispose();
+            cancellation = new CancellationTokenSource();
+            _resizeCancellation = cancellation;
+        }
+
+        _ = ApplyResizeAfterDebounceAsync(size, cancellation);
     }
 
     public async ValueTask DisposeAsync()
@@ -156,6 +187,7 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
         }
 
         Control.EventReceived -= OnNativeEventReceived;
+        CancelPendingResize();
         var disposalRan = false;
         try
         {
@@ -293,6 +325,11 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
             }
         }
 
+        if (nextState != EmbeddedRdpSessionState.Connected)
+        {
+            CancelPendingResize();
+        }
+
         try
         {
             if (Logger.IsEnabled(LogLevel.Trace))
@@ -310,6 +347,86 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
             // A UI subscriber is part of the COM callback path. It must never unwind into mstscax.
         }
     }
+
+    private async Task ApplyResizeAfterDebounceAsync(
+        RdpViewportSize size,
+        CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(ResizeDebounce, TimeProvider, cancellation.Token).ConfigureAwait(false);
+            await Dispatcher.InvokeAsync(
+                () => ApplyResizeCore(size, cancellation),
+                cancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer viewport superseded this request, the session left Connected, or it was disposed.
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(
+                "Dynamic RDP resize could not be dispatched ({FailureType}); the session remains connected.",
+                exception.GetType().Name);
+        }
+        finally
+        {
+            lock (_resizeLock)
+            {
+                if (ReferenceEquals(_resizeCancellation, cancellation))
+                {
+                    _resizeCancellation = null;
+                }
+            }
+
+            cancellation.Dispose();
+        }
+    }
+
+    private void ApplyResizeCore(RdpViewportSize size, CancellationTokenSource cancellation)
+    {
+        if (cancellation.IsCancellationRequested ||
+            Volatile.Read(ref _disposed) != 0 ||
+            State != EmbeddedRdpSessionState.Connected)
+        {
+            return;
+        }
+
+        var result = Control.UpdateSessionDisplaySettings(
+            size.Width,
+            size.Height,
+            size.ScaleFactor,
+            size.ScaleFactor);
+        if (result.Succeeded)
+        {
+            lock (_resizeLock)
+            {
+                _lastAppliedSize = size;
+            }
+            return;
+        }
+
+        var fallback = Control.SetSmartSizing(true);
+        lock (_resizeLock)
+        {
+            _smartSizingFallback = true;
+        }
+        Logger.LogWarning(
+            "Dynamic RDP resize failed ({FailureReason}); SmartSizing fallback {FallbackStatus}.",
+            result.FailureReason ?? "unknown native failure",
+            fallback.Succeeded ? "was enabled" : $"could not be enabled ({fallback.FailureReason})");
+    }
+
+    private void CancelPendingResize()
+    {
+        lock (_resizeLock)
+        {
+            _resizeCancellation?.Cancel();
+            _resizeCancellation = null;
+        }
+    }
+
+    private readonly record struct RdpViewportSize(int Width, int Height, uint ScaleFactor);
 
     private async Task FailWithoutThrowingAsync(string message)
     {

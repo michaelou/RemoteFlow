@@ -135,6 +135,50 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
         Marshal.ThrowExceptionForHR(RequiredNonScriptable().ResetPassword());
     }
 
+    public NativeRdpResizeResult UpdateSessionDisplaySettings(
+        int width,
+        int height,
+        uint desktopScaleFactor,
+        uint deviceScaleFactor)
+    {
+        try
+        {
+            _ = InvokeMethod(
+                RequiredInstance(),
+                "UpdateSessionDisplaySettings",
+                checked((uint)width),
+                checked((uint)height),
+                0u,
+                0u,
+                0u,
+                desktopScaleFactor,
+                deviceScaleFactor);
+            return NativeRdpResizeResult.Success;
+        }
+        catch (Exception exception) when (exception is COMException or TargetInvocationException or
+            MissingMethodException or ArgumentException or OverflowException)
+        {
+            return ResizeFailure(exception);
+        }
+    }
+
+    public NativeRdpResizeResult SetSmartSizing(bool enabled)
+    {
+        try
+        {
+            SetProperty(
+                _advancedSettings ?? throw new ObjectDisposedException(nameof(WindowsNativeRdpControl)),
+                "SmartSizing",
+                enabled);
+            return NativeRdpResizeResult.Success;
+        }
+        catch (Exception exception) when (exception is COMException or TargetInvocationException or
+            MissingMethodException or ArgumentException or ObjectDisposedException)
+        {
+            return ResizeFailure(exception);
+        }
+    }
+
     public string DescribeDisconnect(uint disconnectReason, uint extendedDisconnectReason)
     {
         try
@@ -234,6 +278,15 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
     private static short VariantBool(bool value)
     {
         return value ? (short)-1 : (short)0;
+    }
+
+    private static NativeRdpResizeResult ResizeFailure(Exception exception)
+    {
+        var cause = exception is TargetInvocationException { InnerException: not null }
+            ? exception.InnerException
+            : exception;
+        return NativeRdpResizeResult.Failure(
+            $"{cause.GetType().Name} (HRESULT 0x{Marshal.GetHRForException(cause):X8})");
     }
 
     private static object? GetProperty(object target, string name)

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Domain.Abstractions;
 using RemoteFlow.Domain.Entities;
@@ -361,6 +362,82 @@ public sealed class WindowsEmbeddedRdpSessionTests
         Assert.True(control.AllowPromptingForCredentials);
     }
 
+    [Fact]
+    public async Task ResizeBurstAppliesOnlyLatestPhysicalViewportWithoutReconnect()
+    {
+        var time = new FakeTimeProvider();
+        var control = new FakeNativeRdpControl();
+        await using var session = new WindowsEmbeddedRdpSession(
+            control,
+            new RecordingDispatcher(),
+            timeProvider: time);
+        await ConnectThroughLoginAsync(session, control);
+
+        session.Resize(1000, 700, 1d);
+        session.Resize(1100, 750, 1.25d);
+        session.Resize(1200, 800, 1.5d);
+        time.Advance(WindowsEmbeddedRdpSession.ResizeDebounce);
+        await control.ResizeObserved.Task.WaitAsync(TestContext.Current.CancellationToken);
+
+        var resize = Assert.Single(control.ResizeRequests);
+        Assert.Equal((1200, 800, 140u, 140u), resize);
+        Assert.Equal(1, control.ConnectCount);
+        Assert.Empty(control.SmartSizingValues);
+        Assert.Equal(EmbeddedRdpSessionState.Connected, session.State);
+    }
+
+    [Fact]
+    public async Task ResizeIsNoOpUntilConnectedAndAfterDisconnect()
+    {
+        var time = new FakeTimeProvider();
+        var control = new FakeNativeRdpControl();
+        await using var session = new WindowsEmbeddedRdpSession(
+            control,
+            new RecordingDispatcher(),
+            timeProvider: time);
+
+        session.Resize(0, 0, 0);
+        await session.ConnectAsync(TestContext.Current.CancellationToken);
+        session.Resize(0, 0, 0);
+        control.Raise(4, 1u);
+        session.Resize(0, 0, 0);
+        time.Advance(WindowsEmbeddedRdpSession.ResizeDebounce);
+        await Task.Yield();
+
+        Assert.Empty(control.ResizeRequests);
+    }
+
+    [Fact]
+    public async Task FailedDynamicResizeEnablesSmartSizingOnceAndKeepsSessionConnected()
+    {
+        var time = new FakeTimeProvider();
+        var logger = new TraceLogger();
+        var control = new FakeNativeRdpControl
+        {
+            ResizeResult = NativeRdpResizeResult.Failure("COMException (HRESULT 0x80004001)"),
+        };
+        await using var session = new WindowsEmbeddedRdpSession(
+            control,
+            new RecordingDispatcher(),
+            logger: logger,
+            timeProvider: time);
+        await ConnectThroughLoginAsync(session, control);
+
+        session.Resize(1440, 900, 1d);
+        time.Advance(WindowsEmbeddedRdpSession.ResizeDebounce);
+        await control.ResizeObserved.Task.WaitAsync(TestContext.Current.CancellationToken);
+        session.Resize(1600, 1000, 1d);
+        time.Advance(WindowsEmbeddedRdpSession.ResizeDebounce);
+        await Task.Yield();
+
+        _ = Assert.Single(control.ResizeRequests);
+        Assert.Equal([true], control.SmartSizingValues);
+        Assert.Equal(EmbeddedRdpSessionState.Connected, session.State);
+        Assert.Equal(1, control.ConnectCount);
+        Assert.Contains(logger.Messages, message =>
+            message.Contains("SmartSizing fallback was enabled", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData(516u, 0u, "could not be reached")]
     [InlineData(0u, 5u, "session limit")]
@@ -462,6 +539,16 @@ public sealed class WindowsEmbeddedRdpSessionTests
 
         public int SetPasswordCount { get; private set; }
 
+        public NativeRdpResizeResult ResizeResult { get; init; } = NativeRdpResizeResult.Success;
+
+        public NativeRdpResizeResult SmartSizingResult { get; init; } = NativeRdpResizeResult.Success;
+
+        public List<(int Width, int Height, uint DesktopScale, uint DeviceScale)> ResizeRequests { get; } = [];
+
+        public List<bool> SmartSizingValues { get; } = [];
+
+        public TaskCompletionSource ResizeObserved { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public void Connect(CancellationToken cancellationToken)
         {
             ConnectCount++;
@@ -491,6 +578,23 @@ public sealed class WindowsEmbeddedRdpSessionTests
         {
             ResetPasswordCount++;
             ClearTextPassword = null;
+        }
+
+        public NativeRdpResizeResult UpdateSessionDisplaySettings(
+            int width,
+            int height,
+            uint desktopScaleFactor,
+            uint deviceScaleFactor)
+        {
+            ResizeRequests.Add((width, height, desktopScaleFactor, deviceScaleFactor));
+            _ = ResizeObserved.TrySetResult();
+            return ResizeResult;
+        }
+
+        public NativeRdpResizeResult SetSmartSizing(bool enabled)
+        {
+            SmartSizingValues.Add(enabled);
+            return SmartSizingResult;
         }
 
         public string DescribeDisconnect(uint disconnectReason, uint extendedDisconnectReason)
@@ -560,7 +664,7 @@ public sealed class WindowsEmbeddedRdpSessionTests
 
         public bool IsEnabled(LogLevel logLevel)
         {
-            return logLevel == LogLevel.Trace;
+            return logLevel >= LogLevel.Trace;
         }
 
         public void Log<TState>(

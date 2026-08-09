@@ -13,6 +13,8 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
     private readonly Border _recoveryPanel;
     private readonly TextBlock _statusText;
     private OleRdpControlContainer? _container;
+    private RdpViewportResizeController? _resizeController;
+    private bool? _lastEffectiveVisibility;
     private int _disposed;
 
     public RdpSessionView()
@@ -100,8 +102,13 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
             _nativeHost.Attach(container);
             _container = container;
             Session = session;
+            _resizeController = new RdpViewportResizeController(session);
             Session.StateChanged += OnSessionStateChanged;
+            SizeChanged += OnSizeChanged;
+            LayoutUpdated += OnLayoutUpdated;
             UpdateState(Session.State, Session.StatusMessage);
+            RequestCurrentViewport();
+            SyncEffectiveVisibility();
         }
         catch
         {
@@ -131,6 +138,8 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
         }
 
         session.StateChanged -= OnSessionStateChanged;
+        SizeChanged -= OnSizeChanged;
+        LayoutUpdated -= OnLayoutUpdated;
         await session.DisconnectAsync();
         DisposeContainer();
         await session.DisposeAsync();
@@ -140,6 +149,46 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
     private void OnSessionStateChanged(object? sender, EmbeddedRdpSessionStateChangedEventArgs e)
     {
         UpdateState(e.CurrentState, e.StatusMessage);
+    }
+
+    private void OnSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        RequestCurrentViewport();
+    }
+
+    private void OnLayoutUpdated(object? sender, EventArgs e)
+    {
+        SyncEffectiveVisibility();
+    }
+
+    private void SyncEffectiveVisibility()
+    {
+        if (_lastEffectiveVisibility == IsEffectivelyVisible)
+        {
+            return;
+        }
+
+        _lastEffectiveVisibility = IsEffectivelyVisible;
+        if (IsEffectivelyVisible)
+        {
+            // Capture the final tab/window geometry before releasing the one pending hidden resize.
+            _resizeController?.SetVisible(false);
+            RequestCurrentViewport(syncVisibility: false);
+        }
+
+        _resizeController?.SetVisible(IsEffectivelyVisible);
+    }
+
+    private void RequestCurrentViewport(bool syncVisibility = true)
+    {
+        var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1d;
+        var width = (int)Math.Round(Bounds.Width * scaling, MidpointRounding.AwayFromZero);
+        var height = (int)Math.Round(Bounds.Height * scaling, MidpointRounding.AwayFromZero);
+        if (syncVisibility)
+        {
+            _resizeController?.SetVisible(IsEffectivelyVisible);
+        }
+        _resizeController?.RequestResize(width, height, scaling);
     }
 
     private void UpdateState(EmbeddedRdpSessionState state, string? message)
@@ -177,6 +226,8 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
         _nativeHost.Release();
         _container?.Dispose();
         _container = null;
+        _resizeController = null;
+        _lastEffectiveVisibility = null;
         Session = null;
     }
 }

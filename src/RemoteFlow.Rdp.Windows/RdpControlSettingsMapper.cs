@@ -48,7 +48,7 @@ internal static class RdpControlSettingsMapper
                 MultiMonitorRequested: options.Multimon));
     }
 
-    private static uint MapScaleFactor(double displayScaling)
+    internal static uint MapScaleFactor(double displayScaling)
     {
         var requested = displayScaling * 100d;
         ReadOnlySpan<uint> supported = [100u, 140u, 180u];
