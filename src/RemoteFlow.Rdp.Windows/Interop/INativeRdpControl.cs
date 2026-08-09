@@ -19,6 +19,12 @@ internal interface INativeRdpControl : IAsyncDisposable
 
     void ResetPassword();
 
+    NativeRdpResizeResult ConfigureInitialDisplaySettings(
+        int width,
+        int height,
+        uint desktopScaleFactor,
+        uint deviceScaleFactor);
+
     NativeRdpResizeResult UpdateSessionDisplaySettings(
         int width,
         int height,

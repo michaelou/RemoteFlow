@@ -63,6 +63,7 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
     private object? _instance;
     private object? _advancedSettings;
     private object? _securedSettings;
+    private IMsRdpExtendedSettings? _extendedSettings;
     private IMsRdpClientNonScriptable5? _nonScriptable;
     private int _disposed;
 
@@ -74,6 +75,7 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
         {
             _nonScriptable = instance as IMsRdpClientNonScriptable5
                 ?? throw new InvalidOperationException("The RDP control does not expose credential handover.");
+            _extendedSettings = instance as IMsRdpExtendedSettings;
             _eventSink.EventReceived += ForwardEvent;
             _eventSink.Advise(instance);
             Apply(settings);
@@ -134,6 +136,36 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
     public void ResetPassword()
     {
         Marshal.ThrowExceptionForHR(RequiredNonScriptable().ResetPassword());
+    }
+
+    public NativeRdpResizeResult ConfigureInitialDisplaySettings(
+        int width,
+        int height,
+        uint desktopScaleFactor,
+        uint deviceScaleFactor)
+    {
+        try
+        {
+            var instance = RequiredInstance();
+            SetProperty(instance, "DesktopWidth", width);
+            SetProperty(instance, "DesktopHeight", height);
+            var extended = _extendedSettings;
+            if (extended is null)
+            {
+                return NativeRdpResizeResult.Failure("IMsRdpExtendedSettings is unavailable");
+            }
+
+            object desktopScale = desktopScaleFactor;
+            object deviceScale = deviceScaleFactor;
+            Marshal.ThrowExceptionForHR(extended.put_Property("DesktopScaleFactor", desktopScale));
+            Marshal.ThrowExceptionForHR(extended.put_Property("DeviceScaleFactor", deviceScale));
+            return NativeRdpResizeResult.Success;
+        }
+        catch (Exception exception) when (exception is COMException or TargetInvocationException or
+            MissingMethodException or ArgumentException or ObjectDisposedException)
+        {
+            return ResizeFailure(exception);
+        }
     }
 
     public NativeRdpResizeResult UpdateSessionDisplaySettings(
@@ -231,6 +263,11 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
             _securedSettings,
             "KeyboardHookMode",
             (int)settings.AdvancedSettings.KeyboardHookMode);
+        _ = ConfigureInitialDisplaySettings(
+            settings.DesktopWidth,
+            settings.DesktopHeight,
+            settings.DesktopScaleFactor,
+            settings.DeviceScaleFactor);
     }
 
     private void ForwardEvent(object? sender, NativeRdpEventArgs e)
@@ -269,6 +306,7 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
 
         // This is a QueryInterface view of the control's own RCW, not a separate COM identity.
         _nonScriptable = null;
+        _extendedSettings = null;
 
         var instance = Interlocked.Exchange(ref _instance, null);
         if (instance is not null && Marshal.IsComObject(instance))

@@ -14,10 +14,14 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
     private readonly RdpNativeHost _nativeHost;
     private readonly Border _recoveryPanel;
     private readonly TextBlock _statusText;
+    private readonly TaskCompletionSource _initialViewportReady = new(
+        TaskCreationOptions.RunContinuationsAsynchronously);
     private OleRdpControlContainer? _container;
     private RdpKeyboardHook? _keyboardHook;
     private RdpViewportResizeController? _resizeController;
+    private WindowsEmbeddedRdpSession? _windowsSession;
     private bool? _lastEffectiveVisibility;
+    private double _lastRenderScaling;
     private int _disposed;
 
     public RdpSessionView()
@@ -112,7 +116,8 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
                 () => _ = WorkspaceSessionContentHost.RequestFocusEscape(this));
             _container = container;
             Session = session;
-            _resizeController = new RdpViewportResizeController(session);
+            _windowsSession = windowsSession;
+            _resizeController = new RdpViewportResizeController(windowsSession.ConfigureInitialViewport);
             Session.StateChanged += OnSessionStateChanged;
             SizeChanged += OnSizeChanged;
             LayoutUpdated += OnLayoutUpdated;
@@ -130,6 +135,20 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
     public bool FocusSurface()
     {
         return _container?.FocusControl() == true;
+    }
+
+    internal async Task WaitForInitialViewportAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _initialViewportReady.Task
+                .WaitAsync(TimeSpan.FromSeconds(1), cancellationToken)
+                .ConfigureAwait(true);
+        }
+        catch (TimeoutException)
+        {
+            // Keep the provider's safe 1280x720 at 100% if the view could not be realized promptly.
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -174,6 +193,13 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
     private void OnLayoutUpdated(object? sender, EventArgs e)
     {
         SyncEffectiveVisibility();
+        var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1d;
+        if (Math.Abs(scaling - _lastRenderScaling) > double.Epsilon ||
+            !_initialViewportReady.Task.IsCompleted)
+        {
+            _lastRenderScaling = scaling;
+            RequestCurrentViewport();
+        }
     }
 
     private void SyncEffectiveVisibility()
@@ -199,6 +225,13 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
         var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1d;
         var width = (int)Math.Round(Bounds.Width * scaling, MidpointRounding.AwayFromZero);
         var height = (int)Math.Round(Bounds.Height * scaling, MidpointRounding.AwayFromZero);
+        if (width > 0 && height > 0 && _windowsSession?.State == EmbeddedRdpSessionState.Created)
+        {
+            _windowsSession.ConfigureInitialViewport(width, height, scaling);
+            _ = _initialViewportReady.TrySetResult();
+            return;
+        }
+
         if (syncVisibility)
         {
             _resizeController?.SetVisible(IsEffectivelyVisible);
@@ -248,7 +281,9 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
         _container?.Dispose();
         _container = null;
         _resizeController = null;
+        _windowsSession = null;
         _lastEffectiveVisibility = null;
+        _ = _initialViewportReady.TrySetCanceled();
         Session = null;
     }
 }

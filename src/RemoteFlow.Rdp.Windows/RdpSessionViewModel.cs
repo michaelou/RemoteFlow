@@ -93,9 +93,13 @@ public sealed class RdpSessionViewModel : ObservableObject,
         _ = CreateSessionContent();
     }
 
-    public Task ConnectAsync(CancellationToken cancellationToken = default)
+    public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
-        return _session.ConnectAsync(cancellationToken);
+        if (_view is not null)
+        {
+            await _view.WaitForInitialViewportAsync(cancellationToken).ConfigureAwait(true);
+        }
+        await _session.ConnectAsync(cancellationToken).ConfigureAwait(true);
     }
 
     public void SetActive(bool isActive)

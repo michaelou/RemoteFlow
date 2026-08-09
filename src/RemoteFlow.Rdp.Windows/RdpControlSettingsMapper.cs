@@ -50,6 +50,8 @@ internal static class RdpControlSettingsMapper
 
     internal static uint MapScaleFactor(double displayScaling)
     {
+        // The ActiveX control accepts only 100, 140, and 180. Nearest-value boundaries are 120% and
+        // 160%; an exact tie stays on the lower factor to avoid making remote text unexpectedly larger.
         var requested = displayScaling * 100d;
         ReadOnlySpan<uint> supported = [100u, 140u, 180u];
         var nearest = supported[0];

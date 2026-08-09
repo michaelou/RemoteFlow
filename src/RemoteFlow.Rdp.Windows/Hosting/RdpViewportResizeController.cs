@@ -2,11 +2,16 @@ using RemoteFlow.Application.Abstractions;
 
 namespace RemoteFlow.Rdp.Windows.Hosting;
 
-internal sealed class RdpViewportResizeController(IEmbeddedRdpSession session)
+internal sealed class RdpViewportResizeController(Action<int, int, double> resize)
 {
-    private readonly IEmbeddedRdpSession _session = session ?? throw new ArgumentNullException(nameof(session));
+    private readonly Action<int, int, double> _resize = resize ?? throw new ArgumentNullException(nameof(resize));
     private PendingResize? _pending;
     private bool _isVisible;
+
+    public RdpViewportResizeController(IEmbeddedRdpSession session)
+        : this((session ?? throw new ArgumentNullException(nameof(session))).Resize)
+    {
+    }
 
     public void RequestResize(int width, int height, double scaling)
     {
@@ -23,7 +28,7 @@ internal sealed class RdpViewportResizeController(IEmbeddedRdpSession session)
         }
 
         _pending = null;
-        _session.Resize(resize.Width, resize.Height, resize.Scaling);
+        _resize(resize.Width, resize.Height, resize.Scaling);
     }
 
     public void SetVisible(bool isVisible)
@@ -40,7 +45,7 @@ internal sealed class RdpViewportResizeController(IEmbeddedRdpSession session)
         }
 
         _pending = null;
-        _session.Resize(pending.Width, pending.Height, pending.Scaling);
+        _resize(pending.Width, pending.Height, pending.Scaling);
     }
 
     private readonly record struct PendingResize(int Width, int Height, double Scaling);

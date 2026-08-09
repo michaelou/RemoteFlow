@@ -293,7 +293,8 @@ IMsRdpExtendedSettings[DeviceScaleFactor]  = 100: put -> 0x00000000, get -> 0x00
 ```
 
 The protocol accepts only 100, 140 and 180 for either factor, so Avalonia's `RenderScaling` is quantised
-rather than passed through. A monitor at 125% is sent as 100.
+rather than passed through. RemoteFlow chooses the nearest value: a monitor at 125% is sent as 140, while
+an exact tie at 120% or 160% stays on the lower factor.
 
 On a monitor change, Avalonia raises `RenderScaling`; the response is `UpdateSessionDisplaySettings` with
 the new size and the new quantised factors. What that does to a live session is untested — see below.

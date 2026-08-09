@@ -179,6 +179,40 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
         _ = ApplyResizeAfterDebounceAsync(size, cancellation);
     }
 
+    internal void ConfigureInitialViewport(int width, int height, double scaling)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        if (State != EmbeddedRdpSessionState.Created)
+        {
+            Resize(width, height, scaling);
+            return;
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(scaling);
+        var scaleFactor = RdpControlSettingsMapper.MapScaleFactor(scaling);
+        var result = Control.ConfigureInitialDisplaySettings(
+            width,
+            height,
+            scaleFactor,
+            scaleFactor);
+        if (result.Succeeded)
+        {
+            return;
+        }
+
+        var fallback = Control.SetSmartSizing(true);
+        lock (_resizeLock)
+        {
+            _smartSizingFallback = true;
+        }
+        Logger.LogWarning(
+            "Initial RDP display scaling could not be configured ({FailureReason}); SmartSizing fallback {FallbackStatus}.",
+            result.FailureReason ?? "unknown native failure",
+            fallback.Succeeded ? "was enabled" : $"could not be enabled ({fallback.FailureReason})");
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)

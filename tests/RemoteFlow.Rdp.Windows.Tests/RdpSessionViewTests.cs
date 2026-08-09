@@ -47,6 +47,23 @@ public sealed class RdpSessionViewTests
         Assert.Equal([(1920, 1080, 1d), (1280, 720, 1d)], session.Resizes);
     }
 
+    [Fact]
+    public void HiddenTabAppliesLatestMonitorDpiExactlyOnceWhenShown()
+    {
+        var session = new RecordingSession();
+        var controller = new RdpViewportResizeController(session);
+        controller.SetVisible(true);
+        controller.RequestResize(1000, 700, 1d);
+        controller.SetVisible(false);
+
+        controller.RequestResize(1600, 1000, 1.5d);
+        controller.RequestResize(2000, 1400, 2d);
+        controller.SetVisible(true);
+        controller.SetVisible(true);
+
+        Assert.Equal([(1000, 700, 1d), (2000, 1400, 2d)], session.Resizes);
+    }
+
     [Theory]
     [InlineData(0x0100u, 0x75, false, true, true)]
     [InlineData(0x0101u, 0x75, false, true, true)]

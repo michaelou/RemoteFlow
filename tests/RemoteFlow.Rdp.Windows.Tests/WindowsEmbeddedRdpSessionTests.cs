@@ -412,6 +412,42 @@ public sealed class WindowsEmbeddedRdpSessionTests
     }
 
     [Fact]
+    public async Task InitialViewportSendsMapperScaleFactorsToFakeControlBeforeConnect()
+    {
+        var control = new FakeNativeRdpControl();
+        await using var session = CreateSession(control);
+
+        session.ConfigureInitialViewport(2400, 1350, 2d);
+
+        Assert.Equal([(2400, 1350, 180u, 180u)], control.InitialDisplayRequests);
+        Assert.Equal(0, control.ConnectCount);
+        await session.ConnectAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(1, control.ConnectCount);
+    }
+
+    [Fact]
+    public async Task UnsupportedInitialDpiUsesSmartSizingWithoutBlockingConnect()
+    {
+        var logger = new TraceLogger();
+        var control = new FakeNativeRdpControl
+        {
+            InitialDisplayResult = NativeRdpResizeResult.Failure("IMsRdpExtendedSettings is unavailable"),
+        };
+        await using var session = new WindowsEmbeddedRdpSession(
+            control,
+            new RecordingDispatcher(),
+            logger: logger);
+
+        session.ConfigureInitialViewport(1800, 1200, 1.5d);
+        await session.ConnectAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal([true], control.SmartSizingValues);
+        Assert.Equal(1, control.ConnectCount);
+        Assert.Contains(logger.Messages, message =>
+            message.Contains("Initial RDP display scaling", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ResizeIsNoOpUntilConnectedAndAfterDisconnect()
     {
         var time = new FakeTimeProvider();
@@ -588,6 +624,10 @@ public sealed class WindowsEmbeddedRdpSessionTests
 
         public TaskCompletionSource ResizeObserved { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        public NativeRdpResizeResult InitialDisplayResult { get; init; } = NativeRdpResizeResult.Success;
+
+        public List<(int Width, int Height, uint DesktopScale, uint DeviceScale)> InitialDisplayRequests { get; } = [];
+
         public void Connect(CancellationToken cancellationToken)
         {
             ConnectCount++;
@@ -617,6 +657,16 @@ public sealed class WindowsEmbeddedRdpSessionTests
         {
             ResetPasswordCount++;
             ClearTextPassword = null;
+        }
+
+        public NativeRdpResizeResult ConfigureInitialDisplaySettings(
+            int width,
+            int height,
+            uint desktopScaleFactor,
+            uint deviceScaleFactor)
+        {
+            InitialDisplayRequests.Add((width, height, desktopScaleFactor, deviceScaleFactor));
+            return InitialDisplayResult;
         }
 
         public NativeRdpResizeResult UpdateSessionDisplaySettings(
