@@ -53,6 +53,9 @@
         <TabItem Header="Terminal">
           <settingsViews:TerminalSettings DataContext="{Binding Terminal}" />
         </TabItem>
+        <TabItem Header="Remote desktop" IsVisible="{Binding Rdp.IsAvailable}">
+          <settingsViews:RdpSettings DataContext="{Binding Rdp}" />
+        </TabItem>
         <TabItem Header="Trusted keys">
           <securityViews:TrustedKeysView DataContext="{Binding Security}" />
         </TabItem>

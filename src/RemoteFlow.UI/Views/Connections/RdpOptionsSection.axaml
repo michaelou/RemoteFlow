@@ -80,6 +80,10 @@
       <CheckBox TabIndex="14" Content="Use all my monitors" IsChecked="{Binding RdpMultimon, Mode=TwoWay}" />
       <CheckBox TabIndex="15" Content="Share my clipboard" IsChecked="{Binding RdpRedirectClipboard, Mode=TwoWay}" />
       <CheckBox TabIndex="16" Content="Share my local drives" IsChecked="{Binding RdpRedirectDrives, Mode=TwoWay}" />
+      <TextBlock
+          Classes="hint"
+          Text="Embedded RDP ignores Open full screen and Use all my monitors. Those options still apply when you open the connection in the external RDP client."
+          TextWrapping="Wrap" />
     </StackPanel>
 
     <TextBlock

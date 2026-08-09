@@ -13,11 +13,14 @@ public partial class PageViewModel(string title) : ObservableObject
 public sealed class SettingsPageViewModel(
     Settings.TerminalSettingsViewModel? terminal = null,
     Security.TrustedKeysViewModel? security = null,
-    Settings.AboutViewModel? about = null) : PageViewModel("Settings")
+    Settings.AboutViewModel? about = null,
+    Settings.RdpSettingsViewModel? rdp = null) : PageViewModel("Settings")
 {
     public Settings.TerminalSettingsViewModel? Terminal { get; } = terminal;
 
     public Security.TrustedKeysViewModel? Security { get; } = security;
 
     public Settings.AboutViewModel? About { get; } = about;
+
+    public Settings.RdpSettingsViewModel? Rdp { get; } = rdp;
 }

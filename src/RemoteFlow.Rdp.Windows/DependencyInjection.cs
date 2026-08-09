@@ -13,6 +13,7 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
 
         _ = services.RemoveAll<IEmbeddedRdpSessionProvider>();
+        _ = services.RemoveAll<IEmbeddedRdpWorkspaceSessionFactory>();
         services.TryAddSingleton<INativeRdpControlFactory>(WindowsNativeRdpControlFactory.Instance);
         _ = services.AddSingleton(provider => new WindowsEmbeddedRdpSessionProvider(
             provider.GetRequiredService<INativeRdpControlFactory>(),
@@ -21,6 +22,7 @@ public static class DependencyInjection
             provider.GetService<Microsoft.Extensions.Logging.ILogger<WindowsEmbeddedRdpSession>>()));
         _ = services.AddSingleton<IEmbeddedRdpSessionProvider>(provider =>
             provider.GetRequiredService<WindowsEmbeddedRdpSessionProvider>());
+        _ = services.AddSingleton<IEmbeddedRdpWorkspaceSessionFactory, WindowsRdpWorkspaceSessionFactory>();
         return services;
     }
 }

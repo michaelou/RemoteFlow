@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.Rdp.Windows.Hosting;
+using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels.Terminal;
 
 namespace RemoteFlow.Rdp.Windows;
@@ -13,7 +14,8 @@ public sealed class RdpSessionViewModel : ObservableObject,
     IWorkspaceSessionViewModel,
     IWorkspaceSessionContentProvider,
     IWorkspaceSessionFocusTarget,
-    IWorkspaceSessionCloseRequestSource
+    IWorkspaceSessionCloseRequestSource,
+    IEmbeddedRdpWorkspaceSession
 {
     private readonly IEmbeddedRdpSession _session;
     private readonly AsyncRelayCommand _retryCommand;
@@ -85,6 +87,16 @@ public sealed class RdpSessionViewModel : ObservableObject,
         : "Retry";
 
     public IAsyncRelayCommand RetryCommand => _retryCommand;
+
+    public void PrepareForConnect()
+    {
+        _ = CreateSessionContent();
+    }
+
+    public Task ConnectAsync(CancellationToken cancellationToken = default)
+    {
+        return _session.ConnectAsync(cancellationToken);
+    }
 
     public void SetActive(bool isActive)
     {

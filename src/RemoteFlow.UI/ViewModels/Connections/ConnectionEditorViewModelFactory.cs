@@ -16,7 +16,8 @@ public sealed class ConnectionEditorViewModelFactory(
     ISshKeyService? sshKeyService = null,
     IClipboardService? clipboard = null,
     ISettingsStore? settings = null,
-    IRdpLauncher? rdpLauncher = null)
+    IRdpLauncher? rdpLauncher = null,
+    IEmbeddedRdpWorkspaceSessionFactory? embeddedRdp = null)
 {
     public async Task<ConnectionEditorViewModel> CreateEditorAsync(
         Guid? connectionId,
@@ -69,6 +70,7 @@ public sealed class ConnectionEditorViewModelFactory(
             delete,
             systemTerminalLauncher is null
                 ? null
-                : () => systemTerminalLauncher.OpenSshAsync(connection));
+                : () => systemTerminalLauncher.OpenSshAsync(connection),
+            embeddedRdp?.IsAvailableOnCurrentPlatform == true);
     }
 }
