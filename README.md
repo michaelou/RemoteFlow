@@ -7,8 +7,8 @@ account to create and no server behind it. Nothing about you is ever sent anywhe
 RemoteFlow makes that you did not configure is an optional update check, which reads a version number and
 is described in [Security posture](#no-telemetry-no-cloud-no-accounts).
 
-It is built with .NET 10 and Avalonia, and runs on Windows, macOS, and Linux. RemoteFlow has not had a
-tagged release yet; until it does, see [Install](#install) for how to build one.
+It is built with .NET 10 and Avalonia, and runs on Windows, macOS, and Linux. Windows builds are on the
+[Releases](../../releases) page; macOS and Linux build from source. See [Install](#install).
 
 ![The Connections page: a folder tree of saved connections on the left, and the details of the selected connection on the right](docs/images/connections.png)
 
@@ -40,8 +40,8 @@ tagged release yet; until it does, see [Install](#install) for how to build one.
 
 ### Windows
 
-Prebuilt Windows artefacts are published on the [Releases](../../releases) page once a version is tagged:
-an installer and a portable zip, each for x64 and ARM64.
+Prebuilt Windows artefacts are on the [Releases](../../releases) page: an installer and a portable zip,
+each for x64 and ARM64.
 
 - **Installer** — `RemoteFlow-<version>-win-x64-setup.exe`. It installs for your user only, so there is no
   elevation prompt, and adds a Start-menu entry. Uninstalling leaves your connections and settings alone
