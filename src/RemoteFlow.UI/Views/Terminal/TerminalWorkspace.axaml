@@ -4,6 +4,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:terminal="using:SvcSystems.UI.Terminal"
+    xmlns:terminalViews="using:RemoteFlow.UI.Views.Terminal"
     xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal">
   <Grid Margin="16" RowDefinitions="Auto,Auto,*,Auto">
     <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
@@ -13,7 +14,7 @@
       </StackPanel>
       <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
         <Button Click="Shortcuts_OnClick" Content="Help" ToolTip.Tip="Keyboard shortcuts for copy, paste, find, and switching terminals" />
-        <Button Command="{Binding SelectedSession.OpenFindCommand}" Content="Find" ToolTip.Tip="Find in scrollback (Ctrl+Shift+F)" />
+        <Button Command="{Binding SelectedTerminalSession.OpenFindCommand}" Content="Find" ToolTip.Tip="Find in scrollback (Ctrl+Shift+F)" />
         <Button
             Click="AddTab_OnClick"
             Content="+ New terminal"
@@ -55,7 +56,7 @@
             </ItemsPanelTemplate>
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="terminalViewModels:TerminalSessionViewModel">
+            <DataTemplate x:DataType="terminalViewModels:IWorkspaceSessionViewModel">
               <!-- A tab is a control, not decoration: it takes keyboard focus, announces which session
                    and environment it is, and activates with Enter or Space. Without this the strip is
                    reachable only through the close buttons inside it. -->
@@ -78,20 +79,21 @@
                   ToolTip.Tip="{Binding Title}">
                 <Border.ContextMenu>
                   <ContextMenu>
-                    <MenuItem Click="OpenSystemTerminal_OnClick" Header="Open in system terminal" />
+                    <MenuItem Click="OpenSystemTerminal_OnClick" Header="Open in system terminal" IsVisible="{Binding CanOpenInSystemTerminal}" />
                   </ContextMenu>
                 </Border.ContextMenu>
                 <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="7">
-                  <Border
-                      Background="{Binding AccentColorHex}"
-                      CornerRadius="3"
-                      Padding="4,1"
-                      VerticalAlignment="Center">
-                    <TextBlock FontSize="10" FontWeight="Bold" Foreground="#0B0F14" Text="{Binding EnvironmentCue}" />
-                  </Border>
+                  <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <Border Background="{Binding AccentColorHex}" CornerRadius="3" Padding="4,1">
+                      <TextBlock FontSize="10" FontWeight="Bold" Foreground="#0B0F14" Text="{Binding EnvironmentCue}" />
+                    </Border>
+                    <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3" Padding="4,1">
+                      <TextBlock FontSize="10" FontWeight="Bold" Text="{Binding ProtocolCue}" />
+                    </Border>
+                  </StackPanel>
                   <!-- A star column (not a StackPanel) so the title is measured against the tab
                        width and actually trims instead of overflowing the close button. -->
-                  <Grid Grid.Column="1" ColumnDefinitions="Auto,*">
+                  <Grid Grid.Column="1" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
                     <!-- The dot says "this session has ended". Its colour is not what carries that —
                          its presence is — but a reader needs the words. -->
                     <TextBlock
@@ -107,6 +109,12 @@
                         Text="{Binding TabTitle}"
                         TextTrimming="CharacterEllipsis"
                         VerticalAlignment="Center" />
+                    <TextBlock
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        FontSize="10"
+                        Foreground="{DynamicResource Brush.Text.Secondary}"
+                        Text="{Binding StatusText}" />
                   </Grid>
                   <Button
                       Grid.Column="2"
@@ -117,7 +125,7 @@
                       Padding="6,1"
                       MinWidth="0"
                       VerticalAlignment="Center"
-                      ToolTip.Tip="Close terminal (Ctrl+Shift+W)" />
+                      ToolTip.Tip="Close session (Ctrl+Shift+W)" />
                 </Grid>
               </Border>
             </DataTemplate>
@@ -133,9 +141,17 @@
         BorderThickness="1"
         CornerRadius="0,0,6,6"
         PointerPressed="TerminalBorder_OnPointerPressed">
-      <ContentControl Content="{Binding SelectedSession}">
-        <ContentControl.DataTemplates>
-          <DataTemplate x:DataType="terminalViewModels:TerminalSessionViewModel">
+      <ItemsControl ItemsSource="{Binding Sessions}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <Grid />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="terminalViewModels:IWorkspaceSessionViewModel">
+            <terminalViews:WorkspaceSessionContentHost IsVisible="{Binding IsActive}" Session="{Binding}">
+              <terminalViews:WorkspaceSessionContentHost.DataTemplates>
+                <DataTemplate x:DataType="terminalViewModels:TerminalSessionViewModel">
             <Grid RowDefinitions="Auto,*">
               <Border
                   Background="{DynamicResource Brush.Surface.1}"
@@ -183,9 +199,12 @@
                 </Border>
               </Grid>
             </Grid>
+                </DataTemplate>
+              </terminalViews:WorkspaceSessionContentHost.DataTemplates>
+            </terminalViews:WorkspaceSessionContentHost>
           </DataTemplate>
-        </ContentControl.DataTemplates>
-      </ContentControl>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
     </Border>
 
     <StackPanel Grid.Row="3" Margin="0,8,0,0" Spacing="4">

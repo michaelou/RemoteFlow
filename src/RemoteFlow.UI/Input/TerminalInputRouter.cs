@@ -27,7 +27,7 @@ public sealed class TerminalInputRouter(KeymapService keymap)
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(workspace);
         var stroke = TerminalKeyEventAdapter.FromAvalonia(args);
-        var selected = workspace.SelectedSession;
+        var selected = workspace.SelectedTerminalSession;
         var result = keymap.Resolve(
             stroke,
             OperatingSystem.IsMacOS() ? KeymapPlatform.MacOs : KeymapPlatform.WindowsLinux,
@@ -46,6 +46,7 @@ public sealed class TerminalInputRouter(KeymapService keymap)
         ArgumentNullException.ThrowIfNull(workspace);
         ArgumentNullException.ThrowIfNull(toggleFullscreen);
         var selected = workspace.SelectedSession;
+        var selectedTerminal = workspace.SelectedTerminalSession;
         switch (command)
         {
             case KeymapCommand.NewTerminal:
@@ -79,10 +80,10 @@ public sealed class TerminalInputRouter(KeymapService keymap)
                 toggleFullscreen();
                 break;
             case KeymapCommand.Copy:
-                if (selected is not null && workspace.ClipboardController is { } copyController)
+                if (selectedTerminal is not null && workspace.ClipboardController is { } copyController)
                 {
                     var copyResult = await copyController.CopyAsync(
-                        selected,
+                        selectedTerminal,
                         clearSelection: true,
                         cancellationToken).ConfigureAwait(true);
                     workspace.ReportError(copyResult.ErrorMessage);
@@ -90,18 +91,18 @@ public sealed class TerminalInputRouter(KeymapService keymap)
 
                 break;
             case KeymapCommand.Paste:
-                if (selected is not null && workspace.ClipboardController is { } pasteController)
+                if (selectedTerminal is not null && workspace.ClipboardController is { } pasteController)
                 {
-                    var pasteResult = await pasteController.PasteAsync(selected, cancellationToken).ConfigureAwait(true);
+                    var pasteResult = await pasteController.PasteAsync(selectedTerminal, cancellationToken).ConfigureAwait(true);
                     workspace.ReportError(pasteResult.ErrorMessage);
                 }
 
                 break;
             case KeymapCommand.SelectAll:
-                selected?.Model.SelectAll();
+                selectedTerminal?.Model.SelectAll();
                 break;
             case KeymapCommand.FindTerminal:
-                selected?.OpenFind();
+                selectedTerminal?.OpenFind();
                 break;
             case KeymapCommand.LeaveTerminal:
                 // Purely a focus move, which is the view's business; it is handled before the command

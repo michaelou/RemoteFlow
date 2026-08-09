@@ -12,7 +12,7 @@ namespace RemoteFlow.UI.Views.Terminal;
 
 public sealed partial class TerminalWorkspace : UserControl
 {
-    private TerminalSessionViewModel? _pressedTab;
+    private IWorkspaceSessionViewModel? _pressedTab;
     private Point _pressPosition;
     private bool _isDraggingTab;
 
@@ -57,7 +57,7 @@ public sealed partial class TerminalWorkspace : UserControl
 
     private async void CloseTab_OnClick(object? sender, RoutedEventArgs e)
     {
-        if (sender is Control { DataContext: TerminalSessionViewModel session } &&
+        if (sender is Control { DataContext: IWorkspaceSessionViewModel session } &&
             DataContext is TerminalsPageViewModel viewModel)
         {
             _ = await viewModel.CloseSessionAsync(session).ConfigureAwait(true);
@@ -77,7 +77,7 @@ public sealed partial class TerminalWorkspace : UserControl
 
     private async void Tab_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is not Control { DataContext: TerminalSessionViewModel session } control ||
+        if (sender is not Control { DataContext: IWorkspaceSessionViewModel session } control ||
             DataContext is not TerminalsPageViewModel viewModel)
         {
             return;
@@ -108,7 +108,7 @@ public sealed partial class TerminalWorkspace : UserControl
     /// only when they ask for the session itself.</summary>
     private async void Tab_OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (sender is not Control { DataContext: TerminalSessionViewModel session } ||
+        if (sender is not Control { DataContext: IWorkspaceSessionViewModel session } ||
             DataContext is not TerminalsPageViewModel viewModel)
         {
             return;
@@ -142,7 +142,7 @@ public sealed partial class TerminalWorkspace : UserControl
     private void Tab_OnPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         if (_isDraggingTab && _pressedTab is not null &&
-            sender is Control { DataContext: TerminalSessionViewModel target } &&
+            sender is Control { DataContext: IWorkspaceSessionViewModel target } &&
             DataContext is TerminalsPageViewModel viewModel)
         {
             viewModel.MoveSession(_pressedTab, target);
@@ -164,7 +164,7 @@ public sealed partial class TerminalWorkspace : UserControl
             return;
         }
 
-        if (e.Source is TextBox && viewModel.SelectedSession is { } searchSession)
+        if (e.Source is TextBox && viewModel.SelectedTerminalSession is { } searchSession)
         {
             if (e.Key == Key.Escape)
             {
@@ -213,7 +213,7 @@ public sealed partial class TerminalWorkspace : UserControl
         }
 
         await TerminalInputRouter.ExecuteAsync(command, viewModel, ToggleFullscreen).ConfigureAwait(true);
-        if (viewModel.SelectedSession?.IsFindOpen == true)
+        if (viewModel.SelectedTerminalSession?.IsFindOpen == true)
         {
             FocusFindBox();
         }
@@ -235,7 +235,16 @@ public sealed partial class TerminalWorkspace : UserControl
 
     private void FocusTerminal()
     {
-        var terminal = this.GetVisualDescendants().OfType<TerminalControl>().FirstOrDefault();
+        if (DataContext is TerminalsPageViewModel { SelectedSession: IWorkspaceSessionFocusTarget focusTarget })
+        {
+            _ = focusTarget.FocusSessionContent();
+            return;
+        }
+
+        var selected = (DataContext as TerminalsPageViewModel)?.SelectedTerminalSession;
+        var terminal = this.GetVisualDescendants()
+            .OfType<TerminalControl>()
+            .FirstOrDefault(control => ReferenceEquals(control.DataContext, selected));
         _ = terminal?.Focus();
     }
 
