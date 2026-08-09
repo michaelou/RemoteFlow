@@ -21,6 +21,10 @@ public sealed partial class TerminalWorkspace : UserControl
         InitializeComponent();
         Loaded += OnLoaded;
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(
+            WorkspaceSessionContentHost.FocusEscapeRequestedEvent,
+            OnFocusEscapeRequested,
+            RoutingStrategies.Bubble);
     }
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
@@ -100,7 +104,14 @@ public sealed partial class TerminalWorkspace : UserControl
         _pressedTab = session;
         _pressPosition = e.GetPosition(this);
         _isDraggingTab = false;
-        FocusTerminal();
+        if (session is IWorkspaceSessionFocusTarget)
+        {
+            _ = control.Focus(NavigationMethod.Pointer);
+        }
+        else
+        {
+            FocusTerminal();
+        }
     }
 
     /// <summary>Enter or Space selects the focused tab; Delete closes it. The tab keeps focus after a
@@ -155,6 +166,12 @@ public sealed partial class TerminalWorkspace : UserControl
     private void TerminalBorder_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         FocusTerminal();
+    }
+
+    private void OnFocusEscapeRequested(object? sender, RoutedEventArgs e)
+    {
+        FocusTabStrip();
+        e.Handled = true;
     }
 
     private void OnPreviewKeyDown(object? sender, KeyEventArgs e)

@@ -29,6 +29,8 @@ internal sealed class OleRdpControlContainer : IRdpControlContainer, IOleClientS
 
     public IntPtr Handle { get; private set; }
 
+    public event EventHandler<RdpControlFocusChangedEventArgs>? FocusChanged;
+
     public void Create(int width, int height)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
@@ -272,7 +274,18 @@ internal sealed class OleRdpControlContainer : IRdpControlContainer, IOleClientS
 
     int IOleControlSite.TranslateAccelerator(in NativeMessage message, uint modifiers) => OleHosting.False;
 
-    int IOleControlSite.OnFocus(int gotFocus) => OleHosting.Success;
+    int IOleControlSite.OnFocus(int gotFocus)
+    {
+        try
+        {
+            FocusChanged?.Invoke(this, new RdpControlFocusChangedEventArgs(gotFocus != 0));
+        }
+        catch (Exception)
+        {
+            // Focus observers are called by COM and must not unwind into the ActiveX control.
+        }
+        return OleHosting.Success;
+    }
 
     int IOleControlSite.ShowPropertyFrame() => OleHosting.NotImplemented;
 

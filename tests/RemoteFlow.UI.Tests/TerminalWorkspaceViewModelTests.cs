@@ -80,6 +80,29 @@ public sealed class TerminalWorkspaceViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task NativeSessionFocusEscapeMovesFocusToItsVisibleTab()
+    {
+        await using var workspace = new TerminalWorkspaceViewModel(new RecordingPtyService(), new UiDispatcher());
+        var session = new FakeWorkspaceSession("DC01", "RDP");
+        workspace.AddWorkspaceSession(session);
+        var view = new RemoteFlow.UI.Views.Terminal.TerminalWorkspace { DataContext = workspace };
+        var window = new Window { Content = view };
+        window.Show();
+
+        var handled = RemoteFlow.UI.Views.Terminal.WorkspaceSessionContentHost.RequestFocusEscape(
+            session.LastContent!);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var tab = view.GetVisualDescendants()
+            .OfType<Border>()
+            .Single(border => border.Focusable && ReferenceEquals(border.DataContext, session));
+        Assert.True(handled);
+        Assert.True(tab.Focusable);
+        Assert.Contains("session-tab", tab.Classes);
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public async Task TenSessionsRunIndependentlyAndClosingAllDisposesEveryProcess()
     {
         var token = TestContext.Current.CancellationToken;
@@ -291,6 +314,8 @@ public sealed class TerminalWorkspaceViewModelTests
 
         public int CreateContentCount { get; private set; }
 
+        public Border? LastContent { get; private set; }
+
         public bool IsDisposed { get; private set; }
 
         public void SetActive(bool isActive)
@@ -302,7 +327,8 @@ public sealed class TerminalWorkspaceViewModelTests
         public Control CreateSessionContent()
         {
             CreateContentCount++;
-            return new Border { DataContext = this };
+            LastContent = new Border { DataContext = this };
+            return LastContent;
         }
 
         public ValueTask DisposeAsync()

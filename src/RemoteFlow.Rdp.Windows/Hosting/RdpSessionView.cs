@@ -1,8 +1,10 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.UI.Views.Terminal;
 
 namespace RemoteFlow.Rdp.Windows.Hosting;
 
@@ -13,12 +15,16 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
     private readonly Border _recoveryPanel;
     private readonly TextBlock _statusText;
     private OleRdpControlContainer? _container;
+    private RdpKeyboardHook? _keyboardHook;
     private RdpViewportResizeController? _resizeController;
     private bool? _lastEffectiveVisibility;
     private int _disposed;
 
     public RdpSessionView()
     {
+        AutomationProperties.SetHelpText(
+            this,
+            "Embedded remote desktop. F6 moves focus to its tab; Shift+F6 sends F6 to the remote computer.");
         _nativeHost = new RdpNativeHost
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -100,6 +106,10 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
         {
             container.Create(1280, 720);
             _nativeHost.Attach(container);
+            container.FocusChanged += OnNativeFocusChanged;
+            _keyboardHook = new RdpKeyboardHook(
+                container.Handle,
+                () => _ = WorkspaceSessionContentHost.RequestFocusEscape(this));
             _container = container;
             Session = session;
             _resizeController = new RdpViewportResizeController(session);
@@ -149,6 +159,11 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
     private void OnSessionStateChanged(object? sender, EmbeddedRdpSessionStateChangedEventArgs e)
     {
         UpdateState(e.CurrentState, e.StatusMessage);
+    }
+
+    private void OnNativeFocusChanged(object? sender, RdpControlFocusChangedEventArgs e)
+    {
+        PseudoClasses.Set(":native-focused", e.IsFocused);
     }
 
     private void OnSizeChanged(object? sender, SizeChangedEventArgs e)
@@ -223,6 +238,12 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
 
     private void DisposeContainer()
     {
+        _keyboardHook?.Dispose();
+        _keyboardHook = null;
+        if (_container is { } container)
+        {
+            container.FocusChanged -= OnNativeFocusChanged;
+        }
         _nativeHost.Release();
         _container?.Dispose();
         _container = null;

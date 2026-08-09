@@ -47,6 +47,24 @@ public sealed class RdpSessionViewTests
         Assert.Equal([(1920, 1080, 1d), (1280, 720, 1d)], session.Resizes);
     }
 
+    [Theory]
+    [InlineData(0x0100u, 0x75, false, true, true)]
+    [InlineData(0x0101u, 0x75, false, true, true)]
+    [InlineData(0x0100u, 0x75, true, true, false)]
+    [InlineData(0x0100u, 0x75, false, false, false)]
+    [InlineData(0x0100u, 0x09, false, true, false)]
+    public void OnlyUnmodifiedF6InsideRdpIsReservedForFocusEscape(
+        uint message,
+        int virtualKey,
+        bool shiftDown,
+        bool insideControl,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            RdpKeyboardHook.ShouldConsume(message, virtualKey, shiftDown, insideControl));
+    }
+
     private sealed class RecordingSession : IEmbeddedRdpSession
     {
         public EmbeddedRdpSessionState State => EmbeddedRdpSessionState.Connected;

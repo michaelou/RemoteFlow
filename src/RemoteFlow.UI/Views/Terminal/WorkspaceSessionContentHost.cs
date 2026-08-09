@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using RemoteFlow.UI.ViewModels.Terminal;
 
 namespace RemoteFlow.UI.Views.Terminal;
@@ -7,6 +8,12 @@ namespace RemoteFlow.UI.Views.Terminal;
 /// <summary>Creates platform-owned session content once and keeps it attached for the item's lifetime.</summary>
 public sealed class WorkspaceSessionContentHost : ContentControl
 {
+    public static readonly RoutedEvent<RoutedEventArgs> FocusEscapeRequestedEvent = RoutedEvent.Register<
+        WorkspaceSessionContentHost,
+        RoutedEventArgs>(
+        "FocusEscapeRequested",
+        RoutingStrategies.Bubble);
+
     public static readonly StyledProperty<IWorkspaceSessionViewModel?> SessionProperty =
         AvaloniaProperty.Register<WorkspaceSessionContentHost, IWorkspaceSessionViewModel?>(nameof(Session));
 
@@ -16,6 +23,15 @@ public sealed class WorkspaceSessionContentHost : ContentControl
     {
         get => GetValue(SessionProperty);
         set => SetValue(SessionProperty, value);
+    }
+
+    /// <summary>Lets a native child HWND request the same focus escape as an Avalonia text surface.</summary>
+    public static bool RequestFocusEscape(Interactive source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var request = new RoutedEventArgs(FocusEscapeRequestedEvent, source);
+        source.RaiseEvent(request);
+        return request.Handled;
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)

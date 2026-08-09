@@ -6,6 +6,11 @@
     xmlns:terminal="using:SvcSystems.UI.Terminal"
     xmlns:terminalViews="using:RemoteFlow.UI.Views.Terminal"
     xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal">
+  <UserControl.Styles>
+    <Style Selector="Border.session-tab:focus">
+      <Setter Property="BorderThickness" Value="2,2,2,3" />
+    </Style>
+  </UserControl.Styles>
   <Grid Margin="16" RowDefinitions="Auto,Auto,*,Auto">
     <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
       <StackPanel>
@@ -65,6 +70,7 @@
                   Background="{Binding TabBackgroundHex}"
                   BorderBrush="{Binding AccentColorHex}"
                   BorderThickness="0,0,0,3"
+                  Classes="session-tab"
                   ClipToBounds="True"
                   CornerRadius="6,6,0,0"
                   Focusable="True"

@@ -62,6 +62,7 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
     private readonly NativeRdpEventSink _eventSink = new();
     private object? _instance;
     private object? _advancedSettings;
+    private object? _securedSettings;
     private IMsRdpClientNonScriptable5? _nonScriptable;
     private int _disposed;
 
@@ -224,7 +225,12 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
         SetProperty(_advancedSettings, "AuthenticationLevel", settings.AdvancedSettings.AuthenticationLevel);
         SetProperty(_advancedSettings, "EnableCredSspSupport", settings.AdvancedSettings.EnableCredSspSupport);
         SetProperty(_advancedSettings, "SmartSizing", settings.AdvancedSettings.SmartSizing);
-        // KeyboardHookMode belongs to the secured-settings surface and is applied with #88's focus policy.
+        _securedSettings = GetProperty(instance, "SecuredSettings3")
+            ?? throw new InvalidOperationException("The RDP control does not expose SecuredSettings3.");
+        SetProperty(
+            _securedSettings,
+            "KeyboardHookMode",
+            (int)settings.AdvancedSettings.KeyboardHookMode);
     }
 
     private void ForwardEvent(object? sender, NativeRdpEventArgs e)
@@ -253,6 +259,12 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
         if (advanced is not null && Marshal.IsComObject(advanced))
         {
             _ = Marshal.FinalReleaseComObject(advanced);
+        }
+
+        var secured = Interlocked.Exchange(ref _securedSettings, null);
+        if (secured is not null && Marshal.IsComObject(secured))
+        {
+            _ = Marshal.FinalReleaseComObject(secured);
         }
 
         // This is a QueryInterface view of the control's own RCW, not a separate COM identity.
