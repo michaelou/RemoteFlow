@@ -11,6 +11,7 @@ using RemoteFlow.Infrastructure.Pty;
 using RemoteFlow.Infrastructure.Security;
 using RemoteFlow.Infrastructure.Ssh;
 using RemoteFlow.Infrastructure.Ssh.Auth;
+using RemoteFlow.Infrastructure.Updates;
 using RemoteFlow.Infrastructure.Security.Crypto;
 using RemoteFlow.Application.Abstractions.Backup;
 using RemoteFlow.Infrastructure.Backup;
@@ -50,6 +51,9 @@ public static class DependencyInjection
         services.TryAddSingleton<IFileRevealService, FileRevealService>();
         services.TryAddSingleton<IShellOpenService, ShellOpenService>();
         services.TryAddSingleton<ILastErrorStore, LastErrorStore>();
+        // Singleton because it owns an HttpClient, which is meant to be long-lived. It opens no
+        // connection until something asks it to check.
+        services.TryAddSingleton<IUpdateChecker, GitHubUpdateChecker>();
         services.TryAddSingleton<IWatchedFileMonitor, WatchedFileMonitor>();
         services.TryAddSingleton<TmdsSshTransport>();
         services.TryAddSingleton<SshNetTransport>();

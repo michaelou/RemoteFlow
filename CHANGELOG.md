@@ -7,6 +7,22 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **An update check, off by default.** The About tab has a **Check for updates** button and a **Check
+  automatically** tick box. Pressing the button runs one check; ticking the box runs one more each time
+  RemoteFlow starts, and nothing in between — there is no timer and no background poll. A check is one
+  HTTPS request to `api.github.com` for this project's newest release: it reads a version number, says
+  whether this build is current, and offers a link to the release page when it is not.
+  **RemoteFlow still does not update itself** — nothing is downloaded, nothing is installed, and the
+  release page opens in your browser so you keep the chance to verify a download against `checksums.txt`.
+  No account, no licence key, no installation identifier, and nothing about your machine or your
+  connections is sent; the request names the software and nothing else. Leave the box unticked and
+  RemoteFlow makes no unprompted request ever again. A release candidate is never offered to someone on a
+  stable build, a build newer than the newest release is not offered a downgrade, and a check that cannot
+  reach the network puts the reason on screen and stops there. The security posture in the README now
+  spells all of this out.
+
 ### Changed
 
 - Rounded corners throughout. Buttons, text boxes, drop-downs, and list and tree rows share one radius,

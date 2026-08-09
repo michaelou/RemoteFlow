@@ -1,9 +1,19 @@
 # Releasing
 
 A release is a tag plus a human decision. Pushing the tag builds and tests the artefacts and writes a
-**draft** release; publishing it is a separate, manual act. Nothing in the automation publishes anything,
-and there is no auto-update mechanism and no update ping — RemoteFlow has no telemetry and no cloud
-dependency, and a binary that phoned home to ask about versions would contradict both.
+**draft** release; publishing it is a separate, manual act. Nothing in the automation publishes anything.
+
+There is no auto-update mechanism. RemoteFlow never downloads or installs anything, so a published release
+reaches a machine only because someone chose to fetch it — which is also what keeps `checksums.txt` worth
+publishing. What it does have is an update *check*: an opt-in, off by default, that reads `tag_name` from
+this repository's `releases/latest` and offers a link. That is the whole of it, and it constrains what a
+release may be tagged: **the tag has to be a version this application can compare.** `v0.2.0` and
+`v0.2.0-rc.1` are; `nightly` is not, and a build that met it would tell the user it could not compare
+rather than guess. See [`SemanticVersion`](../src/RemoteFlow.Application/Services/SemanticVersion.cs).
+
+Because `releases/latest` skips drafts and prereleases, tagging `v0.2.0-rc.1` never offers itself to
+anyone running a stable build. A draft release is invisible to the check until it is published, which is
+the behaviour to want: the check reflects what people can actually download.
 
 ## Cutting a release
 

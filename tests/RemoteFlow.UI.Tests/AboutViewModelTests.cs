@@ -1,4 +1,5 @@
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.TestSupport;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels;
 using RemoteFlow.UI.ViewModels.Settings;
@@ -171,6 +172,194 @@ public sealed class AboutViewModelTests
         Assert.False(about.HasLastError);
     }
 
+    // The whole feature is opt-in twice over: nothing happens until the button is pressed, or until the
+    // setting that is off by default has been switched on.
+    [Fact]
+    public async Task NothingIsCheckedUntilSomethingAsksForIt()
+    {
+        var checker = new RecordingUpdateChecker();
+        var about = Create(checker, new InMemorySettingsStore());
+
+        await about.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, checker.Calls);
+        Assert.False(about.AutomaticUpdateCheckEnabled);
+        Assert.Equal(string.Empty, about.UpdateStatus);
+        Assert.False(about.HasUpdateStatus);
+    }
+
+    [Fact]
+    public async Task PressingTheButtonChecksAndNamesTheNewerRelease()
+    {
+        var page = new Uri("https://github.com/michaelou/RemoteFlow/releases/tag/v0.2.0");
+        var checker = new RecordingUpdateChecker
+        {
+            Result = UpdateCheckResult.UpdateAvailable("0.2.0", page),
+        };
+        var about = Create(checker);
+
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, checker.Calls);
+        Assert.Contains("0.2.0", about.UpdateStatus, StringComparison.Ordinal);
+        Assert.True(about.IsUpdateAvailable);
+        Assert.Equal(page, about.ReleasePageUrl);
+        Assert.False(about.IsCheckingForUpdates);
+    }
+
+    // Sending someone who is already current to a download page invites them to reinstall what they run.
+    [Fact]
+    public async Task ACurrentBuildIsToldSoAndOfferedNoDownloadLink()
+    {
+        var checker = new RecordingUpdateChecker
+        {
+            Result = UpdateCheckResult.UpToDate("0.1.0", new Uri("https://github.com/michaelou/RemoteFlow")),
+        };
+        var about = Create(checker);
+
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Contains("current", about.UpdateStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.False(about.IsUpdateAvailable);
+        Assert.Null(about.ReleasePageUrl);
+    }
+
+    [Fact]
+    public async Task AnUnpublishedProjectIsDistinguishedFromAFailedCheck()
+    {
+        var checker = new RecordingUpdateChecker { Result = UpdateCheckResult.NoReleaseYet() };
+        var about = Create(checker);
+
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Contains("no published releases", about.UpdateStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.False(about.IsUpdateAvailable);
+    }
+
+    [Fact]
+    public async Task AFailedCheckLeavesTheReasonOnScreenRatherThanThrowing()
+    {
+        var checker = new RecordingUpdateChecker
+        {
+            Result = UpdateCheckResult.Failed("No such host is known."),
+        };
+        var about = Create(checker);
+
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Equal("No such host is known.", about.UpdateStatus);
+        Assert.False(about.IsUpdateAvailable);
+        Assert.False(about.IsCheckingForUpdates);
+    }
+
+    // One of the callers does not await this, so a checker that throws must not take the process with it.
+    [Fact]
+    public async Task ACheckerThatThrowsIsReportedRatherThanEscaping()
+    {
+        var checker = new RecordingUpdateChecker { Failure = new InvalidOperationException("boom") };
+        var about = Create(checker);
+
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.Contains("boom", about.UpdateStatus, StringComparison.Ordinal);
+        Assert.False(about.IsCheckingForUpdates);
+    }
+
+    [Fact]
+    public async Task TheReleasePageButtonOpensTheLinkTheCheckReturnedAndNothingElse()
+    {
+        var page = new Uri("https://github.com/michaelou/RemoteFlow/releases/tag/v0.2.0");
+        var shell = new RecordingShell();
+        var checker = new RecordingUpdateChecker
+        {
+            Result = UpdateCheckResult.UpdateAvailable("0.2.0", page),
+        };
+        var about = new AboutViewModel(
+            AssemblyVersionInfo.Parse("0.1.0"),
+            new StubPaths(),
+            shell,
+            updateChecker: checker);
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        await about.OpenReleasePageCommand.ExecuteAsync(null);
+
+        Assert.Equal(page, Assert.Single(shell.OpenedUrls));
+    }
+
+    [Fact]
+    public async Task WithNothingToOpenTheReleasePageCommandDoesNothing()
+    {
+        var shell = new RecordingShell();
+        var about = new AboutViewModel(
+            AssemblyVersionInfo.Parse("0.1.0"),
+            new StubPaths(),
+            shell,
+            updateChecker: new RecordingUpdateChecker());
+
+        await about.OpenReleasePageCommand.ExecuteAsync(null);
+
+        Assert.Empty(shell.OpenedUrls);
+    }
+
+    [Fact]
+    public async Task SwitchingTheOptInOnStoresItAndChecksStraightAwayRatherThanNextLaunch()
+    {
+        var settings = new InMemorySettingsStore();
+        var checker = new RecordingUpdateChecker();
+        var about = Create(checker, settings);
+        await about.InitializeAsync(TestContext.Current.CancellationToken);
+
+        about.AutomaticUpdateCheckEnabled = true;
+
+        Assert.True(await settings.Get(SettingKeys.CheckForUpdates, TestContext.Current.CancellationToken));
+        Assert.Equal(1, checker.Calls);
+    }
+
+    [Fact]
+    public async Task SwitchingTheOptInOffStoresThatToo()
+    {
+        var settings = new InMemorySettingsStore();
+        await settings.Set(SettingKeys.CheckForUpdates, true, TestContext.Current.CancellationToken);
+        var about = Create(new RecordingUpdateChecker(), settings);
+        await about.InitializeAsync(TestContext.Current.CancellationToken);
+
+        about.AutomaticUpdateCheckEnabled = false;
+
+        Assert.False(await settings.Get(SettingKeys.CheckForUpdates, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task TheStoredOptInIsHonouredOnStartupAndTheCheckRunsOnce()
+    {
+        var settings = new InMemorySettingsStore();
+        await settings.Set(SettingKeys.CheckForUpdates, true, TestContext.Current.CancellationToken);
+        var checker = new RecordingUpdateChecker();
+        var about = Create(checker, settings);
+
+        await about.InitializeAsync(TestContext.Current.CancellationToken);
+        // The startup path and the page's own Loaded handler both call this; it must not check twice.
+        await about.InitializeAsync(TestContext.Current.CancellationToken);
+        await checker.Completed;
+
+        Assert.True(about.AutomaticUpdateCheckEnabled);
+        Assert.Equal(1, checker.Calls);
+    }
+
+    // A host that registered no checker gets an about box without the section, rather than a dead button.
+    [Fact]
+    public void AbuildWithNoUpdateCheckerHidesTheSectionRatherThanShowingADeadButton()
+    {
+        var about = new AboutViewModel(AssemblyVersionInfo.Parse("0.1.0"));
+
+        Assert.False(about.CanCheckForUpdates);
+    }
+
+    [Fact]
+    public void AbuildWithAnUpdateCheckerShowsTheSection()
+    {
+        Assert.True(Create(new RecordingUpdateChecker()).CanCheckForUpdates);
+    }
+
     // Attribution has to travel with the binary: a user with an extracted portable zip has nothing else.
     [Fact]
     public void TheThirdPartyNoticesAreEmbeddedInTheAssembly()
@@ -181,6 +370,43 @@ public sealed class AboutViewModelTests
         Assert.Contains("Avalonia", about.Notices, StringComparison.Ordinal);
         Assert.Contains("MIT", about.Notices, StringComparison.Ordinal);
         Assert.Same(ThirdPartyNotices.Text, about.Notices);
+    }
+
+    private static AboutViewModel Create(
+        RecordingUpdateChecker checker,
+        ISettingsStore? settings = null)
+    {
+        return new AboutViewModel(
+            AssemblyVersionInfo.Parse("0.1.0"),
+            new StubPaths(),
+            new RecordingShell(),
+            updateChecker: checker,
+            settings: settings);
+    }
+
+    private sealed class RecordingUpdateChecker : IUpdateChecker
+    {
+        private readonly TaskCompletionSource _completed =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public UpdateCheckResult Result { get; init; } = UpdateCheckResult.NoReleaseYet();
+
+        public Exception? Failure { get; init; }
+
+        public int Calls { get; private set; }
+
+        /// <summary>Completes when the first check has run, so a test can wait for the one the view model
+        /// deliberately starts without awaiting.</summary>
+        public Task Completed => _completed.Task;
+
+        public Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            _ = _completed.TrySetResult();
+            return Failure is null
+                ? Task.FromResult(Result)
+                : Task.FromException<UpdateCheckResult>(Failure);
+        }
     }
 
     private sealed class StubPaths : IAppPaths
