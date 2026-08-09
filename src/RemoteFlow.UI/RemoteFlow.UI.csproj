@@ -11,6 +11,14 @@
     <AvaloniaResource Include="Assets/**" />
   </ItemGroup>
 
+  <!-- The attribution has to travel with the binary, not merely with the repository: a portable zip
+       extracted somewhere is the whole of what most users ever have. Embedding it means the about box can
+       show the licences whatever the packaging did. The build gate in build/licenses keeps the file
+       honest; this keeps it delivered. -->
+  <ItemGroup>
+    <EmbeddedResource Include="../../THIRD-PARTY-NOTICES.md" LogicalName="RemoteFlow.UI.THIRD-PARTY-NOTICES.md" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Fonts.Inter" />

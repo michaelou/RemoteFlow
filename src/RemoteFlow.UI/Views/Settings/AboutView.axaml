@@ -5,12 +5,12 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings">
   <ScrollViewer>
-    <Grid Margin="28" RowDefinitions="Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
+    <Grid Margin="28" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
       <StackPanel Spacing="5">
         <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding ProductName}" />
         <TextBlock
             Foreground="{DynamicResource Brush.Text.Secondary}"
-            Text="The build on this machine, and the commit it was built from." />
+            Text="The build on this machine, the commit it was built from, and where it keeps your files." />
       </StackPanel>
 
       <StackPanel Grid.Row="1" Margin="0,24,0,0" Spacing="14">
@@ -33,6 +33,137 @@
               Text="{Binding Commit}"
               TextWrapping="Wrap" />
         </StackPanel>
+
+        <StackPanel Spacing="5">
+          <TextBlock FontWeight="SemiBold" Text="Licence" />
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <SelectableTextBlock
+                x:Name="LicenseText"
+                Foreground="{DynamicResource Brush.Text.Primary}"
+                Text="{Binding License}"
+                VerticalAlignment="Center" />
+            <Button
+                x:Name="RepositoryButton"
+                Command="{Binding OpenRepositoryCommand}"
+                Content="Open the repository"
+                ToolTip.Tip="{Binding Repository}" />
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+
+      <!-- The diagnostics half. Paths are shown as well as opened: a path can be read out over a support
+           conversation, and it is the answer when the file manager itself will not start. -->
+      <StackPanel Grid.Row="2" Margin="0,28,0,0" Spacing="14">
+        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Your files" />
+
+        <StackPanel Spacing="5">
+          <TextBlock FontWeight="SemiBold" Text="Logs" />
+          <SelectableTextBlock
+              x:Name="LogDirectoryText"
+              FontFamily="Cascadia Mono,Consolas"
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="{Binding LogDirectory}"
+              TextWrapping="Wrap" />
+          <Button
+              x:Name="OpenLogFolderButton"
+              Command="{Binding OpenLogFolderCommand}"
+              Content="Open the log folder"
+              HorizontalAlignment="Left"
+              Margin="0,4,0,0" />
+        </StackPanel>
+
+        <StackPanel Spacing="5">
+          <TextBlock FontWeight="SemiBold" Text="Data" />
+          <TextBlock
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="Connections, settings, trusted host keys, and credential references."
+              TextWrapping="Wrap" />
+          <SelectableTextBlock
+              x:Name="DataDirectoryText"
+              FontFamily="Cascadia Mono,Consolas"
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="{Binding DataDirectory}"
+              TextWrapping="Wrap" />
+          <Button
+              x:Name="OpenDataFolderButton"
+              Command="{Binding OpenDataFolderCommand}"
+              Content="Open the data folder"
+              HorizontalAlignment="Left"
+              Margin="0,4,0,0" />
+        </StackPanel>
+
+        <TextBlock
+            x:Name="StatusText"
+            Foreground="{DynamicResource Brush.Danger}"
+            IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+            Text="{Binding StatusText}"
+            TextWrapping="Wrap" />
+      </StackPanel>
+
+      <!-- Hidden until something goes wrong, which is the normal case. Local only: it names the error and
+           opens the folder the logs are already in. Nothing leaves the machine. -->
+      <Border
+          Grid.Row="3"
+          x:Name="LastErrorPanel"
+          Background="{DynamicResource Brush.Surface.1}"
+          BorderBrush="{DynamicResource Brush.Border}"
+          BorderThickness="1"
+          CornerRadius="8"
+          IsVisible="{Binding HasLastError}"
+          Margin="0,24,0,0"
+          Padding="14">
+        <StackPanel Spacing="8">
+          <TextBlock FontWeight="SemiBold" Text="Something went wrong this session" />
+          <SelectableTextBlock
+              x:Name="LastErrorText"
+              Foreground="{DynamicResource Brush.Text.Primary}"
+              Text="{Binding LastErrorSummary}"
+              TextWrapping="Wrap" />
+          <TextBlock
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="The full details are in the log folder on this machine. RemoteFlow sends nothing anywhere; attach the log yourself if you want to report it."
+              TextWrapping="Wrap" />
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button
+                x:Name="OpenLogsForErrorButton"
+                Command="{Binding OpenLogFolderCommand}"
+                Content="Open the log folder" />
+            <Button
+                x:Name="DismissLastErrorButton"
+                Command="{Binding DismissLastErrorCommand}"
+                Content="Dismiss" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <StackPanel Grid.Row="4" Margin="0,28,0,0" Spacing="8">
+        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Third-party notices" />
+        <TextBlock
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="Every package inside this build, with its licence. Embedded in the binary, so it is here whether or not the repository is."
+            TextWrapping="Wrap" />
+        <Border
+            Background="{DynamicResource Brush.Surface.1}"
+            BorderBrush="{DynamicResource Brush.Border}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="12">
+          <!-- No wrapping, and a horizontal scrollbar instead. Laying out fifteen kilobytes of text as
+               wrapped paragraphs takes long enough to freeze the window; the same text as fixed lines is
+               instant, and this is a monospaced table that reads better unwrapped anyway. -->
+          <ScrollViewer
+              HorizontalScrollBarVisibility="Auto"
+              MaxHeight="320"
+              VerticalScrollBarVisibility="Auto">
+            <SelectableTextBlock
+                x:Name="NoticesText"
+                FontFamily="Cascadia Mono,Consolas"
+                FontSize="12"
+                Foreground="{DynamicResource Brush.Text.Secondary}"
+                Text="{Binding Notices}"
+                TextWrapping="NoWrap" />
+          </ScrollViewer>
+        </Border>
       </StackPanel>
     </Grid>
   </ScrollViewer>

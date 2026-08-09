@@ -6,6 +6,9 @@
          name; only the produced binary is renamed. -->
     <AssemblyName>RemoteFlow</AssemblyName>
     <RootNamespace>RemoteFlow.Desktop</RootNamespace>
+    <!-- Checks every resolved package against build/licenses/allowed-licenses.txt and the generated
+         manifest. This is the project whose graph the notices are generated from. -->
+    <VerifyPackageLicenses>true</VerifyPackageLicenses>
   </PropertyGroup>
 
   <!-- Explorer's Details tab and the installer both read these. Version and FileVersion come from MinVer;

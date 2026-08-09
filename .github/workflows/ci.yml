@@ -68,6 +68,13 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      # The build itself fails on an unapproved licence; this catches the other half — a pull request that
+      # adds a dependency and leaves THIRD-PARTY-NOTICES.md describing the previous graph. Needs the
+      # restore above, and nothing after it.
+      - name: Check the third-party notices are current
+        shell: pwsh
+        run: ./scripts/generate-notices.ps1 -Verify
+
       # Directory.Build.props sets TreatWarningsAsErrors for every project, so a new warning fails here.
       - name: Build
         run: dotnet build --no-restore -c Release

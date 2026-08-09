@@ -1,0 +1,7 @@
+# Packages that take part in the build but ship nothing to a user. Their licences are still checked — a
+# build tool with hostile terms is still a problem — but they are left out of THIRD-PARTY-NOTICES.md,
+# which is a statement about what is inside the application a user runs.
+#
+# One package id per line. Blank lines and lines starting with # are ignored.
+
+MinVer
