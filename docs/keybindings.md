@@ -83,3 +83,9 @@ The following limitations are deliberate and apply while the RDP surface has foc
 
 Clicking the RDP surface returns keyboard focus to it. Clicking its tab, or pressing F6, returns focus to
 the visibly focused tab. No other RemoteFlow shortcut is intercepted inside the embedded session.
+
+Clipboard text redirection is configured per connection before the session starts. Saving a different
+**Share my clipboard** value does not reconfigure an open session; reconnect to apply it. With sharing
+enabled in two open RDP sessions, text can move between them through the shared local Windows clipboard.
+If either connection disables sharing, that session neither reads nor writes local clipboard text.
+RemoteFlow does not add file, image, or rich-text transfer channels.

@@ -250,6 +250,31 @@ public sealed class WindowsEmbeddedRdpSessionTests
     }
 
     [Fact]
+    public async Task ClipboardRedirectionIsMappedPerNativeControlBeforeEitherSessionConnects()
+    {
+        var enabledControl = new FakeNativeRdpControl();
+        var disabledControl = new FakeNativeRdpControl();
+        var factory = new FakeNativeRdpControlFactory(enabledControl, disabledControl);
+        var provider = new WindowsEmbeddedRdpSessionProvider(factory, new RecordingDispatcher(), []);
+
+        var enabled = await provider.CreateAsync(
+            CreateConnectionWithClipboardRedirection(enabled: true),
+            TestContext.Current.CancellationToken);
+        var disabled = await provider.CreateAsync(
+            CreateConnectionWithClipboardRedirection(enabled: false),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(enabled.IsSuccess);
+        Assert.True(disabled.IsSuccess);
+        Assert.True(enabledControl.RedirectClipboard);
+        Assert.False(disabledControl.RedirectClipboard);
+        Assert.Equal([true, false], factory.CreatedSettings.Select(settings =>
+            settings.AdvancedSettings.RedirectClipboard));
+        await enabled.Value.DisposeAsync();
+        await disabled.Value.DisposeAsync();
+    }
+
+    [Fact]
     public async Task StoredPasswordIsAppliedOnceWithSavingDisabledAndNoExternalLauncherDependency()
     {
         const string secret = "Correct-Horse-Battery-Staple";
@@ -486,6 +511,18 @@ public sealed class WindowsEmbeddedRdpSessionTests
         return connection.SetCredential(credential, SystemGuidProvider.Instance);
     }
 
+    private static Connection CreateConnectionWithClipboardRedirection(bool enabled)
+    {
+        var connection = CreateConnection();
+        var options = RdpOptions.Default();
+        _ = options.Configure(redirectClipboard: enabled);
+        return connection.SetOptions(
+            SshOptions.Default(),
+            SftpOptions.Default(),
+            options,
+            SystemGuidProvider.Instance);
+    }
+
     private sealed class RecordingDispatcher : IUiDispatcher
     {
         public int InvocationCount { get; private set; }
@@ -538,6 +575,8 @@ public sealed class WindowsEmbeddedRdpSessionTests
         public int ResetPasswordCount { get; private set; }
 
         public int SetPasswordCount { get; private set; }
+
+        public bool RedirectClipboard { get; set; }
 
         public NativeRdpResizeResult ResizeResult { get; init; } = NativeRdpResizeResult.Success;
 
@@ -680,12 +719,20 @@ public sealed class WindowsEmbeddedRdpSessionTests
 
     private sealed class FakeNativeRdpControlFactory : INativeRdpControlFactory
     {
-        private readonly INativeRdpControl? _control;
+        private readonly Queue<INativeRdpControl> _controls = [];
         private readonly Exception? _exception;
 
         public FakeNativeRdpControlFactory(INativeRdpControl control)
         {
-            _control = control;
+            _controls.Enqueue(control);
+        }
+
+        public FakeNativeRdpControlFactory(params INativeRdpControl[] controls)
+        {
+            foreach (var control in controls)
+            {
+                _controls.Enqueue(control);
+            }
         }
 
         public FakeNativeRdpControlFactory(Exception exception)
@@ -693,10 +740,23 @@ public sealed class WindowsEmbeddedRdpSessionTests
             _exception = exception;
         }
 
+        public List<RdpControlSettings> CreatedSettings { get; } = [];
+
         public INativeRdpControl Create(RdpControlSettings settings, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return _exception is null ? _control! : throw _exception;
+            if (_exception is not null)
+            {
+                throw _exception;
+            }
+
+            CreatedSettings.Add(settings);
+            var control = _controls.Dequeue();
+            if (control is FakeNativeRdpControl fake)
+            {
+                fake.RedirectClipboard = settings.AdvancedSettings.RedirectClipboard;
+            }
+            return control;
         }
     }
 }
