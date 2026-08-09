@@ -13,6 +13,12 @@ internal interface INativeRdpControl : IAsyncDisposable
 
     void Disconnect(CancellationToken cancellationToken);
 
+    void ConfigureCredentialPolicy(bool allowCredentialSaving, bool allowPromptingForCredentials);
+
+    void SetClearTextPassword(ReadOnlySpan<char> password);
+
+    void ResetPassword();
+
     string DescribeDisconnect(uint disconnectReason, uint extendedDisconnectReason);
 
     uint ExtendedDisconnectReason { get; }

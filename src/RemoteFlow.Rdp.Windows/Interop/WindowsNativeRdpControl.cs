@@ -62,6 +62,7 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
     private readonly NativeRdpEventSink _eventSink = new();
     private object? _instance;
     private object? _advancedSettings;
+    private IMsRdpClientNonScriptable5? _nonScriptable;
     private int _disposed;
 
     public WindowsNativeRdpControl(object instance, RdpControlSettings settings)
@@ -70,6 +71,8 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
         ArgumentNullException.ThrowIfNull(settings);
         try
         {
+            _nonScriptable = instance as IMsRdpClientNonScriptable5
+                ?? throw new InvalidOperationException("The RDP control does not expose credential handover.");
             _eventSink.EventReceived += ForwardEvent;
             _eventSink.Advise(instance);
             Apply(settings);
@@ -111,6 +114,25 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
     {
         cancellationToken.ThrowIfCancellationRequested();
         _ = InvokeMethod(RequiredInstance(), "Disconnect");
+    }
+
+    public void ConfigureCredentialPolicy(bool allowCredentialSaving, bool allowPromptingForCredentials)
+    {
+        var control = RequiredNonScriptable();
+        Marshal.ThrowExceptionForHR(control.put_AllowCredentialSaving(VariantBool(allowCredentialSaving)));
+        Marshal.ThrowExceptionForHR(control.put_AllowPromptingForCredentials(VariantBool(allowPromptingForCredentials)));
+    }
+
+    public void SetClearTextPassword(ReadOnlySpan<char> password)
+    {
+        // COM requires a BSTR, so one short-lived managed string is unavoidable and cannot be reliably
+        // zeroed. Keep it scoped to this single write-only assignment and never retain or log it.
+        Marshal.ThrowExceptionForHR(RequiredNonScriptable().put_ClearTextPassword(new string(password)));
+    }
+
+    public void ResetPassword()
+    {
+        Marshal.ThrowExceptionForHR(RequiredNonScriptable().ResetPassword());
     }
 
     public string DescribeDisconnect(uint disconnectReason, uint extendedDisconnectReason)
@@ -189,6 +211,9 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
             _ = Marshal.FinalReleaseComObject(advanced);
         }
 
+        // This is a QueryInterface view of the control's own RCW, not a separate COM identity.
+        _nonScriptable = null;
+
         var instance = Interlocked.Exchange(ref _instance, null);
         if (instance is not null && Marshal.IsComObject(instance))
         {
@@ -199,6 +224,16 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
     private object RequiredInstance()
     {
         return _instance ?? throw new ObjectDisposedException(nameof(WindowsNativeRdpControl));
+    }
+
+    private IMsRdpClientNonScriptable5 RequiredNonScriptable()
+    {
+        return _nonScriptable ?? throw new ObjectDisposedException(nameof(WindowsNativeRdpControl));
+    }
+
+    private static short VariantBool(bool value)
+    {
+        return value ? (short)-1 : (short)0;
     }
 
     private static object? GetProperty(object target, string name)

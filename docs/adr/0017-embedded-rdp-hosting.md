@@ -19,6 +19,18 @@ Nothing here changes the credential rule. Embedding removes the `.rdp` file from
 which is strictly less exposure than ADR-0015 describes, and the `cmdkey` handover is not needed at all
 when the control takes the credential in memory.
 
+The embedded path resolves the connection's existing `StoreProvider` and `StoreKey` through
+`ICredentialProvider` immediately before every connect or reconnect. If a secret exists, it is assigned
+once to the control's write-only `ClearTextPassword` property; no process starts, no file is written and
+no Credential Manager handover entry is created. If the reference or secret is absent, the control's
+password is reset and its own credential prompt remains enabled. `AllowCredentialSaving` is always false.
+
+`SecretHandle` zeroes its mutable character buffer after the assignment. COM requires a BSTR, however,
+so the assignment necessarily creates one short-lived .NET `string`; .NET strings cannot be reliably
+zeroed. The implementation therefore keeps that string to the single property call and never retains,
+logs, formats or includes it in an exception. Reconnect reads the provider again, so deleting a stored
+credential takes effect immediately instead of reusing an earlier value.
+
 RemoteFlow implements no RDP protocol code. FreeRDP is out of scope.
 
 ## Decisions

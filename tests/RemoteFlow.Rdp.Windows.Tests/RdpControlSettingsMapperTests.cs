@@ -88,6 +88,27 @@ public sealed class RdpControlSettingsMapperTests
             RdpControlSettingsMapper.Map(CreateConnection(), width, height, 1d));
     }
 
+    [Theory]
+    [InlineData("EXAMPLE\\alice")]
+    [InlineData("alice@example.com")]
+    public void QualifiedAndUpnUserNamesArePreserved(string userName)
+    {
+        var connection = CreateConnection();
+        _ = connection.SetDetails(
+            userName,
+            AuthMethod.Password,
+            notes: null,
+            EnvironmentKind.Unspecified,
+            colorOverrideHex: null,
+            SystemGuidProvider.Instance);
+
+        var settings = RdpControlSettingsMapper.Map(connection, 1280, 720, 1d);
+
+        Assert.Equal(userName, settings.UserName);
+        Assert.Equal(2u, settings.AdvancedSettings.AuthenticationLevel);
+        Assert.True(settings.AdvancedSettings.EnableCredSspSupport);
+    }
+
     private static Connection CreateConnection()
     {
         return Connection.Create(

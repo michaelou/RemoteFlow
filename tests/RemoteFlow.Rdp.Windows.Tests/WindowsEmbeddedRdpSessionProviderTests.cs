@@ -17,8 +17,9 @@ public sealed class WindowsEmbeddedRdpSessionProviderTests
         _ = services.AddRemoteFlowRdpWindows();
 
         var descriptor = Assert.Single(services, service => service.ServiceType == typeof(IEmbeddedRdpSessionProvider));
-        var provider = Assert.IsType<WindowsEmbeddedRdpSessionProvider>(descriptor.ImplementationInstance);
-        Assert.True(provider.SupportsEmbeddedSessions);
+        Assert.NotNull(descriptor.ImplementationFactory);
+        var concrete = Assert.Single(services, service => service.ServiceType == typeof(WindowsEmbeddedRdpSessionProvider));
+        Assert.NotNull(concrete.ImplementationFactory);
     }
 
     private sealed class FallbackProvider : IEmbeddedRdpSessionProvider

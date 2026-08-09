@@ -1,8 +1,10 @@
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Domain.Abstractions;
 using RemoteFlow.Domain.Entities;
 using RemoteFlow.Domain.Enums;
+using RemoteFlow.Domain.ValueObjects;
 using RemoteFlow.Rdp.Windows.Interop;
 using RemoteFlow.UI.Services;
 using Xunit;
@@ -225,7 +227,8 @@ public sealed class WindowsEmbeddedRdpSessionTests
         var control = new FakeNativeRdpControl();
         var provider = new WindowsEmbeddedRdpSessionProvider(
             new FakeNativeRdpControlFactory(control),
-            new RecordingDispatcher());
+            new RecordingDispatcher(),
+            []);
         var connection = CreateConnection();
 
         var success = await provider.CreateAsync(connection, TestContext.Current.CancellationToken);
@@ -236,12 +239,126 @@ public sealed class WindowsEmbeddedRdpSessionTests
 
         var unavailable = new WindowsEmbeddedRdpSessionProvider(
             new FakeNativeRdpControlFactory(new InvalidOperationException("COM unavailable")),
-            new RecordingDispatcher());
+            new RecordingDispatcher(),
+            []);
         var failure = await unavailable.CreateAsync(connection, TestContext.Current.CancellationToken);
 
         Assert.True(failure.IsFailure);
         Assert.Equal(RemoteFlowErrorKind.Unavailable, failure.Error.Kind);
         Assert.Contains("could not be activated", failure.Error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task StoredPasswordIsAppliedOnceWithSavingDisabledAndNoExternalLauncherDependency()
+    {
+        const string secret = "Correct-Horse-Battery-Staple";
+        var connection = CreateConnectionWithCredential();
+        var provider = new MutableCredentialProvider(secret);
+        var control = new FakeNativeRdpControl();
+        await using var session = new WindowsEmbeddedRdpSession(
+            control,
+            new RecordingDispatcher(),
+            new EmbeddedRdpCredentialSource(connection, [provider]));
+
+        await session.ConnectAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(secret, control.ClearTextPassword);
+        Assert.Equal(1, control.SetPasswordCount);
+        Assert.False(control.AllowCredentialSaving);
+        Assert.True(control.AllowPromptingForCredentials);
+        Assert.True(provider.IssuedHandles.Single().IsDisposed);
+        Assert.DoesNotContain(
+            typeof(WindowsEmbeddedRdpSessionProvider).Assembly.GetReferencedAssemblies(),
+            assembly => assembly.Name == "RemoteFlow.Infrastructure");
+        Assert.DoesNotContain(
+            typeof(WindowsEmbeddedRdpSessionProvider).GetConstructors(
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic)
+                .SelectMany(constructor => constructor.GetParameters()),
+            parameter => parameter.ParameterType.Name.Contains("Process", StringComparison.OrdinalIgnoreCase) ||
+                parameter.ParameterType.Name.Contains("Path", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DeletedCredentialIsResetAndReconnectPromptsInsteadOfReusingIt()
+    {
+        var connection = CreateConnectionWithCredential();
+        var provider = new MutableCredentialProvider("first-secret");
+        var control = new FakeNativeRdpControl();
+        await using var session = new WindowsEmbeddedRdpSession(
+            control,
+            new RecordingDispatcher(),
+            new EmbeddedRdpCredentialSource(connection, [provider]));
+        await ConnectThroughLoginAsync(session, control);
+        Assert.Equal("first-secret", control.ClearTextPassword);
+
+        provider.Secret = null;
+        control.Raise(4, 1u);
+        await session.ReconnectAsync(TestContext.Current.CancellationToken);
+
+        Assert.Null(control.ClearTextPassword);
+        Assert.Equal(2, control.ResetPasswordCount);
+        Assert.Equal(1, control.SetPasswordCount);
+        Assert.True(control.AllowPromptingForCredentials);
+        Assert.False(control.AllowCredentialSaving);
+    }
+
+    [Fact]
+    public async Task TraceLoggingAndFailuresNeverContainPassword()
+    {
+        const string secret = "Do-Not-Log-This-Secret";
+        var connection = CreateConnectionWithCredential();
+        var provider = new MutableCredentialProvider(secret);
+        var logger = new TraceLogger();
+
+        var successfulControl = new FakeNativeRdpControl();
+        await using (var successful = new WindowsEmbeddedRdpSession(
+            successfulControl,
+            new RecordingDispatcher(),
+            new EmbeddedRdpCredentialSource(connection, [provider]),
+            logger))
+        {
+            await successful.ConnectAsync(TestContext.Current.CancellationToken);
+            successfulControl.Raise(3);
+            Assert.Equal(EmbeddedRdpSessionState.Connected, successful.State);
+        }
+
+        var failedControl = new FakeNativeRdpControl
+        {
+            ConnectAction = _ => throw new InvalidOperationException($"native failure contained {secret}"),
+        };
+        await using var failed = new WindowsEmbeddedRdpSession(
+            failedControl,
+            new RecordingDispatcher(),
+            new EmbeddedRdpCredentialSource(connection, [provider]),
+            logger);
+
+        var exception = await Record.ExceptionAsync(() =>
+            failed.ConnectAsync(TestContext.Current.CancellationToken));
+
+        Assert.Null(exception);
+        Assert.Equal(EmbeddedRdpSessionState.Failed, failed.State);
+        Assert.DoesNotContain(secret, failed.StatusMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain(logger.Messages, message => message.Contains(secret, StringComparison.Ordinal));
+        Assert.All(provider.IssuedHandles, handle => Assert.True(handle.IsDisposed));
+    }
+
+    [Fact]
+    public async Task AuthenticationWarningIsSurfacedWithoutWeakeningSecuritySettings()
+    {
+        var control = new FakeNativeRdpControl();
+        await using var session = CreateSession(control);
+        string? warning = null;
+        session.StateChanged += (_, change) => warning = change.StatusMessage;
+        await session.ConnectAsync(TestContext.Current.CancellationToken);
+
+        control.Raise(18);
+
+        Assert.Equal(EmbeddedRdpSessionState.Connecting, session.State);
+        Assert.Contains("certificate or identity warning", warning, StringComparison.OrdinalIgnoreCase);
+        Assert.False(control.AllowCredentialSaving);
+        Assert.True(control.AllowPromptingForCredentials);
     }
 
     [Theory]
@@ -280,6 +397,16 @@ public sealed class WindowsEmbeddedRdpSessionTests
             "RDP server",
             "server.example.com",
             ProtocolType.Rdp).Value;
+    }
+
+    private static Connection CreateConnectionWithCredential()
+    {
+        var connection = CreateConnection();
+        var credential = CredentialRef.Create(
+            CredentialKind.RdpPassword,
+            "rdp/server.example.com",
+            "test-provider").Value;
+        return connection.SetCredential(credential, SystemGuidProvider.Instance);
     }
 
     private sealed class RecordingDispatcher : IUiDispatcher
@@ -325,6 +452,16 @@ public sealed class WindowsEmbeddedRdpSessionTests
 
         public string NativeDescription { get; init; } = "The connection was closed.";
 
+        public bool AllowCredentialSaving { get; private set; }
+
+        public bool AllowPromptingForCredentials { get; private set; }
+
+        public string? ClearTextPassword { get; private set; }
+
+        public int ResetPasswordCount { get; private set; }
+
+        public int SetPasswordCount { get; private set; }
+
         public void Connect(CancellationToken cancellationToken)
         {
             ConnectCount++;
@@ -336,6 +473,24 @@ public sealed class WindowsEmbeddedRdpSessionTests
             cancellationToken.ThrowIfCancellationRequested();
             DisconnectCount++;
             DisconnectAction?.Invoke();
+        }
+
+        public void ConfigureCredentialPolicy(bool allowCredentialSaving, bool allowPromptingForCredentials)
+        {
+            AllowCredentialSaving = allowCredentialSaving;
+            AllowPromptingForCredentials = allowPromptingForCredentials;
+        }
+
+        public void SetClearTextPassword(ReadOnlySpan<char> password)
+        {
+            SetPasswordCount++;
+            ClearTextPassword = new string(password);
+        }
+
+        public void ResetPassword()
+        {
+            ResetPasswordCount++;
+            ClearTextPassword = null;
         }
 
         public string DescribeDisconnect(uint disconnectReason, uint extendedDisconnectReason)
@@ -352,6 +507,70 @@ public sealed class WindowsEmbeddedRdpSessionTests
         public void Raise(int dispatchId, params object?[] arguments)
         {
             EventReceived?.Invoke(this, new(dispatchId, arguments));
+        }
+    }
+
+    private sealed class MutableCredentialProvider(string? secret) : ICredentialProvider
+    {
+        public string Name => "test-provider";
+
+        public bool IsAvailable => true;
+
+        public string? Secret { get; set; } = secret;
+
+        public List<SecretHandle> IssuedHandles { get; } = [];
+
+        public Task<SecretHandle?> GetAsync(string storeKey, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Secret is null)
+            {
+                return Task.FromResult<SecretHandle?>(null);
+            }
+
+            var handle = new SecretHandle(Secret);
+            IssuedHandles.Add(handle);
+            return Task.FromResult<SecretHandle?>(handle);
+        }
+
+        public Task SetAsync(
+            string storeKey,
+            ReadOnlyMemory<char> value,
+            string displayName,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task DeleteAsync(string storeKey, CancellationToken cancellationToken = default)
+        {
+            Secret = null;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class TraceLogger : ILogger<WindowsEmbeddedRdpSession>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        {
+            return null;
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return logLevel == LogLevel.Trace;
+        }
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Messages.Add(formatter(state, exception));
         }
     }
 

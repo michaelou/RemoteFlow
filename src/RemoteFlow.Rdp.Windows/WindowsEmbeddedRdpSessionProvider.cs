@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Domain.Common;
 using RemoteFlow.Domain.Entities;
@@ -14,17 +16,19 @@ public sealed class WindowsEmbeddedRdpSessionProvider : IEmbeddedRdpSessionProvi
     private const int _initialViewportHeight = 720;
     private readonly INativeRdpControlFactory _controlFactory;
     private readonly IUiDispatcher _dispatcher;
-
-    public static WindowsEmbeddedRdpSessionProvider Instance { get; } = new(
-        WindowsNativeRdpControlFactory.Instance,
-        new UiDispatcher());
+    private readonly IReadOnlyList<ICredentialProvider> _credentialProviders;
+    private readonly ILogger<WindowsEmbeddedRdpSession> _logger;
 
     internal WindowsEmbeddedRdpSessionProvider(
         INativeRdpControlFactory controlFactory,
-        IUiDispatcher dispatcher)
+        IUiDispatcher dispatcher,
+        IEnumerable<ICredentialProvider> credentialProviders,
+        ILogger<WindowsEmbeddedRdpSession>? logger = null)
     {
         _controlFactory = controlFactory ?? throw new ArgumentNullException(nameof(controlFactory));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        _credentialProviders = [.. credentialProviders ?? throw new ArgumentNullException(nameof(credentialProviders))];
+        _logger = logger ?? NullLogger<WindowsEmbeddedRdpSession>.Instance;
     }
 
     public bool SupportsEmbeddedSessions => true;
@@ -51,7 +55,11 @@ public sealed class WindowsEmbeddedRdpSessionProvider : IEmbeddedRdpSessionProvi
                 _initialViewportHeight,
                 displayScaling: 1d);
             var control = _controlFactory.Create(settings, cancellationToken);
-            IEmbeddedRdpSession session = new WindowsEmbeddedRdpSession(control, _dispatcher);
+            IEmbeddedRdpSession session = new WindowsEmbeddedRdpSession(
+                control,
+                _dispatcher,
+                new EmbeddedRdpCredentialSource(connection, _credentialProviders),
+                _logger);
             return Task.FromResult(Result<IEmbeddedRdpSession>.Success(session));
         }
         catch (OperationCanceledException)
@@ -61,11 +69,11 @@ public sealed class WindowsEmbeddedRdpSessionProvider : IEmbeddedRdpSessionProvi
                 "embedded_rdp.activation_cancelled",
                 "Creating the embedded RDP session was cancelled.")));
         }
-        catch (Exception exception)
+        catch (Exception)
         {
             return Task.FromResult(Result<IEmbeddedRdpSession>.Failure(RemoteFlowError.Unavailable(
                 "embedded_rdp.activation_unavailable",
-                $"The embedded RDP control could not be activated: {exception.Message}")));
+                "The embedded RDP control could not be activated.")));
         }
     }
 }

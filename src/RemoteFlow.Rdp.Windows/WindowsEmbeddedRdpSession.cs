@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Rdp.Windows.Interop;
 using RemoteFlow.UI.Services;
@@ -11,10 +13,16 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
     private readonly Lock _stateLock = new();
     private int _disposed;
 
-    public WindowsEmbeddedRdpSession(INativeRdpControl control, IUiDispatcher dispatcher)
+    public WindowsEmbeddedRdpSession(
+        INativeRdpControl control,
+        IUiDispatcher dispatcher,
+        IEmbeddedRdpCredentialSource? credentialSource = null,
+        ILogger<WindowsEmbeddedRdpSession>? logger = null)
     {
         Control = control ?? throw new ArgumentNullException(nameof(control));
         Dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        CredentialSource = credentialSource ?? NoEmbeddedRdpCredentialSource.Instance;
+        Logger = logger ?? NullLogger<WindowsEmbeddedRdpSession>.Instance;
         Control.EventReceived += OnNativeEventReceived;
     }
 
@@ -48,6 +56,10 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
 
     private IUiDispatcher Dispatcher { get; }
 
+    private IEmbeddedRdpCredentialSource CredentialSource { get; }
+
+    private ILogger<WindowsEmbeddedRdpSession> Logger { get; }
+
     private EmbeddedRdpSessionState CurrentState { get; set; } = EmbeddedRdpSessionState.Created;
 
     private string? CurrentStatusMessage { get; set; }
@@ -58,6 +70,10 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
         try
         {
             await TransitionAsync(EmbeddedRdpSessionState.Connecting, null, cancellationToken).ConfigureAwait(false);
+            if (!await ApplyCredentialAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
             await Dispatcher.InvokeAsync(
                 () => Control.Connect(cancellationToken),
                 cancellationToken).ConfigureAwait(false);
@@ -68,11 +84,13 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
         }
         catch (COMException exception)
         {
-            await FailWithoutThrowingAsync($"The embedded RDP control could not connect: {exception.Message}").ConfigureAwait(false);
+            LogFailure("connect", exception);
+            await FailWithoutThrowingAsync("The embedded RDP control could not connect.").ConfigureAwait(false);
         }
         catch (Exception exception)
         {
-            await FailWithoutThrowingAsync($"The embedded RDP session could not connect: {exception.Message}").ConfigureAwait(false);
+            LogFailure("connect", exception);
+            await FailWithoutThrowingAsync("The embedded RDP session could not connect.").ConfigureAwait(false);
         }
     }
 
@@ -91,7 +109,8 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
         }
         catch (Exception exception)
         {
-            await FailWithoutThrowingAsync($"The embedded RDP session could not disconnect: {exception.Message}").ConfigureAwait(false);
+            LogFailure("disconnect", exception);
+            await FailWithoutThrowingAsync("The embedded RDP session could not disconnect.").ConfigureAwait(false);
         }
     }
 
@@ -101,6 +120,10 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
         try
         {
             await TransitionAsync(EmbeddedRdpSessionState.Reconnecting, null, cancellationToken).ConfigureAwait(false);
+            if (!await ApplyCredentialAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
             await Dispatcher.InvokeAsync(
                 () => Control.Connect(cancellationToken),
                 cancellationToken).ConfigureAwait(false);
@@ -111,7 +134,8 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
         }
         catch (Exception exception)
         {
-            await FailWithoutThrowingAsync($"The embedded RDP session could not reconnect: {exception.Message}").ConfigureAwait(false);
+            LogFailure("reconnect", exception);
+            await FailWithoutThrowingAsync("The embedded RDP session could not reconnect.").ConfigureAwait(false);
         }
     }
 
@@ -173,7 +197,8 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
         }
         catch (Exception exception)
         {
-            await FailWithoutThrowingAsync($"The embedded RDP control reported an error: {exception.Message}")
+            LogFailure("event callback", exception);
+            await FailWithoutThrowingAsync("The embedded RDP control reported an error.")
                 .ConfigureAwait(false);
         }
     }
@@ -196,6 +221,14 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
                 TransitionCore(
                     EmbeddedRdpSessionState.Failed,
                     $"The embedded RDP control reported a fatal error{FormatCode(e.Arguments)}.");
+                break;
+            case 18: // OnAuthenticationWarningDisplayed
+                TransitionCore(
+                    State,
+                    "Windows is displaying an RDP certificate or identity warning. Review it before continuing.");
+                break;
+            case 19: // OnAuthenticationWarningDismissed
+                TransitionCore(State, null);
                 break;
             case 22: // OnLogonError
                 TransitionCore(
@@ -242,21 +275,34 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
             previous = CurrentState;
             if (previous == nextState)
             {
-                CurrentStatusMessage = message ?? CurrentStatusMessage;
-                return;
-            }
+                if (string.Equals(CurrentStatusMessage, message, StringComparison.Ordinal))
+                {
+                    return;
+                }
 
-            if (!IsLegal(previous, nextState))
+                CurrentStatusMessage = message;
+            }
+            else if (!IsLegal(previous, nextState))
             {
                 return;
             }
-
-            CurrentState = nextState;
-            CurrentStatusMessage = message;
+            else
+            {
+                CurrentState = nextState;
+                CurrentStatusMessage = message;
+            }
         }
 
         try
         {
+            if (Logger.IsEnabled(LogLevel.Trace))
+            {
+                Logger.LogTrace(
+                    "Embedded RDP state changed from {PreviousState} to {CurrentState}: {StatusMessage}",
+                    previous,
+                    nextState,
+                    message);
+            }
             StateChanged?.Invoke(this, new(previous, nextState, message));
         }
         catch (Exception)
@@ -279,6 +325,50 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
                 CurrentState = EmbeddedRdpSessionState.Failed;
                 CurrentStatusMessage = message;
             }
+        }
+    }
+
+    private async Task<bool> ApplyCredentialAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var credential = await CredentialSource.GetAsync(cancellationToken).ConfigureAwait(false);
+            await Dispatcher.InvokeAsync(() =>
+                {
+                    Control.ConfigureCredentialPolicy(
+                        allowCredentialSaving: false,
+                        allowPromptingForCredentials: true);
+                    Control.ResetPassword();
+                    if (credential is not null && !credential.Secret.IsEmpty)
+                    {
+                        Control.SetClearTextPassword(credential.Secret.Span);
+                    }
+                }, cancellationToken)
+                .ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            LogFailure("credential handover", exception);
+            await FailWithoutThrowingAsync("The stored RDP credential could not be read or applied.")
+                .ConfigureAwait(false);
+            return false;
+        }
+    }
+
+    private void LogFailure(string operation, Exception exception)
+    {
+        if (Logger.IsEnabled(LogLevel.Trace))
+        {
+            Logger.LogTrace(
+                "Embedded RDP {Operation} failed with {ExceptionType} (0x{ErrorCode:X8}).",
+                operation,
+                exception.GetType().Name,
+                exception.HResult);
         }
     }
 
