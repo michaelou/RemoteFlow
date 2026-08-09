@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- The Remote Desktop ActiveX control is a Windows COM component and the WinForms AxHost container
+         is one of the two hosting mechanisms under test, so this spike targets Windows. EnableWindowsTargeting
+         keeps `dotnet build` on the solution working from Linux and macOS, where it compiles but cannot run. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Required by [LibraryImport]: the generated marshalling stubs are unsafe code. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- CA1001: the spike owns disposables from window lifetime, not from IDisposable plumbing.
+         CA1416: the whole project is Windows-only by design; the per-call platform guard adds nothing.
+         SYSLIB1096: source-generated COM interop cannot express the ActiveX site, which needs the
+         built-in marshaller for VARIANT and BSTR out-parameters. -->
+    <NoWarn>$(NoWarn);CA1001;CA1416;SYSLIB1096</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,79 @@
+<Window
+    x:Class="RemoteFlow.RdpSpike.MainWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="RemoteFlow embedded RDP spike"
+    Width="1320"
+    Height="900"
+    MinWidth="900"
+    MinHeight="600">
+  <Grid RowDefinitions="Auto,Auto,*,Auto,220">
+    <WrapPanel Margin="8" ItemSpacing="6" LineSpacing="6">
+      <TextBlock Text="Host" VerticalAlignment="Center" />
+      <TextBox x:Name="HostTextBox" Width="200" PlaceholderText="server or server:port" />
+      <TextBlock Text="User" VerticalAlignment="Center" />
+      <TextBox x:Name="UserTextBox" Width="140" PlaceholderText="optional" />
+      <TextBlock Text="Container" VerticalAlignment="Center" />
+      <ComboBox x:Name="ContainerComboBox" Width="240" SelectedIndex="0">
+        <ComboBoxItem Content="Hand-rolled OLE site" />
+        <ComboBoxItem Content="WinForms AxHost" />
+      </ComboBox>
+      <TextBlock Text="Class" VerticalAlignment="Center" />
+      <ComboBox x:Name="ClassComboBox" Width="130" SelectedIndex="0" />
+      <Button x:Name="ConnectButton" Content="Connect" Click="Connect_OnClick" />
+      <Button x:Name="DisconnectButton" Content="Disconnect" Click="Disconnect_OnClick" />
+      <Button Content="Destroy control" Click="Destroy_OnClick" />
+    </WrapPanel>
+
+    <WrapPanel Grid.Row="1" Margin="8,0,8,8" ItemSpacing="6" LineSpacing="6">
+      <Button Content="Resize to window (Reconnect)" Click="ResizeReconnect_OnClick" />
+      <Button Content="Resize to window (UpdateSessionDisplaySettings)" Click="ResizeUpdate_OnClick" />
+      <Button Content="Focus control" Click="FocusControl_OnClick" />
+      <ToggleSwitch
+          x:Name="KeepAttachedSwitch"
+          IsChecked="True"
+          OnContent="Page switch: keep attached"
+          OffContent="Page switch: detach the host" />
+      <Button Content="Show page A" Click="ShowPageA_OnClick" />
+      <Button Content="Show page B" Click="ShowPageB_OnClick" />
+      <Button Content="Export evidence" Click="ExportEvidence_OnClick" />
+    </WrapPanel>
+
+    <TabControl Grid.Row="2" x:Name="Tabs" Margin="8,0">
+      <TabItem Header="Session">
+        <Grid x:Name="PageHost">
+          <Border x:Name="PageA" BorderBrush="#606060" BorderThickness="1">
+            <ContentControl x:Name="SessionSlot" />
+          </Border>
+          <Border x:Name="PageB" IsVisible="False" BorderBrush="#606060" BorderThickness="1">
+            <TextBlock
+                Margin="16"
+                TextWrapping="Wrap"
+                Text="Page B. Switching pages with the toggle on leaves the session view in the visual tree and only flips IsVisible. With it off, the host leaves the tree, which is what a TabControl does by default." />
+          </Border>
+        </Grid>
+      </TabItem>
+      <TabItem Header="Another tab (detaches the host)">
+        <TextBlock
+            Margin="16"
+            TextWrapping="Wrap"
+            Text="A second TabItem. Avalonia removes the first tab's content from the visual tree when this one is selected, so the native host detaches. Come back to Session and check the log: the session should still be connected, and the detach count should have gone up." />
+      </TabItem>
+    </TabControl>
+
+    <StackPanel Grid.Row="3" Margin="8" Spacing="2">
+      <TextBlock x:Name="StatusText" TextWrapping="Wrap" />
+      <TextBlock x:Name="MetricsText" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <TextBox
+        Grid.Row="4"
+        x:Name="LogTextBox"
+        Margin="8,0,8,8"
+        AcceptsReturn="True"
+        IsReadOnly="True"
+        TextWrapping="NoWrap"
+        FontFamily="Cascadia Mono, Consolas, monospace"
+        FontSize="12" />
+  </Grid>
+</Window>
