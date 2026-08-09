@@ -7,9 +7,24 @@ public enum ConnectionOpenMode
     Rdp = 2,
 }
 
+/// <summary>Whether the connection opened, and — when it did not — what to tell the person who asked.
+/// A bare false leaves them to guess between "no RDP client" and "the host refused".</summary>
+public sealed record ConnectionOpenResult(bool Opened, string? Message = null)
+{
+    public static ConnectionOpenResult Success()
+    {
+        return new(true);
+    }
+
+    public static ConnectionOpenResult Failure(string? message = null)
+    {
+        return new(false, message);
+    }
+}
+
 public interface IConnectionSessionOpener
 {
-    Task<bool> OpenAsync(
+    Task<ConnectionOpenResult> OpenAsync(
         Guid connectionId,
         ConnectionOpenMode mode,
         CancellationToken cancellationToken = default);
@@ -17,14 +32,16 @@ public interface IConnectionSessionOpener
 
 public sealed class DeferredConnectionSessionOpener : IConnectionSessionOpener
 {
-    public event Func<Guid, ConnectionOpenMode, CancellationToken, Task<bool>>? OpenRequested;
+    public event Func<Guid, ConnectionOpenMode, CancellationToken, Task<ConnectionOpenResult>>? OpenRequested;
 
-    public async Task<bool> OpenAsync(
+    public async Task<ConnectionOpenResult> OpenAsync(
         Guid connectionId,
         ConnectionOpenMode mode,
         CancellationToken cancellationToken = default)
     {
         var handler = OpenRequested;
-        return handler is not null && await handler(connectionId, mode, cancellationToken).ConfigureAwait(false);
+        return handler is null
+            ? ConnectionOpenResult.Failure()
+            : await handler(connectionId, mode, cancellationToken).ConfigureAwait(false);
     }
 }

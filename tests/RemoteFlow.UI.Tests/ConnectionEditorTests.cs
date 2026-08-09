@@ -557,13 +557,13 @@ public sealed class ConnectionEditorTests
 
     private sealed class SuccessfulOpener : IConnectionSessionOpener
     {
-        public Task<bool> OpenAsync(
+        public Task<ConnectionOpenResult> OpenAsync(
             Guid connectionId,
             ConnectionOpenMode mode,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(true);
+            return Task.FromResult(ConnectionOpenResult.Success());
         }
     }
 }

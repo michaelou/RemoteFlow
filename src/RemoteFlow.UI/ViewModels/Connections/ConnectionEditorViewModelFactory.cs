@@ -15,7 +15,8 @@ public sealed class ConnectionEditorViewModelFactory(
     ISystemTerminalLauncher? systemTerminalLauncher = null,
     ISshKeyService? sshKeyService = null,
     IClipboardService? clipboard = null,
-    ISettingsStore? settings = null)
+    ISettingsStore? settings = null,
+    IRdpLauncher? rdpLauncher = null)
 {
     public async Task<ConnectionEditorViewModel> CreateEditorAsync(
         Guid? connectionId,
@@ -30,7 +31,8 @@ public sealed class ConnectionEditorViewModelFactory(
             tagService,
             sshKeyService,
             clipboard,
-            settings);
+            settings,
+            rdpLauncher);
         await editor.InitializeAsync(connectionId, cancellationToken).ConfigureAwait(true);
         return editor;
     }

@@ -81,9 +81,9 @@ public sealed partial class CommandPaletteViewModel : ObservableObject, IDisposa
             SelectedResult.Id,
             ConnectionOpenMode.Default,
             cancellationToken).ConfigureAwait(true);
-        if (!opened)
+        if (!opened.Opened)
         {
-            FeedbackMessage = $"{SelectedResult.Name} could not be opened.";
+            FeedbackMessage = opened.Message ?? $"{SelectedResult.Name} could not be opened.";
             return false;
         }
 

@@ -6,6 +6,7 @@ using RemoteFlow.Application.Abstractions.Ssh;
 using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Infrastructure.Diagnostics;
 using RemoteFlow.Infrastructure.Platform;
+using RemoteFlow.Infrastructure.Platform.Rdp;
 using RemoteFlow.Infrastructure.Pty;
 using RemoteFlow.Infrastructure.Security;
 using RemoteFlow.Infrastructure.Ssh;
@@ -33,6 +34,18 @@ public static class DependencyInjection
         services.TryAddSingleton<ISystemPlatform, SystemPlatform>();
         services.TryAddSingleton<IProcessRunner, ProcessRunner>();
         services.TryAddSingleton<ISystemTerminalLauncher, SystemTerminalLauncher>();
+        services.TryAddSingleton<IRdpLauncher>(provider =>
+        {
+            var platform = provider.GetRequiredService<ISystemPlatform>();
+            return platform.OperatingSystem == OperatingSystemFamily.Windows
+                ? new WindowsRdpLauncher(
+                    platform,
+                    provider.GetRequiredService<IProcessRunner>(),
+                    provider.GetRequiredService<IAppPaths>(),
+                    provider.GetRequiredService<IClock>(),
+                    provider.GetServices<ICredentialProvider>())
+                : new UnsupportedRdpLauncher(platform);
+        });
         services.TryAddSingleton<IFileEditorLauncher, FileEditorLauncher>();
         services.TryAddSingleton<IFileRevealService, FileRevealService>();
         services.TryAddSingleton<IShellOpenService, ShellOpenService>();

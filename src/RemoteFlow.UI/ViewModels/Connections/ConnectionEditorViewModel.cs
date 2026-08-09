@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using Avalonia.Media;
@@ -24,6 +25,10 @@ public sealed record ColorOverrideChoiceViewModel(string Label, string? Hex, boo
 
     public bool HasSwatch => Hex is not null;
 }
+
+/// <summary>One entry in the RDP resolution picker. The "Fit to client" entry carries no size, and the
+/// custom entry takes its size from the width and height boxes.</summary>
+public sealed record RdpResolutionChoiceViewModel(string Label, int? Width, int? Height, bool IsCustom = false);
 
 public sealed partial class TagChoiceViewModel(Guid id, string name) : ObservableObject
 {
@@ -51,8 +56,10 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     private readonly ITagRepository _tags;
     private readonly ITagService _tagService;
     private readonly ISettingsStore? _settings;
+    private readonly IRdpLauncher? _rdpLauncher;
     private bool _loading;
     private bool _syncingColorChoice;
+    private bool _syncingResolutionChoice;
 
     public ConnectionEditorViewModel(
         IConnectionService connections,
@@ -63,7 +70,8 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         ITagService tagService,
         ISshKeyService? sshKeyService = null,
         IClipboardService? clipboard = null,
-        ISettingsStore? settings = null)
+        ISettingsStore? settings = null,
+        IRdpLauncher? rdpLauncher = null)
     {
         _connections = connections;
         _connectionRepository = connectionRepository;
@@ -72,6 +80,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         _tags = tags;
         _tagService = tagService;
         _settings = settings;
+        _rdpLauncher = rdpLauncher;
         if (sshKeyService is not null && clipboard is not null)
         {
             KeyPicker = new SshKeyPickerViewModel(sshKeyService, clipboard);
@@ -88,6 +97,9 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         Environments = Enum.GetValues<EnvironmentKind>();
         HostKeyPolicies = Enum.GetValues<HostKeyPolicy>();
         SelectedColorOverride = ColorOverrideChoices[0];
+        SelectedRdpResolution = RdpResolutionChoices[0];
+        RdpInstallGuidance = _rdpLauncher?.MissingClientGuidance
+            ?? "No RDP launcher is available in this build.";
         UpdateConditionalProperties();
         UpdateEnvironmentPreview();
     }
@@ -102,6 +114,19 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         new("Amber", "#F5B14C"),
         new("Rose", "#FF7EB6"),
         new("Custom…", null, IsCustom: true),
+    ];
+
+    /// <summary>The sizes worth one click. Anything else goes through "Custom…" and the two boxes.</summary>
+    public static IReadOnlyList<RdpResolutionChoiceViewModel> RdpResolutionChoices { get; } =
+    [
+        new("Fit to the client window", null, null),
+        new("1280 × 720", 1_280, 720),
+        new("1366 × 768", 1_366, 768),
+        new("1600 × 900", 1_600, 900),
+        new("1920 × 1080", 1_920, 1_080),
+        new("2560 × 1440", 2_560, 1_440),
+        new("3840 × 2160", 3_840, 2_160),
+        new("Custom…", null, null, IsCustom: true),
     ];
 
     public Guid? ConnectionId { get; private set; }
@@ -180,6 +205,49 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
             "Accepts any host key without checking. Sessions are flagged as unverified and remain open to interception.",
         _ => throw new ArgumentOutOfRangeException(nameof(HostKeyPolicy)),
     };
+
+    [ObservableProperty]
+    public partial string? RdpDomain { get; set; }
+
+    [ObservableProperty]
+    public partial bool RdpFullScreen { get; set; }
+
+    [ObservableProperty]
+    public partial bool RdpMultimon { get; set; }
+
+    [ObservableProperty]
+    public partial bool RdpRedirectClipboard { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool RdpRedirectDrives { get; set; }
+
+    [ObservableProperty]
+    public partial RdpResolutionChoiceViewModel SelectedRdpResolution { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsCustomRdpResolutionVisible { get; private set; }
+
+    [ObservableProperty]
+    public partial string? RdpWidthText { get; set; }
+
+    [ObservableProperty]
+    public partial string? RdpHeightText { get; set; }
+
+    [ObservableProperty]
+    public partial string? RdpResolutionError { get; private set; }
+
+    /// <summary>What the RDP section says about this machine's client, refreshed each time the section
+    /// appears.</summary>
+    [ObservableProperty]
+    public partial string RdpClientStatusText { get; private set; } = "Looking for an RDP client…";
+
+    [ObservableProperty]
+    public partial bool IsRdpClientMissing { get; private set; }
+
+    public string RdpInstallGuidance { get; }
+
+    /// <summary>Completes when the client detection kicked off by showing the section has finished.</summary>
+    public Task RdpClientDetectionSettled { get; private set; } = Task.CompletedTask;
 
     [ObservableProperty]
     public partial string? TagInput { get; set; }
@@ -306,6 +374,11 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
                 await KeyPicker.RefreshAvailableKeysAsync(cancellationToken).ConfigureAwait(true);
             }
 
+            if (IsRdpSectionVisible)
+            {
+                await RefreshRdpClientsAsync(cancellationToken).ConfigureAwait(true);
+            }
+
             ClearValidationErrors();
             IsDirty = false;
             OnPropertyChanged(nameof(IsNew));
@@ -330,19 +403,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         SaveError = null;
         try
         {
-            var input = new ConnectionInput(
-                Name,
-                Host,
-                Port,
-                Protocol,
-                Username,
-                AuthMethod,
-                Notes,
-                SelectedFolder?.Id,
-                Environment,
-                ColorOverrideHex,
-                PrivateKeyPath,
-                HostKeyPolicy);
+            var input = BuildInput();
             var saved = ConnectionId is { } id
                 ? await _connections.UpdateAsync(id, input, cancellationToken).ConfigureAwait(true)
                 : await _connections.CreateAsync(input, cancellationToken).ConfigureAwait(true);
@@ -447,6 +508,12 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         IsFavorite = connection.IsFavorite;
         PrivateKeyPath = connection.Ssh.PrivateKeyPath;
         HostKeyPolicy = connection.Ssh.HostKeyPolicy;
+        RdpDomain = connection.Rdp.Domain;
+        RdpFullScreen = connection.Rdp.FullScreen;
+        RdpMultimon = connection.Rdp.Multimon;
+        RdpRedirectClipboard = connection.Rdp.RedirectClipboard;
+        RdpRedirectDrives = connection.Rdp.RedirectDrives;
+        LoadResolution(connection.Rdp.Width, connection.Rdp.Height);
         var selectedTagIds = connection.Tags.Select(tag => tag.TagId).ToHashSet();
         foreach (var choice in TagChoices)
         {
@@ -530,7 +597,20 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     private bool Validate()
     {
         ClearValidationErrors();
-        var errors = ConnectionValidator.Validate(new ConnectionInput(
+        UpdateRdpResolutionError();
+        var errors = ConnectionValidator.Validate(BuildInput());
+        foreach (var error in errors)
+        {
+            ApplyValidationError(error);
+        }
+
+        return errors.Count == 0 && RdpResolutionError is null;
+    }
+
+    private ConnectionInput BuildInput()
+    {
+        var (width, height, _) = ReadResolution();
+        return new ConnectionInput(
             Name,
             Host,
             Port,
@@ -541,13 +621,83 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
             SelectedFolder?.Id,
             Environment,
             ColorOverrideHex,
-            PrivateKeyPath));
-        foreach (var error in errors)
+            PrivateKeyPath,
+            HostKeyPolicy,
+            RdpDomain,
+            RdpFullScreen,
+            width,
+            height,
+            RdpMultimon,
+            RdpRedirectClipboard,
+            RdpRedirectDrives);
+    }
+
+    /// <summary>Reads the two boxes. Anything that is not a whole number of pixels comes back as a parse
+    /// error rather than as a dimension, so it can be rejected where it was typed.</summary>
+    private (int? Width, int? Height, string? ParseError) ReadResolution()
+    {
+        var width = ParseDimension(RdpWidthText, out var widthIsGarbage);
+        var height = ParseDimension(RdpHeightText, out var heightIsGarbage);
+        return (
+            width,
+            height,
+            widthIsGarbage || heightIsGarbage
+                ? "Enter the width and height as whole numbers of pixels."
+                : null);
+    }
+
+    private void UpdateRdpResolutionError()
+    {
+        var (width, height, parseError) = ReadResolution();
+        var errors = ConnectionValidator.ValidateRdpResolution(width, height);
+        RdpResolutionError = parseError ?? (errors.Count == 0 ? null : errors[0].Message);
+    }
+
+    private static int? ParseDimension(string? text, out bool isGarbage)
+    {
+        var trimmed = (text ?? string.Empty).Trim();
+        if (trimmed.Length == 0)
         {
-            ApplyValidationError(error);
+            isGarbage = false;
+            return null;
         }
 
-        return errors.Count == 0;
+        if (int.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var value))
+        {
+            isGarbage = false;
+            return value;
+        }
+
+        isGarbage = true;
+        return null;
+    }
+
+    public async Task RefreshRdpClientsAsync(CancellationToken cancellationToken = default)
+    {
+        if (_rdpLauncher is null)
+        {
+            RdpClientStatusText = "RDP launching is not available in this build.";
+            IsRdpClientMissing = true;
+            return;
+        }
+
+        try
+        {
+            var clients = await _rdpLauncher.DetectClientsAsync(cancellationToken).ConfigureAwait(true);
+            IsRdpClientMissing = clients.Count == 0;
+            RdpClientStatusText = IsRdpClientMissing
+                ? "No RDP client found on this machine."
+                : "Using " + string.Join(", ", clients.Select(client => client.Description)) + ".";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            IsRdpClientMissing = true;
+            RdpClientStatusText = $"The RDP client could not be detected: {exception.Message}";
+        }
     }
 
     private void ApplyValidationError(RemoteFlowError error)
@@ -562,6 +712,8 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
             case "connection.environment": EnvironmentError = error.Message; break;
             case "connection.color": ColorOverrideError = error.Message; break;
             case "connection.private_key_path": PrivateKeyPathError = error.Message; break;
+            case "connection.rdp_resolution": RdpResolutionError = error.Message; break;
+            case "rdp.dimensions": RdpResolutionError = error.Message; break;
             default: SaveError = error.Message; break;
         }
     }
@@ -582,6 +734,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         EnvironmentError = null;
         ColorOverrideError = null;
         PrivateKeyPathError = null;
+        RdpResolutionError = null;
         SaveError = null;
     }
 
@@ -608,11 +761,42 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
 
     private void UpdateConditionalProperties()
     {
+        var rdpWasVisible = IsRdpSectionVisible;
         IsSshSectionVisible = Protocol is ProtocolType.Ssh or ProtocolType.Sftp;
         IsSftpSectionVisible = Protocol == ProtocolType.Sftp;
         IsRdpSectionVisible = Protocol == ProtocolType.Rdp;
         IsPrivateKeyPassphraseVisible = AuthMethod == AuthMethod.PrivateKey;
         IsPrivateKeySectionVisible = IsSshSectionVisible && AuthMethod == AuthMethod.PrivateKey;
+
+        // A client can be installed or removed while the editor is open, so the indicator is answered
+        // afresh every time the section comes into view rather than once per editor.
+        if (IsRdpSectionVisible && !rdpWasVisible && !_loading)
+        {
+            RdpClientDetectionSettled = RefreshRdpClientsAsync();
+        }
+    }
+
+    /// <summary>Puts a stored size onto the picker, falling back to "Custom…" for a size that is not one
+    /// of the presets.</summary>
+    private void LoadResolution(int? width, int? height)
+    {
+        _syncingResolutionChoice = true;
+        try
+        {
+            RdpWidthText = width?.ToString(CultureInfo.InvariantCulture);
+            RdpHeightText = height?.ToString(CultureInfo.InvariantCulture);
+            var match = RdpResolutionChoices.FirstOrDefault(choice =>
+                            !choice.IsCustom && choice.Width == width && choice.Height == height)
+                        ?? RdpResolutionChoices.Single(choice => choice.IsCustom);
+            SelectedRdpResolution = match;
+            IsCustomRdpResolutionVisible = match.IsCustom;
+        }
+        finally
+        {
+            _syncingResolutionChoice = false;
+        }
+
+        UpdateRdpResolutionError();
     }
 
     private void UpdateEnvironmentPreview()
@@ -659,6 +843,36 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     }
     partial void OnTagInputChanged(string? value) { MarkDirty(); }
     partial void OnHostKeyPolicyChanged(HostKeyPolicy value) { MarkDirty(); }
+    partial void OnRdpDomainChanged(string? value) { MarkDirty(); }
+    partial void OnRdpFullScreenChanged(bool value) { MarkDirty(); }
+    partial void OnRdpMultimonChanged(bool value) { MarkDirty(); }
+    partial void OnRdpRedirectClipboardChanged(bool value) { MarkDirty(); }
+    partial void OnRdpRedirectDrivesChanged(bool value) { MarkDirty(); }
+
+    partial void OnRdpWidthTextChanged(string? value)
+    {
+        UpdateRdpResolutionError();
+        MarkDirty();
+    }
+
+    partial void OnRdpHeightTextChanged(string? value)
+    {
+        UpdateRdpResolutionError();
+        MarkDirty();
+    }
+
+    partial void OnSelectedRdpResolutionChanged(RdpResolutionChoiceViewModel value)
+    {
+        IsCustomRdpResolutionVisible = value.IsCustom;
+        if (_syncingResolutionChoice || value.IsCustom)
+        {
+            return;
+        }
+
+        // A preset owns both boxes; "Fit to the client window" carries no size and so clears them.
+        RdpWidthText = value.Width?.ToString(CultureInfo.InvariantCulture);
+        RdpHeightText = value.Height?.ToString(CultureInfo.InvariantCulture);
+    }
 
     partial void OnProtocolChanged(ProtocolType oldValue, ProtocolType newValue)
     {

@@ -9,6 +9,16 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ### Added
 
+- Remote Desktop. An RDP connection opens in Windows' own Remote Desktop Connection client — RemoteFlow
+  does not embed RDP. The connection editor gained an RDP section: domain, resolution presets or a custom
+  size, full screen, all monitors, and clipboard and drive sharing. It says which client it found, and
+  when it finds none it says what to install instead of failing at launch time.
+  **Your password is never written into the `.rdp` file**, not even as the DPAPI blob the format allows:
+  a file that leaks is a credential that leaks. If you have stored one, it is handed to Windows for the
+  moment the session starts and taken straight back out again; the default is to store nothing and let
+  Windows ask. The generated `.rdp` lives in a per-launch temporary folder that is deleted after the
+  client has read it, and anything a crash left behind is swept at the next startup.
+  macOS and Linux are not supported yet: RemoteFlow says so and names a client to use in the meantime.
 - Tag-driven versioning with MinVer. Every assembly records the version and the commit it was built from,
   `RemoteFlow.exe --version` prints both, and the Settings page has an About tab showing the same values.
 - Windows release artefacts: a portable zip and an installer for both x64 and ARM64, built by

@@ -286,6 +286,19 @@ public sealed class ConnectionService(
             return Result<Connection>.Failure(ssh.Error);
         }
 
+        var rdp = RdpOptions.Default().Configure(
+            domain: input.RdpDomain,
+            fullScreen: input.RdpFullScreen,
+            width: input.RdpWidth,
+            height: input.RdpHeight,
+            multimon: input.RdpMultimon,
+            redirectClipboard: input.RdpRedirectClipboard,
+            redirectDrives: input.RdpRedirectDrives);
+        if (rdp.IsFailure)
+        {
+            return Result<Connection>.Failure(rdp.Error);
+        }
+
         var details = connection.SetDetails(
             input.Username,
             input.AuthMethod,
@@ -300,7 +313,7 @@ public sealed class ConnectionService(
         }
 
         _ = connection.SetFolder(input.FolderId, guidProvider, clock.UtcNow)
-            .SetOptions(ssh.Value, SftpOptions.Default(), RdpOptions.Default(), guidProvider, clock.UtcNow);
+            .SetOptions(ssh.Value, SftpOptions.Default(), rdp.Value, guidProvider, clock.UtcNow);
         return Result<Connection>.Success(connection);
     }
 
