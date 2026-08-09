@@ -136,7 +136,9 @@ public sealed class WindowsRdpLauncherTests : IDisposable
         Assert.Equal(["/delete:TERMSRV/rdp.example.test"], cmdkey[1].Arguments);
 
         // The handover has to bracket the launch: added before `mstsc` starts, removed after.
-        var order = runner.Requests.Select(request => Path.GetFileName(request.FileName)).ToArray();
+        var order = runner.Requests
+            .Select(request => Path.GetFileName(request.FileName.Replace('\\', Path.DirectorySeparatorChar)))
+            .ToArray();
         Assert.Equal(["cmdkey.exe", "mstsc.exe", "cmdkey.exe"], order);
     }
 

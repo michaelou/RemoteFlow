@@ -1,10 +1,17 @@
 <Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="CrossPlatform" />
+  </Configurations>
   <Folder Name="/src/">
     <Project Path="src/RemoteFlow.Application/RemoteFlow.Application.csproj" />
     <Project Path="src/RemoteFlow.Desktop/RemoteFlow.Desktop.csproj" />
     <Project Path="src/RemoteFlow.Domain/RemoteFlow.Domain.csproj" />
     <Project Path="src/RemoteFlow.Infrastructure/RemoteFlow.Infrastructure.csproj" />
     <Project Path="src/RemoteFlow.Persistence/RemoteFlow.Persistence.csproj" />
+    <Project Path="src/RemoteFlow.Rdp.Windows/RemoteFlow.Rdp.Windows.csproj">
+      <Build Solution="*|CrossPlatform" Project="false" />
+    </Project>
     <Project Path="src/RemoteFlow.UI/RemoteFlow.UI.csproj" />
   </Folder>
   <Folder Name="/tests/">
@@ -13,12 +20,17 @@
     <Project Path="tests/RemoteFlow.Domain.Tests/RemoteFlow.Domain.Tests.csproj" />
     <Project Path="tests/RemoteFlow.Infrastructure.Tests/RemoteFlow.Infrastructure.Tests.csproj" />
     <Project Path="tests/RemoteFlow.Persistence.Tests/RemoteFlow.Persistence.Tests.csproj" />
+    <Project Path="tests/RemoteFlow.Rdp.Windows.Tests/RemoteFlow.Rdp.Windows.Tests.csproj">
+      <Build Solution="*|CrossPlatform" Project="false" />
+    </Project>
     <Project Path="tests/RemoteFlow.Ssh.IntegrationTests/RemoteFlow.Ssh.IntegrationTests.csproj" />
     <Project Path="tests/RemoteFlow.TestSupport/RemoteFlow.TestSupport.csproj" />
     <Project Path="tests/RemoteFlow.UI.Tests/RemoteFlow.UI.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
-    <Project Path="tools/RemoteFlow.RdpSpike/RemoteFlow.RdpSpike.csproj" />
+    <Project Path="tools/RemoteFlow.RdpSpike/RemoteFlow.RdpSpike.csproj">
+      <Build Solution="*|CrossPlatform" Project="false" />
+    </Project>
     <Project Path="tools/RemoteFlow.TerminalSpike/RemoteFlow.TerminalSpike.csproj" />
   </Folder>
 </Solution>

@@ -5,6 +5,9 @@ using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Infrastructure;
 using RemoteFlow.Persistence;
 using RemoteFlow.UI;
+#if WINDOWS_RDP
+using RemoteFlow.Rdp.Windows;
+#endif
 
 namespace RemoteFlow.Desktop;
 
@@ -15,11 +18,17 @@ public static class DesktopComposition
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(appPaths);
         _ = builder.Logging.ClearProviders();
-        _ = builder.Services
+        var services = builder.Services
             .AddRemoteFlowApplication()
             .AddRemoteFlowInfrastructure(appPaths)
             .AddRemoteFlowPersistence(appPaths)
             .AddRemoteFlowUI();
+#if WINDOWS_RDP
+        if (OperatingSystem.IsWindowsVersionAtLeast(7))
+        {
+            _ = services.AddRemoteFlowRdpWindows();
+        }
+#endif
         return builder;
     }
 }
