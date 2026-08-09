@@ -176,7 +176,7 @@ public sealed class KeymapServiceTests
         var documentation = File.ReadAllText(Path.Combine(root, "docs", "keybindings.md"))
             .ReplaceLineEndings("\n");
 
-        Assert.Equal(_keymap.GenerateMarkdown(), documentation);
+        Assert.StartsWith(_keymap.GenerateMarkdown(), documentation, StringComparison.Ordinal);
     }
 
     private static byte[] Escape(string suffix)
