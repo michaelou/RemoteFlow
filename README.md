@@ -25,9 +25,10 @@ It is built with .NET 10 and Avalonia, and runs on Windows, macOS, and Linux. Wi
   server allows it. Transfers run in a queue you can watch on the Transfers page.
 - **Remote editing.** Open a remote file in your usual editor, keep working, and RemoteFlow uploads it
   when you save — and warns you if the remote copy changed underneath you.
-- **Remote Desktop.** An RDP connection opens in the platform's own client. On Windows that is Remote
-  Desktop Connection; macOS and Linux are not wired up yet and RemoteFlow says so, naming a client to use
-  instead.
+- **Remote Desktop.** **Embedded RDP tabs are Windows-only.** On Windows, choose a live desktop inside
+  RemoteFlow or open Remote Desktop Connection as a separate, isolated client; the external action stays
+  available as a fallback. Linux and macOS do not load the Windows component and keep the external-client
+  workflow, with guidance naming the native client to use when RemoteFlow cannot launch one directly.
 - **Backup and restore.** Export connections, folders, tags, settings, and trusted host keys to a ZIP,
   merge or replace on import, and optionally include credentials inside a separate encrypted entry. The
   format is documented and frozen: [docs/backup-format.md](docs/backup-format.md).
@@ -176,7 +177,8 @@ Security issues go through [SECURITY.md](SECURITY.md), privately, not through a 
 
 | | |
 | --- | --- |
-| [docs/keybindings.md](docs/keybindings.md) | Every terminal keybinding, generated from the keymap the application actually uses. |
+| [docs/keybindings.md](docs/keybindings.md) | Terminal bindings and the embedded-RDP focus/shortcut limitations. |
+| [docs/manual-test-rdp-embedded.md](docs/manual-test-rdp-embedded.md) | The release-blocking Windows embedded-RDP playbook, including native ARM64. |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Concrete symptoms and concrete fixes. |
 | [docs/accessibility.md](docs/accessibility.md) | Working without a mouse, what a screen reader hears, and the contrast floors. |
 | [docs/building.md](docs/building.md) | Building and running from source on Windows, macOS, and Linux. |
@@ -190,7 +192,8 @@ Security issues go through [SECURITY.md](SECURITY.md), privately, not through a 
 
 [CONTRIBUTING.md](CONTRIBUTING.md) covers the local checks, the changelog convention, and how third-party
 licences are kept current. [docs/manual-test-terminal.md](docs/manual-test-terminal.md) is the manual
-terminal test pass to run when touching the terminal stack.
+terminal test pass to run when touching the terminal stack. Windows embedded-RDP changes also require
+[docs/manual-test-rdp-embedded.md](docs/manual-test-rdp-embedded.md).
 
 ## Licence
 

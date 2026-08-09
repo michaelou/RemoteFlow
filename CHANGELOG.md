@@ -7,6 +7,19 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **Windows-only embedded Remote Desktop.** Windows can now open multiple Microsoft RDP ActiveX sessions
+  as retained tabs beside local and SSH terminals, with reconnect/recovery controls, dynamic resolution,
+  DPI-aware sizing, plain-text clipboard redirection, stored-credential handoff, and a documented F6
+  focus escape. The existing **Open in external RDP client** action remains available, and can be selected
+  as the default for process isolation or host compatibility. Embedded RDP is not available on Linux or
+  macOS; those platforms keep the external-client workflow and native-client guidance. Display scaling is
+  quantised to RDP's supported 100%, 140%, and 180% factors, and hosts without dynamic resolution use a
+  SmartSizing bitmap fallback without reconnecting. Because `mstscax.dll` is in-process, a crash in that
+  Windows component can also terminate RemoteFlow; the separate external client is the isolation
+  fallback. See the [manual release playbook](docs/manual-test-rdp-embedded.md).
+
 ### Fixed
 
 - **An imported backup shows up straight away.** Applying a backup — merge or replace — rewrote the

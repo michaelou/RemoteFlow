@@ -1,6 +1,9 @@
-# Terminal keybindings
+# Keyboard bindings
 
-This file is generated from `KeymapService.Bindings`. Changes must be made in the keymap data first.
+## Terminal
+
+The terminal table is generated from `KeymapService.Bindings`. Changes to that table must be made in the
+keymap data first.
 
 | Platform | Binding | Action |
 | --- | --- | --- |

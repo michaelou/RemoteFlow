@@ -113,14 +113,15 @@ public sealed class RdpControlSettingsMapperTests
     [InlineData(0.75d, 100u)]
     [InlineData(1.00d, 100u)]
     [InlineData(1.20d, 100u)]
-    [InlineData(1.25d, 140u)]
+    [InlineData(1.25d, 100u)]
     [InlineData(1.40d, 140u)]
     [InlineData(1.50d, 140u)]
     [InlineData(1.60d, 140u)]
+    [InlineData(1.79d, 140u)]
     [InlineData(1.80d, 180u)]
     [InlineData(2.00d, 180u)]
     [InlineData(2.25d, 180u)]
-    public void DisplayScalingUsesNearestSupportedRdpFactor(double renderScaling, uint expected)
+    public void DisplayScalingUsesDocumentedSupportedRdpFactor(double renderScaling, uint expected)
     {
         Assert.Equal(expected, RdpControlSettingsMapper.MapScaleFactor(renderScaling));
     }
