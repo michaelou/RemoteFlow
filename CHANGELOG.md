@@ -7,8 +7,41 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-09
+
+The first tagged release. RemoteFlow is a local-first desktop workspace for the machines you administer:
+SSH sessions, SFTP browsing and transfers, and Remote Desktop, organised in one place. Everything below
+shipped in it. Windows gets prebuilt artefacts; macOS and Linux build from source.
+
 ### Added
 
+- Connections, organised. Name, host, port, protocol, username, notes, folder, tags, and favourites, in a
+  folder tree with drag-and-drop, inline rename, search, and filters by protocol, environment, and tag.
+  Recent sessions are kept and can be cleared. Every connection is marked Development, Staging, or
+  Production, and says so in words as well as colour.
+- SSH sessions over Tmds.Ssh, with SSH.NET selectable as a fallback transport. Password, private key,
+  agent, and keyboard-interactive authentication; keys can be discovered, pasted, browsed to, or generated
+  as Ed25519.
+- **Host key verification that behaves like OpenSSH.** Trust on first use by default, with the SHA-256
+  fingerprint and randomart shown before you accept; Strict never prompts; Accept-any exists for lab
+  machines and flags the connection as unverified. A changed key is never accepted silently, revoked keys
+  refuse the connection, `known_hosts` imports including hashed hostnames, and comparison is constant-time.
+  Trusted keys are listed and removable under Settings.
+- An embedded terminal workspace: multiple local and SSH sessions as tabs, UTF-8 and ANSI, bracketed
+  paste, scrollback search, configurable font, colour scheme, cursor, bell, and scrollback, shell profiles,
+  and "open in system terminal". Tested against vim, nano, tmux, and htop. RemoteFlow drives XTerm.NET over
+  a real PTY rather than implementing a terminal emulator.
+- SFTP: browse, upload, download, rename, delete, create folders, and edit permissions where the server
+  allows it, with a transfer queue you can watch, cancel, and retry.
+- Remote editing. Open a remote file in your usual editor, keep working, and RemoteFlow uploads it when you
+  save — and tells you when the remote copy changed underneath you, rather than overwriting it.
+- **Credential storage that never touches the database.** Passwords, private-key passphrases, and RDP
+  passwords go to Windows Credential Manager, the macOS login keychain, or libsecret, under a per-connection
+  key; the database holds only a reference. Windows falls back to DPAPI-encrypted files when Credential
+  Manager is unavailable, and an Argon2id/AES-GCM file vault exists for machines with no keyring at all.
+- Backup and restore. A documented, versioned ZIP of connections, folders, tags, settings, and trusted host
+  keys, importable as a merge or a replace, with credentials optionally included inside a separate
+  encrypted entry and never anywhere else. See [docs/backup-format.md](docs/backup-format.md).
 - An accessibility and keyboard-only pass. Every button, box, and list now tells a screen reader what it
   is — including the icon-only ones, which previously announced an arrow or nothing at all. The terminal
   announces as a text area named for its session and environment, its tabs take focus and say which
@@ -78,10 +111,9 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
   rather than accepting a different size, so RemoteFlow now applies the executable's own icon once the
   window is open.
 
-## [0.0.0] - unreleased
+The **Changed** and **Fixed** entries above describe work done against earlier pre-release states of the
+same development line. Nobody upgrading from a published version encountered any of it; they are kept
+because they say what the code does now and why.
 
-RemoteFlow has not had a tagged release yet. Everything up to this point was built and reviewed as
-pre-release work across Milestones 1 to 7: connections and folders, the SSH transport and host key policy,
-the embedded terminal, SFTP browsing and transfers, remote editing, credential storage, and the backup
-format. The first tagged release will restate what shipped rather than trying to reconstruct that history
-here.
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/michaelou/RemoteFlow/releases/tag/v0.1.0
