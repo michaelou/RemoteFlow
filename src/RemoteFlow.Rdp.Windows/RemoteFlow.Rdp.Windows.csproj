@@ -2,6 +2,8 @@
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- The ActiveX event sink needs the built-in COM marshaller for VARIANT arguments. -->
+    <NoWarn>$(NoWarn);CA1416;SYSLIB1096</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

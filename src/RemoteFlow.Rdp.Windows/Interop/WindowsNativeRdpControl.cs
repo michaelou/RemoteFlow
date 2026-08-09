@@ -1,0 +1,236 @@
+using System.Globalization;
+using System.Reflection;
+using System.Runtime.InteropServices;
+
+namespace RemoteFlow.Rdp.Windows.Interop;
+
+internal sealed class WindowsNativeRdpControlFactory : INativeRdpControlFactory
+{
+    private static readonly (int Generation, Guid ClassId)[] _candidates =
+    [
+        (12, new("3f859aa3-c2d4-4faa-b0e4-fd0c9c4e5e3a")),
+        (11, new("1df7c823-b2d4-4b54-975a-f2ac5d7cf8b8")),
+        (10, new("a0c63c30-f08d-4ab4-907c-34905d770c7d")),
+        (9, new("8b918b82-7985-4c24-89df-c33ad2bbfbcd")),
+        (8, new("a3bc03a0-041d-42e3-ad22-882b7865c9c5")),
+    ];
+
+    public static WindowsNativeRdpControlFactory Instance { get; } = new();
+
+    private WindowsNativeRdpControlFactory()
+    {
+    }
+
+    public INativeRdpControl Create(RdpControlSettings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        cancellationToken.ThrowIfCancellationRequested();
+        Exception? lastFailure = null;
+
+        foreach (var (generation, classId) in _candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            object? instance = null;
+            try
+            {
+                var type = Type.GetTypeFromCLSID(classId, throwOnError: true)!;
+                instance = Activator.CreateInstance(type)
+                    ?? throw new InvalidOperationException($"MsRdpClient{generation} returned no COM object.");
+                var ownedInstance = instance;
+                instance = null;
+                return new WindowsNativeRdpControl(ownedInstance, settings);
+            }
+            catch (Exception exception) when (exception is COMException or InvalidOperationException or TargetInvocationException)
+            {
+                lastFailure = exception;
+                if (instance is not null && Marshal.IsComObject(instance))
+                {
+                    _ = Marshal.FinalReleaseComObject(instance);
+                }
+            }
+        }
+
+        throw new InvalidOperationException(
+            "No supported Microsoft Remote Desktop ActiveX control could be activated.",
+            lastFailure);
+    }
+}
+
+internal sealed class WindowsNativeRdpControl : INativeRdpControl
+{
+    private const BindingFlags _dispatchFlags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
+    private readonly NativeRdpEventSink _eventSink = new();
+    private object? _instance;
+    private object? _advancedSettings;
+    private int _disposed;
+
+    public WindowsNativeRdpControl(object instance, RdpControlSettings settings)
+    {
+        _instance = instance ?? throw new ArgumentNullException(nameof(instance));
+        ArgumentNullException.ThrowIfNull(settings);
+        try
+        {
+            _eventSink.EventReceived += ForwardEvent;
+            _eventSink.Advise(instance);
+            Apply(settings);
+        }
+        catch
+        {
+            DisposeCore();
+            throw;
+        }
+    }
+
+    public event EventHandler<NativeRdpEventArgs>? EventReceived;
+
+    public object NativeInstance => _instance ?? throw new ObjectDisposedException(nameof(WindowsNativeRdpControl));
+
+    public uint ExtendedDisconnectReason
+    {
+        get
+        {
+            try
+            {
+                var value = GetProperty(RequiredInstance(), "ExtendedDisconnectReason");
+                return unchecked((uint)Convert.ToInt32(value, CultureInfo.InvariantCulture));
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
+        }
+    }
+
+    public void Connect(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _ = InvokeMethod(RequiredInstance(), "Connect");
+    }
+
+    public void Disconnect(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _ = InvokeMethod(RequiredInstance(), "Disconnect");
+    }
+
+    public string DescribeDisconnect(uint disconnectReason, uint extendedDisconnectReason)
+    {
+        try
+        {
+            return Convert.ToString(
+                InvokeMethod(RequiredInstance(), "GetErrorDescription", disconnectReason, extendedDisconnectReason),
+                CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        DisposeCore();
+        GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
+    }
+
+    private void Apply(RdpControlSettings settings)
+    {
+        var instance = RequiredInstance();
+        SetProperty(instance, "Server", settings.Server);
+        SetProperty(instance, "DesktopWidth", settings.DesktopWidth);
+        SetProperty(instance, "DesktopHeight", settings.DesktopHeight);
+        SetProperty(instance, "ColorDepth", settings.ColorDepth);
+        if (!string.IsNullOrWhiteSpace(settings.UserName))
+        {
+            SetProperty(instance, "UserName", settings.UserName);
+        }
+        if (!string.IsNullOrWhiteSpace(settings.Domain))
+        {
+            SetProperty(instance, "Domain", settings.Domain);
+        }
+
+        _advancedSettings = GetProperty(instance, "AdvancedSettings9")
+            ?? throw new InvalidOperationException("The RDP control does not expose AdvancedSettings9.");
+        SetProperty(_advancedSettings, "RDPPort", settings.RdpPort);
+        SetProperty(_advancedSettings, "RedirectClipboard", settings.AdvancedSettings.RedirectClipboard);
+        SetProperty(_advancedSettings, "RedirectDrives", settings.AdvancedSettings.RedirectDrives);
+        SetProperty(_advancedSettings, "AuthenticationLevel", settings.AdvancedSettings.AuthenticationLevel);
+        SetProperty(_advancedSettings, "EnableCredSspSupport", settings.AdvancedSettings.EnableCredSspSupport);
+        SetProperty(_advancedSettings, "SmartSizing", settings.AdvancedSettings.SmartSizing);
+        // KeyboardHookMode belongs to the secured-settings surface and is applied with #88's focus policy.
+    }
+
+    private void ForwardEvent(object? sender, NativeRdpEventArgs e)
+    {
+        try
+        {
+            EventReceived?.Invoke(this, e);
+        }
+        catch (Exception)
+        {
+            // The raw COM sink also guards this boundary; keep the adapter safe when invoked directly.
+        }
+    }
+
+    private void DisposeCore()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        _eventSink.EventReceived -= ForwardEvent;
+        _eventSink.Dispose();
+
+        var advanced = Interlocked.Exchange(ref _advancedSettings, null);
+        if (advanced is not null && Marshal.IsComObject(advanced))
+        {
+            _ = Marshal.FinalReleaseComObject(advanced);
+        }
+
+        var instance = Interlocked.Exchange(ref _instance, null);
+        if (instance is not null && Marshal.IsComObject(instance))
+        {
+            _ = Marshal.FinalReleaseComObject(instance);
+        }
+    }
+
+    private object RequiredInstance()
+    {
+        return _instance ?? throw new ObjectDisposedException(nameof(WindowsNativeRdpControl));
+    }
+
+    private static object? GetProperty(object target, string name)
+    {
+        return target.GetType().InvokeMember(
+            name,
+            _dispatchFlags | BindingFlags.GetProperty,
+            binder: null,
+            target,
+            args: null,
+            CultureInfo.InvariantCulture);
+    }
+
+    private static void SetProperty(object target, string name, object? value)
+    {
+        _ = target.GetType().InvokeMember(
+            name,
+            _dispatchFlags | BindingFlags.SetProperty,
+            binder: null,
+            target,
+            [value],
+            CultureInfo.InvariantCulture);
+    }
+
+    private static object? InvokeMethod(object target, string name, params object?[] arguments)
+    {
+        return target.GetType().InvokeMember(
+            name,
+            _dispatchFlags | BindingFlags.InvokeMethod,
+            binder: null,
+            target,
+            arguments,
+            CultureInfo.InvariantCulture);
+    }
+}
