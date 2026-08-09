@@ -117,16 +117,53 @@ public sealed class BackupApplyTests
         Assert.Equal("Sérver 🚀", store.Target.Connections.Single().Name);
     }
 
+    [Fact]
+    public async Task ApplyAnnouncesAReloadSoOpenViewsDoNotKeepThePreImportData()
+    {
+        var archive = CreateArchive("Server", "server.test", "/Root", "Production");
+        var store = new RecordingImportStore();
+        var notifier = new ConnectionChangeNotifier();
+        var service = CreateService(archive, EmptySnapshot(), store, notifier);
+        var changes = new List<ConnectionChangedEventArgs>();
+        notifier.ConnectionChanged += (_, args) => changes.Add(args);
+
+        _ = await service.ApplyAsync(
+            new BackupApplyRequest("backup.zip", MergeStrategy.Replace, ReplaceConfirmation: "REPLACE"),
+            TestContext.Current.CancellationToken);
+
+        var change = Assert.Single(changes);
+        Assert.Equal(ConnectionChangeKind.Reloaded, change.Kind);
+        Assert.Equal(Guid.Empty, change.ConnectionId);
+    }
+
+    [Fact]
+    public async Task AFailedApplyAnnouncesNothing()
+    {
+        var archive = CreateArchive("Server", "server.test", "/Root", "Production");
+        var notifier = new ConnectionChangeNotifier();
+        var service = CreateService(archive, EmptySnapshot(), new RecordingImportStore(), notifier);
+        var changed = false;
+        notifier.ConnectionChanged += (_, _) => changed = true;
+
+        _ = await Assert.ThrowsAsync<BackupArchiveException>(() => service.ApplyAsync(
+            new BackupApplyRequest("backup.zip", MergeStrategy.Replace),
+            TestContext.Current.CancellationToken));
+
+        Assert.False(changed);
+    }
+
     private static BackupService CreateService(
         BackupArchive archive,
         BackupDataSnapshot local,
-        RecordingImportStore store)
+        RecordingImportStore store,
+        IConnectionChangeNotifier? changeNotifier = null)
     {
         return new BackupService(
             new StaticSource(local),
             new StaticSerializer(archive),
             new FixedClock(),
-            store);
+            store,
+            changeNotifier: changeNotifier);
     }
 
     private static BackupArchive CreateArchive(

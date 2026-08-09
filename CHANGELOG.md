@@ -7,6 +7,15 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Fixed
+
+- **An imported backup shows up straight away.** Applying a backup — merge or replace — rewrote the
+  database underneath the running application, and the Connections page went on showing the tree from
+  before the import until RemoteFlow was closed and started again. An import now announces that
+  everything reloaded: the tree, the tag filter chips, and the details pane are rebuilt from the imported
+  data, and an editor left open on a connection the import may have removed is closed rather than left
+  offering to save over it.
+
 ## [0.1.1] - 2026-08-09
 
 A softer-looking application that can now tell you when there is a newer one, and still will not fetch it

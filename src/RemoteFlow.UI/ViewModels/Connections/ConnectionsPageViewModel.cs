@@ -896,8 +896,36 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
     private async void OnConnectionChanged(object? sender, ConnectionChangedEventArgs e)
     {
-        ConnectionChangesSettled = RefreshAsync();
+        ConnectionChangesSettled = HandleConnectionChangeAsync(e.Kind);
         await ConnectionChangesSettled.ConfigureAwait(true);
+    }
+
+    private Task HandleConnectionChangeAsync(ConnectionChangeKind kind)
+    {
+        if (kind == ConnectionChangeKind.Reloaded)
+        {
+            // A backup import rewrote the store underneath the page: the tag chips, the open editor, and
+            // the details pane all describe rows that may be gone, so none of them is carried over.
+            ResetTagFilters();
+            Editor = null;
+            Details = null;
+            OnPropertyChanged(nameof(IsEditorOpen));
+        }
+
+        return RefreshAsync();
+    }
+
+    /// <summary>Drops the cached tag chips so the next refresh reloads them from the imported data.</summary>
+    private void ResetTagFilters()
+    {
+        foreach (var chip in TagFilters)
+        {
+            chip.SelectionChanged -= OnFilterChipSelectionChanged;
+        }
+
+        TagFilters.Clear();
+        _tagsLoaded = false;
+        UpdateFilterSummary();
     }
 
     private async Task OpenEditorAsync(Guid? connectionId, CancellationToken cancellationToken = default)

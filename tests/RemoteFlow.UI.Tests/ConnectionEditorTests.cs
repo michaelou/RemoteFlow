@@ -348,6 +348,38 @@ public sealed class ConnectionEditorTests
         Assert.Null(await fixture.Connections.GetByIdAsync(connection.Id, token));
     }
 
+    /// <summary>A backup import rewrites the rows the editor and the details pane were built from, so both
+    /// close instead of offering to save a draft over data that may no longer exist.</summary>
+    [Fact]
+    public async Task AReloadClosesTheEditorAndDetailsWithoutPrompting()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var connection = Connection.Create(
+            SystemGuidProvider.Instance,
+            "Imported over",
+            "gone.test",
+            createdUtc: fixture.Clock.UtcNow).Value;
+        await fixture.Connections.AddAsync(connection, token);
+        var confirmation = new RecordingConfirmation();
+        using var page = fixture.CreatePage(confirmation);
+        await page.InitializeAsync(token);
+        page.SelectNode(NodeFor(page, connection.Id), false);
+        await page.WorkspaceChangesSettled;
+        await page.Details!.EditCommand.ExecuteAsync(null);
+        page.Editor!.Name = "Draft the import invalidates";
+
+        await fixture.Connections.DeleteAsync(connection.Id, token);
+        fixture.Notifier.NotifyReloaded();
+        await page.ConnectionChangesSettled;
+
+        Assert.Null(page.Editor);
+        Assert.Null(page.Details);
+        Assert.False(page.IsEditorOpen);
+        Assert.Empty(confirmation.LastMessage);
+        Assert.DoesNotContain(page.RootNodes, node => !node.IsVirtual);
+    }
+
     [Theory]
     [InlineData(ProtocolType.Ssh, true, false)]
     [InlineData(ProtocolType.Sftp, true, false)]

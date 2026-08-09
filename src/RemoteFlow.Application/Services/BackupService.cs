@@ -9,13 +9,15 @@ public sealed class BackupService(
     IBackupArchiveSerializer serializer,
     IClock clock,
     IBackupImportStore? importStore = null,
-    IBackupCredentialProtector? credentialProtector = null) : IBackupService
+    IBackupCredentialProtector? credentialProtector = null,
+    IConnectionChangeNotifier? changeNotifier = null) : IBackupService
 {
     private readonly IBackupDataSource _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
     private readonly IBackupArchiveSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     private readonly IClock _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     private readonly IBackupImportStore? _importStore = importStore;
     private readonly IBackupCredentialProtector? _credentialProtector = credentialProtector;
+    private readonly IConnectionChangeNotifier? _changeNotifier = changeNotifier;
 
     public bool CanExportCredentials => _credentialProtector is not null;
 
@@ -73,6 +75,10 @@ public sealed class BackupService(
                 throw;
             }
         }
+
+        // The import wrote straight to the database behind every repository, so nothing else raised a
+        // change. Without this, the connection explorer keeps showing the pre-import tree until restart.
+        _changeNotifier?.NotifyReloaded();
         return new BackupImportResult(
             request.Strategy,
             plan.AppliedCounts,

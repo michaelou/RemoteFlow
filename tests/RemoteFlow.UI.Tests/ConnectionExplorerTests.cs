@@ -220,6 +220,32 @@ public sealed class ConnectionExplorerTests
     }
 
     [Fact]
+    public async Task AReloadRebuildsTheTreeAndTheTagChipsFromTheImportedData()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await ExplorerFixture.CreateAsync(token);
+        var beforeTag = await fixture.AddTagAsync("Before", token);
+        var before = await fixture.AddConnectionAsync("Before", cancellationToken: token);
+        using var viewModel = fixture.CreateViewModel();
+        await viewModel.InitializeAsync(token);
+        viewModel.TagFilters.Single(chip => chip.TagId == beforeTag.Id).IsSelected = true;
+        await viewModel.SearchChangesSettled;
+
+        // Stand in for the import: the rows change without any repository raising a per-connection change.
+        await fixture.Connections.DeleteAsync(before.Id, token);
+        await fixture.Tags.DeleteAsync(beforeTag.Id, token);
+        var afterTag = await fixture.AddTagAsync("After", token);
+        var after = await fixture.AddConnectionAsync("After", cancellationToken: token);
+        fixture.Notifier.NotifyReloaded();
+        await viewModel.ConnectionChangesSettled;
+
+        Assert.Equal(after.Id, Assert.Single(RealConnections(viewModel)).Id);
+        Assert.Equal([afterTag.Id], [.. viewModel.TagFilters.Select(chip => chip.TagId)]);
+        Assert.DoesNotContain(viewModel.TagFilters, chip => chip.IsSelected);
+        Assert.False(viewModel.HasActiveFilters);
+    }
+
+    [Fact]
     public async Task RecentRecordsSuccessfulOpensOnlyAndDisplaysTheConfiguredLimit()
     {
         var token = TestContext.Current.CancellationToken;
