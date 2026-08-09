@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using RemoteFlow.Application.Abstractions;
 
 namespace RemoteFlow.Rdp.Windows;
 
@@ -8,8 +10,8 @@ public static class DependencyInjection
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // The platform composition point exists before the provider implementation so native services
-        // never need to be registered from a shared project. Issue #80 adds the first registration.
+        _ = services.RemoveAll<IEmbeddedRdpSessionProvider>();
+        _ = services.AddSingleton<IEmbeddedRdpSessionProvider>(WindowsEmbeddedRdpSessionProvider.Instance);
         return services;
     }
 }
