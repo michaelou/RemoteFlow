@@ -60,12 +60,14 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
 {
     private const BindingFlags _dispatchFlags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase;
     private readonly NativeRdpEventSink _eventSink = new();
+    private static int _liveInstanceCount;
     private object? _instance;
     private object? _advancedSettings;
     private object? _securedSettings;
     private IMsRdpExtendedSettings? _extendedSettings;
     private IMsRdpClientNonScriptable5? _nonScriptable;
     private int _disposed;
+    private int _liveCounted;
 
     public WindowsNativeRdpControl(object instance, RdpControlSettings settings)
     {
@@ -79,6 +81,8 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
             _eventSink.EventReceived += ForwardEvent;
             _eventSink.Advise(instance);
             Apply(settings);
+            _ = Interlocked.Increment(ref _liveInstanceCount);
+            _liveCounted = 1;
         }
         catch
         {
@@ -88,6 +92,8 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
     }
 
     public event EventHandler<NativeRdpEventArgs>? EventReceived;
+
+    internal static int LiveInstanceCount => Volatile.Read(ref _liveInstanceCount);
 
     public object NativeInstance => _instance ?? throw new ObjectDisposedException(nameof(WindowsNativeRdpControl));
 
@@ -312,6 +318,10 @@ internal sealed class WindowsNativeRdpControl : INativeRdpControl
         if (instance is not null && Marshal.IsComObject(instance))
         {
             _ = Marshal.FinalReleaseComObject(instance);
+        }
+        if (Interlocked.Exchange(ref _liveCounted, 0) != 0)
+        {
+            _ = Interlocked.Decrement(ref _liveInstanceCount);
         }
     }
 

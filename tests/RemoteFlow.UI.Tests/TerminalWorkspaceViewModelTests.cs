@@ -140,6 +140,29 @@ public sealed class TerminalWorkspaceViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task RequestCloseAllDisposesRdpSessionsAlongsideTerminals()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var pty = new RecordingPtyService();
+        var confirmation = new RecordingConfirmationService(true);
+        await using var workspace = new TerminalsPageViewModel(
+            pty,
+            new UiDispatcher(),
+            new InMemorySettingsStore(),
+            confirmation);
+        _ = await workspace.AddLocalSessionAsync(token);
+        var rdp = new FakeWorkspaceSession("DC01", "RDP");
+        workspace.AddWorkspaceSession(rdp);
+
+        Assert.True(await workspace.RequestCloseAllAsync(token));
+
+        Assert.Empty(workspace.Sessions);
+        Assert.True(rdp.IsDisposed);
+        Assert.All(pty.Sessions, session => Assert.True(session.IsDisposed));
+        Assert.Equal(1, confirmation.CallCount);
+    }
+
+    [AvaloniaFact]
     public async Task ReorderAndKeyboardStyleSelectionPersistForTheRun()
     {
         var token = TestContext.Current.CancellationToken;

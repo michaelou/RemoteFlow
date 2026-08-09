@@ -166,12 +166,10 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
             return;
         }
 
-        session.StateChanged -= OnSessionStateChanged;
-        SizeChanged -= OnSizeChanged;
-        LayoutUpdated -= OnLayoutUpdated;
-        await session.DisconnectAsync();
-        DisposeContainer();
-        await session.DisposeAsync();
+        await RdpSessionTeardown.DisposeAsync(
+            session,
+            () => UnsubscribeEvents(session),
+            DisposeContainer);
         GC.SuppressFinalize(this);
     }
 
@@ -285,5 +283,16 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
         _lastEffectiveVisibility = null;
         _ = _initialViewportReady.TrySetCanceled();
         Session = null;
+    }
+
+    private void UnsubscribeEvents(IEmbeddedRdpSession session)
+    {
+        session.StateChanged -= OnSessionStateChanged;
+        SizeChanged -= OnSizeChanged;
+        LayoutUpdated -= OnLayoutUpdated;
+        if (_container is { } container)
+        {
+            container.FocusChanged -= OnNativeFocusChanged;
+        }
     }
 }

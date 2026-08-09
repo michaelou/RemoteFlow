@@ -7,6 +7,7 @@ using RemoteFlow.Domain.Entities;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.Domain.ValueObjects;
 using RemoteFlow.Rdp.Windows.Interop;
+using RemoteFlow.Rdp.Windows.Hosting;
 using RemoteFlow.UI.Services;
 using Xunit;
 
@@ -220,6 +221,62 @@ public sealed class WindowsEmbeddedRdpSessionTests
         await session.DisposeAsync();
 
         Assert.Equal(1, control.DisposeCount);
+    }
+
+    [Fact]
+    public async Task TeardownUnsubscribesDisconnectsDestroysContainerThenReleasesControl()
+    {
+        var lifecycle = new List<string>();
+        var control = new FakeNativeRdpControl { Lifecycle = lifecycle };
+        var session = CreateSession(control);
+        await ConnectThroughLoginAsync(session, control);
+
+        await RdpSessionTeardown.DisposeAsync(
+            session,
+            () => lifecycle.Add("unsubscribe events"),
+            () => lifecycle.Add("destroy container HWND"));
+
+        Assert.Equal(
+            ["unsubscribe events", "native disconnect", "destroy container HWND", "release control RCW"],
+            lifecycle);
+        Assert.Equal(0, control.EventSubscriberCount);
+        Assert.Equal(1, control.DisposeCount);
+    }
+
+    [Fact]
+    public async Task DisconnectWithoutNativeCallbackTimesOutAndDoesNotHang()
+    {
+        var time = new FakeTimeProvider();
+        var control = new FakeNativeRdpControl { SuppressDisconnectEvent = true };
+        await using var session = new WindowsEmbeddedRdpSession(
+            control,
+            new RecordingDispatcher(),
+            timeProvider: time);
+        await ConnectThroughLoginAsync(session, control);
+
+        var disconnect = session.DisconnectAsync(TestContext.Current.CancellationToken);
+        var concurrentDisconnect = session.DisconnectAsync(TestContext.Current.CancellationToken);
+        time.Advance(WindowsEmbeddedRdpSession.DisconnectTimeout);
+        await Task.WhenAll(disconnect, concurrentDisconnect);
+
+        Assert.Equal(EmbeddedRdpSessionState.Disconnected, session.State);
+        Assert.Contains("cleanup continued", session.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, control.DisconnectCount);
+    }
+
+    [Fact]
+    public async Task DisposeMidConnectIsIdempotentAndReleasesAllNativeSubscriptions()
+    {
+        var control = new FakeNativeRdpControl();
+        var session = CreateSession(control);
+        await session.ConnectAsync(TestContext.Current.CancellationToken);
+
+        await session.DisposeAsync();
+        await session.DisposeAsync();
+
+        Assert.Equal(1, control.DisconnectCount);
+        Assert.Equal(1, control.DisposeCount);
+        Assert.Equal(0, control.EventSubscriberCount);
     }
 
     [Fact]
@@ -582,7 +639,21 @@ public sealed class WindowsEmbeddedRdpSessionTests
 
     private sealed class FakeNativeRdpControl : INativeRdpControl
     {
-        public event EventHandler<NativeRdpEventArgs>? EventReceived;
+        private EventHandler<NativeRdpEventArgs>? _eventReceived;
+
+        public event EventHandler<NativeRdpEventArgs>? EventReceived
+        {
+            add
+            {
+                _eventReceived += value;
+                EventSubscriberCount++;
+            }
+            remove
+            {
+                _eventReceived -= value;
+                EventSubscriberCount--;
+            }
+        }
 
         public object NativeInstance { get; } = new();
 
@@ -595,6 +666,12 @@ public sealed class WindowsEmbeddedRdpSessionTests
         public int DisconnectCount { get; private set; }
 
         public Action? DisconnectAction { get; set; }
+
+        public int EventSubscriberCount { get; private set; }
+
+        public List<string>? Lifecycle { get; init; }
+
+        public bool SuppressDisconnectEvent { get; init; }
 
         public uint ExtendedDisconnectReasonValue { get; init; }
 
@@ -638,7 +715,15 @@ public sealed class WindowsEmbeddedRdpSessionTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             DisconnectCount++;
-            DisconnectAction?.Invoke();
+            Lifecycle?.Add("native disconnect");
+            if (DisconnectAction is not null)
+            {
+                DisconnectAction();
+            }
+            else if (!SuppressDisconnectEvent)
+            {
+                Raise(4, 1u);
+            }
         }
 
         public void ConfigureCredentialPolicy(bool allowCredentialSaving, bool allowPromptingForCredentials)
@@ -694,12 +779,13 @@ public sealed class WindowsEmbeddedRdpSessionTests
         public ValueTask DisposeAsync()
         {
             DisposeCount++;
+            Lifecycle?.Add("release control RCW");
             return ValueTask.CompletedTask;
         }
 
         public void Raise(int dispatchId, params object?[] arguments)
         {
-            EventReceived?.Invoke(this, new(dispatchId, arguments));
+            _eventReceived?.Invoke(this, new(dispatchId, arguments));
         }
     }
 

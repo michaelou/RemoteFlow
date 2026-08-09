@@ -11,12 +11,16 @@ namespace RemoteFlow.Rdp.Windows;
 internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
 {
     internal static readonly TimeSpan ResizeDebounce = TimeSpan.FromMilliseconds(150);
+    internal static readonly TimeSpan DisconnectTimeout = TimeSpan.FromMilliseconds(750);
 
+    private readonly Lock _disconnectLock = new();
     private readonly Lock _resizeLock = new();
     private readonly Lock _stateLock = new();
     private CancellationTokenSource? _resizeCancellation;
+    private TaskCompletionSource? _disconnectCompletion;
     private RdpViewportSize? _lastAppliedSize;
     private bool _smartSizingFallback;
+    private int _disposeStarted;
     private int _disposed;
 
     public WindowsEmbeddedRdpSession(
@@ -107,11 +111,57 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
     public async Task DisconnectAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        await DisconnectCoreAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task DisconnectCoreAsync(CancellationToken cancellationToken)
+    {
+        if (State is EmbeddedRdpSessionState.Created or
+            EmbeddedRdpSessionState.Disconnected or
+            EmbeddedRdpSessionState.Failed)
+        {
+            return;
+        }
+
+        TaskCompletionSource completion;
+        var initiateDisconnect = false;
+        lock (_disconnectLock)
+        {
+            completion = _disconnectCompletion ?? new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            if (_disconnectCompletion is null)
+            {
+                _disconnectCompletion = completion;
+                initiateDisconnect = true;
+            }
+        }
         try
         {
-            await Dispatcher.InvokeAsync(
-                () => Control.Disconnect(cancellationToken),
-                cancellationToken).ConfigureAwait(false);
+            if (initiateDisconnect)
+            {
+                await Dispatcher.InvokeAsync(
+                    () => Control.Disconnect(cancellationToken),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            try
+            {
+                await completion.Task
+                    .WaitAsync(DisconnectTimeout, TimeProvider, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                if (initiateDisconnect)
+                {
+                    Logger.LogWarning(
+                        "The embedded RDP control did not report OnDisconnected within {DisconnectTimeoutMs} ms; teardown will continue.",
+                        DisconnectTimeout.TotalMilliseconds);
+                    await TransitionAsync(
+                        EmbeddedRdpSessionState.Disconnected,
+                        "The RDP control did not confirm disconnection; local cleanup continued.",
+                        CancellationToken.None).ConfigureAwait(false);
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -121,6 +171,19 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
         {
             LogFailure("disconnect", exception);
             await FailWithoutThrowingAsync("The embedded RDP session could not disconnect.").ConfigureAwait(false);
+        }
+        finally
+        {
+            if (initiateDisconnect)
+            {
+                lock (_disconnectLock)
+                {
+                    if (ReferenceEquals(_disconnectCompletion, completion))
+                    {
+                        _disconnectCompletion = null;
+                    }
+                }
+            }
         }
     }
 
@@ -215,11 +278,13 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
 
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
         {
             return;
         }
 
+        await DisconnectCoreAsync(CancellationToken.None).ConfigureAwait(false);
+        _ = Interlocked.Exchange(ref _disposed, 1);
         Control.EventReceived -= OnNativeEventReceived;
         CancelPendingResize();
         var disposalRan = false;
@@ -323,6 +388,10 @@ internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
                 ? EmbeddedRdpSessionState.Failed
                 : EmbeddedRdpSessionState.Disconnected,
             message);
+        lock (_disconnectLock)
+        {
+            _ = _disconnectCompletion?.TrySetResult();
+        }
     }
 
     private async ValueTask TransitionAsync(

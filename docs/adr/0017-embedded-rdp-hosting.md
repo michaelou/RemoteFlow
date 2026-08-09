@@ -324,6 +324,21 @@ fails with `InvalidComObjectException`. The spike hit this exactly once and it i
 not. Release the object that `get_AdvancedSettings9` hands out if you like — it is a distinct COM identity
 — but let one owner release the control.
 
+The production shutdown sequence is therefore fixed and covered by a fake-control ordering test:
+
+1. Unsubscribe workspace, view, size, layout, and native-focus observers so teardown cannot re-enter UI.
+2. Call `Disconnect()` and keep the native event subscription only long enough to await `OnDisconnected`.
+   The wait is bounded to 750 ms; timeout is logged and cleanup continues.
+3. Unhook the thread-local keyboard hook, close the OLE object, and destroy its container HWND.
+4. Unsubscribe the native event sink and call `FinalReleaseComObject` on the control RCW. The credential
+   handle was already disposed immediately after its pre-connect handoff and is never session-owned state.
+
+The 20-cycle harness warms mstscax once, then measures the same process before and after 20
+activate/container-create/container-destroy/release cycles. On Windows 11 24H2 on 2026-08-10 it retained
+0 GDI handles, 0 USER handles, 0 live control instances, and 2.9 MiB of private memory. The regression
+budget is +8 GDI handles, +8 USER handles, and +16 MiB private memory; mstscax is in-process, so there is
+no child process to orphan.
+
 ### 8. win-arm64
 
 **Unresolved. The spike compiles for `win-arm64` and was not run on ARM64 hardware.**
