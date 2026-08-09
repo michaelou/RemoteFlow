@@ -140,7 +140,7 @@ public sealed class CommandPaletteTests
     {
         public Guid? ConnectionId { get; private set; }
 
-        public async Task<bool> OpenAsync(
+        public async Task<ConnectionOpenResult> OpenAsync(
             Guid connectionId,
             ConnectionOpenMode mode,
             CancellationToken cancellationToken = default)
@@ -151,7 +151,7 @@ public sealed class CommandPaletteTests
             {
                 await recent.RecordOpenedAsync(connectionId, clock.UtcNow, cancellationToken);
             }
-            return true;
+            return ConnectionOpenResult.Success();
         }
     }
 

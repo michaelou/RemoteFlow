@@ -451,7 +451,7 @@ public sealed class ConnectionExplorerTests
     {
         public Queue<bool> Results { get; } = [];
 
-        public async Task<bool> OpenAsync(
+        public async Task<ConnectionOpenResult> OpenAsync(
             Guid connectionId,
             ConnectionOpenMode mode,
             CancellationToken cancellationToken = default)
@@ -462,7 +462,7 @@ public sealed class ConnectionExplorerTests
             {
                 await recordSuccess(connectionId, cancellationToken);
             }
-            return result;
+            return result ? ConnectionOpenResult.Success() : ConnectionOpenResult.Failure();
         }
     }
 }

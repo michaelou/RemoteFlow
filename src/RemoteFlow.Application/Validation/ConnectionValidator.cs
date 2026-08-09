@@ -17,7 +17,14 @@ public sealed record ConnectionInput(
     string? PrivateKeyPath = null,
     // Trust on first use, not the domain's Strict default: Strict rejects any host whose key is not
     // already stored and offers no way to store one, so it can only be chosen deliberately.
-    HostKeyPolicy HostKeyPolicy = HostKeyPolicy.TrustOnFirstUse);
+    HostKeyPolicy HostKeyPolicy = HostKeyPolicy.TrustOnFirstUse,
+    string? RdpDomain = null,
+    bool RdpFullScreen = false,
+    int? RdpWidth = null,
+    int? RdpHeight = null,
+    bool RdpMultimon = false,
+    bool RdpRedirectClipboard = true,
+    bool RdpRedirectDrives = false);
 
 public static class ConnectionValidator
 {
@@ -75,6 +82,41 @@ public static class ConnectionValidator
             errors.Add(RemoteFlowError.Validation(
                 "connection.private_key_path",
                 "Choose a private key file for private-key authentication."));
+        }
+
+        errors.AddRange(ValidateRdpResolution(input.RdpWidth, input.RdpHeight));
+        return errors;
+    }
+
+    /// <summary>A custom RDP resolution is either both dimensions or neither. The bounds are the range a
+    /// desktop can plausibly be asked for: below them the session is unusable, above them the client
+    /// clamps to the monitor anyway, and a stray keystroke turning 1920 into 19200 is caught here. The
+    /// editor calls this on every keystroke so the box can complain before the user reaches Save.</summary>
+    public static IReadOnlyList<RemoteFlowError> ValidateRdpResolution(int? width, int? height)
+    {
+        if ((width is null) != (height is null))
+        {
+            return
+            [
+                RemoteFlowError.Validation(
+                    "connection.rdp_resolution",
+                    "Enter both a width and a height, or leave both blank to use the client's own size."),
+            ];
+        }
+
+        var errors = new List<RemoteFlowError>();
+        if (width is < 640 or > 7_680)
+        {
+            errors.Add(RemoteFlowError.Validation(
+                "connection.rdp_resolution",
+                "The width must be between 640 and 7680 pixels."));
+        }
+
+        if (height is < 480 or > 4_320)
+        {
+            errors.Add(RemoteFlowError.Validation(
+                "connection.rdp_resolution",
+                "The height must be between 480 and 4320 pixels."));
         }
 
         return errors;

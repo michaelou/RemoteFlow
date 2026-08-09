@@ -104,6 +104,8 @@ public static class DependencyInjection
                 await provider.GetRequiredService<IThemeService>().InitializeAsync().ConfigureAwait(true);
                 await provider.GetRequiredService<IRemoteEditServiceFactory>()
                     .SweepStaleFilesAsync().ConfigureAwait(true);
+                await provider.GetRequiredService<IRdpLauncher>()
+                    .SweepStaleFilesAsync().ConfigureAwait(true);
             },
             StartupErrorAction = exception => provider.GetRequiredService<IGlobalExceptionHandler>()
                 .HandleAsync(exception, "application startup"),

@@ -780,13 +780,14 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
                     _ => throw new ArgumentOutOfRangeException(nameof(action)),
                 };
                 var opened = await _sessionOpener.OpenAsync(node.Id!.Value, mode).ConfigureAwait(true);
-                if (opened)
+                if (opened.Opened)
                 {
                     await RefreshAsync().ConfigureAwait(true);
                 }
                 else
                 {
-                    FeedbackMessage = "The connection did not open, so it was not added to Recent.";
+                    FeedbackMessage = opened.Message
+                        ?? "The connection did not open, so it was not added to Recent.";
                 }
 
                 break;
@@ -937,10 +938,15 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
     private async Task OpenFromDetailsAsync(Guid connectionId, ConnectionOpenMode mode)
     {
-        if (await _sessionOpener.OpenAsync(connectionId, mode).ConfigureAwait(true))
+        var opened = await _sessionOpener.OpenAsync(connectionId, mode).ConfigureAwait(true);
+        if (opened.Opened)
         {
             await ShowDetailsAsync(connectionId).ConfigureAwait(true);
             await RefreshAsync().ConfigureAwait(true);
+        }
+        else if (opened.Message is { } message)
+        {
+            FeedbackMessage = message;
         }
     }
 

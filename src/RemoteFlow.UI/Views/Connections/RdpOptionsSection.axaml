@@ -1,0 +1,89 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Connections.RdpOptionsSection"
+    x:DataType="connectionViewModels:ConnectionEditorViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections">
+  <StackPanel Spacing="12">
+    <TextBlock Classes="section" Text="RDP options" />
+
+    <StackPanel>
+      <TextBlock Classes="hint" Margin="0" Text="{Binding RdpClientStatusText}" />
+      <!-- Only shown when detection came back empty: with a client installed there is nothing to say. -->
+      <Border
+          Margin="0,8,0,0"
+          Padding="12"
+          Background="{DynamicResource Brush.Surface.2}"
+          BorderBrush="{DynamicResource Brush.Warning}"
+          BorderThickness="1"
+          CornerRadius="{DynamicResource Radius.Control}"
+          IsVisible="{Binding IsRdpClientMissing}">
+        <StackPanel Spacing="4">
+          <TextBlock FontWeight="SemiBold" Text="No RDP client found" />
+          <TextBlock
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              FontSize="12"
+              Text="{Binding RdpInstallGuidance}"
+              TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+
+    <StackPanel>
+      <TextBlock Classes="label" Text="Domain" />
+      <TextBox
+          TabIndex="9"
+          AutomationProperties.Name="RDP domain"
+          PlaceholderText="Leave blank for a local account"
+          Text="{Binding RdpDomain, Mode=TwoWay}" />
+    </StackPanel>
+
+    <StackPanel>
+      <TextBlock Classes="label" Text="Resolution" />
+      <ComboBox
+          TabIndex="10"
+          AutomationProperties.Name="RDP resolution"
+          DisplayMemberBinding="{Binding Label}"
+          HorizontalAlignment="Stretch"
+          ItemsSource="{x:Static connectionViewModels:ConnectionEditorViewModel.RdpResolutionChoices}"
+          SelectedItem="{Binding SelectedRdpResolution, Mode=TwoWay}" />
+      <Grid
+          Margin="0,6,0,0"
+          ColumnDefinitions="*,Auto,*"
+          ColumnSpacing="8"
+          IsVisible="{Binding IsCustomRdpResolutionVisible}">
+        <TextBox
+            TabIndex="11"
+            AutomationProperties.Name="Custom width"
+            PlaceholderText="Width"
+            Text="{Binding RdpWidthText, Mode=TwoWay}" />
+        <TextBlock
+            Grid.Column="1"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="×" />
+        <TextBox
+            Grid.Column="2"
+            TabIndex="12"
+            AutomationProperties.Name="Custom height"
+            PlaceholderText="Height"
+            Text="{Binding RdpHeightText, Mode=TwoWay}" />
+      </Grid>
+      <TextBlock
+          Classes="error"
+          IsVisible="{Binding RdpResolutionError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+          Text="{Binding RdpResolutionError}" />
+    </StackPanel>
+
+    <StackPanel Spacing="6">
+      <CheckBox TabIndex="13" Content="Open full screen" IsChecked="{Binding RdpFullScreen, Mode=TwoWay}" />
+      <CheckBox TabIndex="14" Content="Use all my monitors" IsChecked="{Binding RdpMultimon, Mode=TwoWay}" />
+      <CheckBox TabIndex="15" Content="Share my clipboard" IsChecked="{Binding RdpRedirectClipboard, Mode=TwoWay}" />
+      <CheckBox TabIndex="16" Content="Share my local drives" IsChecked="{Binding RdpRedirectDrives, Mode=TwoWay}" />
+    </StackPanel>
+
+    <TextBlock
+        Classes="hint"
+        Text="Your password is never written into the .rdp file. If one is stored, RemoteFlow hands it to Windows for the moment the session starts and takes it straight back out again; otherwise Windows asks you for it." />
+  </StackPanel>
+</UserControl>
