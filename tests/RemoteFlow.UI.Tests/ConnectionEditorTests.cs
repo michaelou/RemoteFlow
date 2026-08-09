@@ -248,6 +248,52 @@ public sealed class ConnectionEditorTests
     }
 
     [Fact]
+    public async Task SelectingAnotherConnectionMovesTheOpenEditorUnlessChangesAreKept()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var first = Connection.Create(
+            SystemGuidProvider.Instance,
+            "First server",
+            "first.test",
+            createdUtc: fixture.Clock.UtcNow).Value;
+        var second = Connection.Create(
+            SystemGuidProvider.Instance,
+            "Second server",
+            "second.test",
+            createdUtc: fixture.Clock.UtcNow).Value;
+        await fixture.Connections.AddAsync(first, token);
+        await fixture.Connections.AddAsync(second, token);
+        var confirmation = new RecordingConfirmation(false, true);
+        using var page = fixture.CreatePage(confirmation);
+        await page.InitializeAsync(token);
+
+        page.SelectNode(NodeFor(page, first.Id), false);
+        await page.WorkspaceChangesSettled;
+        await page.Details!.EditCommand.ExecuteAsync(null);
+        Assert.Equal(first.Id, page.Editor!.ConnectionId);
+
+        page.SelectNode(NodeFor(page, second.Id), false);
+        await page.WorkspaceChangesSettled;
+
+        Assert.Equal(second.Id, page.Editor!.ConnectionId);
+        Assert.Equal("Second server", page.Editor.Name);
+
+        // Unsaved work still wins: the declined prompt leaves the editor on the connection it was on.
+        page.Editor.Name = "Renamed but not saved";
+        page.SelectNode(NodeFor(page, first.Id), false);
+        await page.WorkspaceChangesSettled;
+
+        Assert.Equal(second.Id, page.Editor!.ConnectionId);
+        Assert.Contains("Renamed but not saved", confirmation.LastMessage, StringComparison.Ordinal);
+
+        page.SelectNode(NodeFor(page, first.Id), false);
+        await page.WorkspaceChangesSettled;
+
+        Assert.Equal(first.Id, page.Editor!.ConnectionId);
+    }
+
+    [Fact]
     public async Task DetailsDeleteConfirmationNamesConnectionAndCanCancel()
     {
         var token = TestContext.Current.CancellationToken;
@@ -303,6 +349,12 @@ public sealed class ConnectionEditorTests
 
         Assert.Equal(canOpenSftp, details.OpenSftpCommand.CanExecute(null));
         Assert.Equal(canLaunchRdp, details.LaunchRdpCommand.CanExecute(null));
+    }
+
+    private static ExplorerNodeViewModel NodeFor(ConnectionsPageViewModel page, Guid connectionId)
+    {
+        return page.RootNodes.Single(node =>
+            node.Kind == ExplorerNodeKind.Connection && node.Id == connectionId);
     }
 
     private static async Task<string> ReadAllTextColumnsAsync(

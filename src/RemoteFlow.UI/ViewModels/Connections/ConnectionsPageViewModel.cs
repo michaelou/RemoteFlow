@@ -262,10 +262,16 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
             SelectedNodes.Add(node);
         }
 
-        if (node.Kind == ExplorerNodeKind.Connection && node.Id is { } connectionId && Editor is null)
+        if (node.Kind != ExplorerNodeKind.Connection || node.Id is not { } connectionId)
         {
-            WorkspaceChangesSettled = ShowDetailsAsync(connectionId);
+            return;
         }
+
+        // The right-hand pane follows the selection whichever pane is showing: with the editor open,
+        // picking another connection moves the editor to it rather than leaving it on the old one.
+        WorkspaceChangesSettled = Editor is null
+            ? ShowDetailsAsync(connectionId)
+            : SwitchEditorAsync(connectionId);
     }
 
     public async Task<bool> DropAsync(
@@ -902,6 +908,15 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         Editor = await _editorFactory.CreateEditorAsync(connectionId, cancellationToken).ConfigureAwait(true);
         Details = null;
         OnPropertyChanged(nameof(IsEditorOpen));
+    }
+
+    /// <summary>Retargets the open editor at <paramref name="connectionId"/>. Unsaved work still has to be
+    /// discarded explicitly, so a declined prompt leaves the editor where it was.</summary>
+    private Task SwitchEditorAsync(Guid connectionId, CancellationToken cancellationToken = default)
+    {
+        return Editor is { } editor && editor.ConnectionId == connectionId
+            ? Task.CompletedTask
+            : OpenEditorAsync(connectionId, cancellationToken);
     }
 
     private async Task ShowDetailsAsync(Guid connectionId, CancellationToken cancellationToken = default)

@@ -3,7 +3,9 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
+using RemoteFlow.Application.Queries;
 using RemoteFlow.Application.Services;
+using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels.Transfers;
 
@@ -19,6 +21,9 @@ public enum SftpSortColumn
 }
 
 public sealed record SftpBreadcrumb(string Label, string Path);
+
+/// <summary>One entry in the workspace's connection picker. Only connections that can speak SFTP get one.</summary>
+public sealed record SftpConnectionChoice(Guid Id, string Name, string Endpoint);
 
 public sealed partial class SftpItemViewModel(RemoteFileInfo file) : ObservableObject
 {
@@ -85,10 +90,12 @@ public sealed partial class SftpWorkspaceViewModel(
     IClipboardService clipboard,
     IRemoteEditServiceFactory? remoteEditFactory = null,
     TransfersPageViewModel? transferManager = null,
-    IUiDispatcher? dispatcher = null) : PageViewModel("SFTP"), IAsyncDisposable
+    IUiDispatcher? dispatcher = null,
+    IConnectionQueryService? connectionQueries = null) : PageViewModel("SFTP"), IAsyncDisposable
 {
     private readonly List<string> _backHistory = [];
     private readonly List<string> _forwardHistory = [];
+    private Guid? _attachedConnectionId;
     private SftpWorkspaceSession? _session;
     private TransferEngine? _transfers;
     private IRemoteEditService? _remoteEdits;
@@ -100,6 +107,20 @@ public sealed partial class SftpWorkspaceViewModel(
     public ObservableCollection<SftpItemViewModel> SelectedItems { get; } = [];
 
     public ObservableCollection<SftpBreadcrumb> Breadcrumbs { get; } = [];
+
+    /// <summary>The SFTP-capable connections offered by the picker, so the workspace can be opened from
+    /// here instead of only by connecting from the explorer.</summary>
+    public ObservableCollection<SftpConnectionChoice> AvailableConnections { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConnectSelectedCommand))]
+    public partial SftpConnectionChoice? SelectedConnection { get; set; }
+
+    public bool HasConnectionChoices => AvailableConnections.Count > 0;
+
+    public string NoConnectionMessage => HasConnectionChoices
+        ? "Choose a connection above and select Connect to browse its files."
+        : "No SSH or SFTP connections are saved yet. Create one on the Connections page first.";
 
     [ObservableProperty]
     public partial string ConnectionTitle { get; private set; } = "SFTP";
@@ -165,6 +186,50 @@ public sealed partial class SftpWorkspaceViewModel(
     [ObservableProperty]
     public partial string NewFolderName { get; set; } = "New folder";
 
+    /// <summary>Reloads the picker from the saved connections, keeping whatever was selected if it survived.</summary>
+    [RelayCommand]
+    public async Task LoadConnectionsAsync(CancellationToken cancellationToken = default)
+    {
+        if (connectionQueries is null)
+        {
+            return;
+        }
+        try
+        {
+            var items = await connectionQueries.QueryAsync(
+                new ConnectionFilter
+                {
+                    Protocols = [ProtocolType.Ssh, ProtocolType.Sftp],
+                    SortBy = ConnectionSortBy.Name,
+                },
+                cancellationToken).ConfigureAwait(true);
+            var previous = SelectedConnection?.Id ?? _attachedConnectionId;
+            AvailableConnections.Clear();
+            foreach (var item in items)
+            {
+                AvailableConnections.Add(new SftpConnectionChoice(item.Id, item.Name, $"{item.Host}:{item.Port}"));
+            }
+            SelectedConnection = AvailableConnections.FirstOrDefault(choice => choice.Id == previous);
+            NotifyConnectionChoicesChanged();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage = $"The connection list could not be loaded: {exception.Message}";
+        }
+    }
+
+    /// <summary>Opens the connection chosen in the picker, replacing whatever session is already attached.</summary>
+    [RelayCommand(CanExecute = nameof(CanConnectSelected))]
+    public Task ConnectSelectedAsync(CancellationToken cancellationToken = default)
+    {
+        return SelectedConnection is { } choice
+            ? AttachAsync(choice.Id, cancellationToken)
+            : Task.CompletedTask;
+    }
+
     public async Task AttachAsync(Guid connectionId, CancellationToken cancellationToken = default)
     {
         IsLoading = true;
@@ -186,7 +251,9 @@ public sealed partial class SftpWorkspaceViewModel(
                 activeRemoteEdits.ActiveEditsChanged += OnActiveEditsChanged;
                 activeRemoteEdits.UploadCompleted += OnRemoteEditUploadCompleted;
             }
+            _attachedConnectionId = connectionId;
             ConnectionTitle = next.Definition.Name;
+            SyncPickerWithSession(next.Definition.Id, next.Definition.Name, $"{next.Definition.Host}:{next.Definition.Port}");
             ShowHiddenFiles = next.Definition.Sftp.ShowHiddenFiles;
             _backHistory.Clear();
             _forwardHistory.Clear();
@@ -199,7 +266,6 @@ public sealed partial class SftpWorkspaceViewModel(
                 return;
             }
             _ = await NavigateCoreAsync(realPath.Value, addHistory: false, cancellationToken).ConfigureAwait(true);
-            OnPropertyChanged(nameof(IsConnected));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -212,6 +278,7 @@ public sealed partial class SftpWorkspaceViewModel(
         finally
         {
             IsLoading = false;
+            OnPropertyChanged(nameof(IsConnected));
         }
     }
 
@@ -876,6 +943,32 @@ public sealed partial class SftpWorkspaceViewModel(
         {
             IsBusyIndicatorVisible = true;
         }
+    }
+
+    private bool CanConnectSelected()
+    {
+        return SelectedConnection is not null;
+    }
+
+    private void NotifyConnectionChoicesChanged()
+    {
+        OnPropertyChanged(nameof(HasConnectionChoices));
+        OnPropertyChanged(nameof(NoConnectionMessage));
+    }
+
+    /// <summary>Points the picker at the session that just attached, adding an entry for it when the
+    /// workspace was opened from the explorer before the list was ever loaded.</summary>
+    private void SyncPickerWithSession(Guid connectionId, string name, string endpoint)
+    {
+        var match = AvailableConnections.FirstOrDefault(choice => choice.Id == connectionId);
+        if (match is null)
+        {
+            match = new SftpConnectionChoice(connectionId, name, endpoint);
+            AvailableConnections.Add(match);
+            NotifyConnectionChoicesChanged();
+        }
+
+        SelectedConnection = match;
     }
 
     private void CancelBusyIndicatorDelay()

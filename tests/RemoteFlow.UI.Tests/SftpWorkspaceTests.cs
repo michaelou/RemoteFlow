@@ -6,8 +6,10 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
+using RemoteFlow.Application.Queries;
 using RemoteFlow.Domain.Abstractions;
 using RemoteFlow.Domain.Entities;
+using RemoteFlow.Domain.Enums;
 using RemoteFlow.TestSupport;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels.Sftp;
@@ -525,11 +527,81 @@ public sealed class SftpWorkspaceTests
         Assert.Contains("Saved 'app.conf'", fixture.ViewModel.FeedbackMessage, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task ConnectionPickerOffersSftpCapableConnectionsAndOpensTheChosenOne()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var queries = new StubConnectionQueries();
+        var fixture = CreateFixture(connectionQueries: queries);
+        queries.Items =
+        [
+            ListItem(fixture.Connection.Id, "Files", "example.test"),
+            ListItem(Guid.NewGuid(), "Backups", "backup.test"),
+        ];
+
+        Assert.False(fixture.ViewModel.HasConnectionChoices);
+        Assert.Contains("No SSH or SFTP connections", fixture.ViewModel.NoConnectionMessage, StringComparison.Ordinal);
+
+        await fixture.ViewModel.LoadConnectionsAsync(token);
+
+        Assert.Equal(
+            [ProtocolType.Ssh, ProtocolType.Sftp],
+            queries.LastFilter!.Protocols);
+        Assert.Equal(
+            ["Files", "Backups"],
+            fixture.ViewModel.AvailableConnections.Select(choice => choice.Name));
+        Assert.Equal("example.test:22", fixture.ViewModel.AvailableConnections[0].Endpoint);
+        Assert.True(fixture.ViewModel.HasConnectionChoices);
+        Assert.False(fixture.ViewModel.IsConnected);
+        Assert.False(fixture.ViewModel.ConnectSelectedCommand.CanExecute(null));
+
+        fixture.ViewModel.SelectedConnection = fixture.ViewModel.AvailableConnections[0];
+        Assert.True(fixture.ViewModel.ConnectSelectedCommand.CanExecute(null));
+        await fixture.ViewModel.ConnectSelectedCommand.ExecuteAsync(null);
+
+        Assert.True(fixture.ViewModel.IsConnected);
+        Assert.Equal("Files", fixture.ViewModel.ConnectionTitle);
+        Assert.Null(fixture.ViewModel.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ConnectingFromElsewherePointsThePickerAtTheOpenSession()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = CreateFixture();
+
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+
+        var choice = Assert.Single(fixture.ViewModel.AvailableConnections);
+        Assert.Equal(fixture.Connection.Id, choice.Id);
+        Assert.Equal(choice, fixture.ViewModel.SelectedConnection);
+        Assert.True(fixture.ViewModel.HasConnectionChoices);
+    }
+
+    private static ConnectionListItem ListItem(Guid id, string name, string host)
+    {
+        return new ConnectionListItem(
+            id,
+            name,
+            host,
+            22,
+            ProtocolType.Ssh,
+            EnvironmentKind.Unspecified,
+            false,
+            null,
+            null,
+            null,
+            null,
+            [],
+            null);
+    }
+
     private static Fixture CreateFixture(
         ISftpService? service = null,
         bool confirmationResult = true,
         TransfersPageViewModel? transferManager = null,
-        IRemoteEditServiceFactory? remoteEdits = null)
+        IRemoteEditServiceFactory? remoteEdits = null,
+        IConnectionQueryService? connectionQueries = null)
     {
         var connection = Connection.Create(SystemGuidProvider.Instance, "Files", "example.test").Value;
         var ssh = new FakeSshConnection();
@@ -547,7 +619,8 @@ public sealed class SftpWorkspaceTests
                 confirmation,
                 clipboard,
                 remoteEdits,
-                transferManager),
+                transferManager,
+                connectionQueries: connectionQueries),
             confirmation,
             clipboard);
     }
@@ -592,6 +665,31 @@ public sealed class SftpWorkspaceTests
         SftpWorkspaceViewModel ViewModel,
         RecordingConfirmation Confirmation,
         RecordingClipboard Clipboard);
+
+    private sealed class StubConnectionQueries : IConnectionQueryService
+    {
+        public IReadOnlyList<ConnectionListItem> Items { get; set; } = [];
+
+        public ConnectionFilter? LastFilter { get; private set; }
+
+        public Task<IReadOnlyList<ConnectionListItem>> QueryAsync(
+            ConnectionFilter filter,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            LastFilter = filter;
+            return Task.FromResult(Items);
+        }
+
+        public Task<IReadOnlyList<ConnectionListItem>> SearchPaletteAsync(
+            string text,
+            int limit = 20,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Items);
+        }
+    }
 
     private sealed class StubSessionFactory(SftpWorkspaceSession session) : ISftpWorkspaceSessionFactory
     {

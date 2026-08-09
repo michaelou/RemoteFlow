@@ -6,8 +6,53 @@
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Sftp"
     Loaded="Workspace_OnLoaded">
   <Grid RowDefinitions="*,Auto">
-  <Grid Margin="20,20,20,10" RowDefinitions="Auto,Auto,Auto,Auto,*">
-    <Grid ColumnDefinitions="Auto,*,Auto">
+  <Grid Margin="20,20,20,10" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*">
+    <!-- Connection picker: the workspace can be opened straight from here, not only by connecting
+         from the explorer. -->
+    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,0,0,10">
+      <TextBlock
+          Margin="0,0,8,0"
+          VerticalAlignment="Center"
+          Foreground="{DynamicResource Brush.Text.Secondary}"
+          Text="Connection" />
+      <ComboBox
+          x:Name="ConnectionPicker"
+          Grid.Column="1"
+          HorizontalAlignment="Stretch"
+          ItemsSource="{Binding AvailableConnections}"
+          SelectedItem="{Binding SelectedConnection}"
+          PlaceholderText="Select a connection…">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="viewModels:SftpConnectionChoice">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{Binding Name}" />
+              <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Endpoint}" />
+            </StackPanel>
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+      <Button
+          Grid.Column="2"
+          Margin="8,0,0,0"
+          Classes="accent"
+          Content="Connect"
+          Command="{Binding ConnectSelectedCommand}" />
+      <Button
+          Grid.Column="3"
+          Margin="6,0,0,0"
+          Content="↻"
+          Command="{Binding LoadConnectionsCommand}"
+          ToolTip.Tip="Reload the connection list" />
+      <TextBlock
+          Grid.Column="4"
+          Margin="12,0,0,0"
+          VerticalAlignment="Center"
+          FontWeight="SemiBold"
+          IsVisible="{Binding IsConnected}"
+          Text="{Binding ConnectionTitle}" />
+    </Grid>
+
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding IsConnected}">
       <StackPanel Orientation="Horizontal" Spacing="6">
         <Button Content="←" IsEnabled="{Binding CanGoBack}" Command="{Binding BackCommand}" ToolTip.Tip="Back" />
         <Button Content="→" IsEnabled="{Binding CanGoForward}" Command="{Binding ForwardCommand}" ToolTip.Tip="Forward" />
@@ -31,7 +76,7 @@
       </StackPanel>
     </Grid>
 
-    <Grid Grid.Row="1" Margin="0,10,0,6" ColumnDefinitions="*,Auto">
+    <Grid Grid.Row="2" Margin="0,10,0,6" ColumnDefinitions="*,Auto" IsVisible="{Binding IsConnected}">
       <ItemsControl ItemsSource="{Binding Breadcrumbs}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
@@ -52,11 +97,11 @@
       </StackPanel>
     </Grid>
 
-    <Border Grid.Row="2" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Padding="10" Background="#33D43B3B">
+    <Border Grid.Row="3" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Padding="10" Background="#33D43B3B">
       <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
     </Border>
 
-    <Grid Grid.Row="3" ColumnDefinitions="3*,110,180,120,160" Margin="0,8,0,0">
+    <Grid Grid.Row="4" ColumnDefinitions="3*,110,180,120,160" Margin="0,8,0,0" IsVisible="{Binding IsConnected}">
       <Button Classes="flat" HorizontalContentAlignment="Left" Content="Name" Click="SortName_OnClick" />
       <Button Grid.Column="1" Classes="flat" HorizontalContentAlignment="Right" Content="Size" Click="SortSize_OnClick" />
       <Button Grid.Column="2" Classes="flat" HorizontalContentAlignment="Left" Content="Modified" Click="SortModified_OnClick" />
@@ -66,7 +111,8 @@
 
     <ListBox
         x:Name="FileList"
-        Grid.Row="4"
+        Grid.Row="5"
+        IsVisible="{Binding IsConnected}"
         SelectionMode="Multiple"
         ItemsSource="{Binding Items}"
         SelectionChanged="FileList_OnSelectionChanged"
@@ -116,6 +162,30 @@
         </DataTemplate>
       </ListBox.ItemTemplate>
     </ListBox>
+
+    <Border
+        Grid.Row="5"
+        Margin="0,8,0,0"
+        Padding="40"
+        Background="{DynamicResource Brush.Surface.1}"
+        CornerRadius="{DynamicResource Radius.Control}"
+        IsVisible="{Binding !IsConnected}">
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+        <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="Not connected" />
+        <TextBlock
+            HorizontalAlignment="Center"
+            TextAlignment="Center"
+            TextWrapping="Wrap"
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="{Binding NoConnectionMessage}" />
+        <Button
+            Classes="accent"
+            Content="Connect"
+            HorizontalAlignment="Center"
+            IsVisible="{Binding HasConnectionChoices}"
+            Command="{Binding ConnectSelectedCommand}" />
+      </StackPanel>
+    </Border>
 
   </Grid>
 

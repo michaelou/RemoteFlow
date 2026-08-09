@@ -18,9 +18,13 @@ public sealed partial class SftpWorkspace : UserControl
         InitializeComponent();
     }
 
-    private void Workspace_OnLoaded(object? sender, RoutedEventArgs e)
+    private async void Workspace_OnLoaded(object? sender, RoutedEventArgs e)
     {
         _ = FileList.Focus();
+        if (DataContext is SftpWorkspaceViewModel viewModel)
+        {
+            await viewModel.LoadConnectionsAsync().ConfigureAwait(true);
+        }
     }
 
     private async void PathEditor_OnKeyDown(object? sender, KeyEventArgs e)
