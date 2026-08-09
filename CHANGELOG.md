@@ -58,6 +58,9 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ### Fixed
 
+- The terminal workspace shows its arrows again. The shell-profile dropdown, the find bar's next and
+  previous buttons, and its close button were each rendering two or three garbled letters instead of a
+  symbol: the characters had been saved once through a Windows-1252 decode and kept the damage.
 - The Windows taskbar button shows the RemoteFlow icon instead of a generic placeholder. Avalonia builds a
   24x24 icon for the window's large slot; the taskbar asks for 32x32 and falls back to the placeholder
   rather than accepting a different size, so RemoteFlow now applies the executable's own icon once the
