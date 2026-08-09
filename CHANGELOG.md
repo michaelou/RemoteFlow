@@ -9,6 +9,12 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ### Added
 
+- User documentation. The README now walks a new user from download to a connected session, with dark-mode
+  screenshots, and states the security posture plainly: no telemetry, no cloud, no accounts, no update
+  ping — and exactly what is stored where, what is **never** stored, how credentials are held on each
+  platform, and how host keys are verified. `docs/building.md` covers building and running from source on
+  macOS and Linux, which is how those platforms get RemoteFlow in v1. `docs/troubleshooting.md` answers the
+  failures people actually meet, each with a concrete fix.
 - Remote Desktop. An RDP connection opens in Windows' own Remote Desktop Connection client — RemoteFlow
   does not embed RDP. The connection editor gained an RDP section: domain, resolution presets or a custom
   size, full screen, all monitors, and clipboard and drive sharing. It says which client it found, and
