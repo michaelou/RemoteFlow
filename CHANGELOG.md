@@ -7,6 +7,17 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-10
+
+### Fixed
+
+- **Returning to the terminal workspace no longer freezes the window.** An embedded Remote Desktop tab
+  keeps one view for the life of its session, so that its native window survives. Leaving the terminals
+  page with such a tab selected and coming back built a second host for that one view, and a control
+  cannot have two parents: the exception landed inside a layout pass, so the window stopped laying out
+  and rendering altogether and only a restart brought it back. A host now takes the view over from the
+  previous one.
+
 ## [0.2.0] - 2026-08-10
 
 Remote Desktop stops being a thing RemoteFlow hands to another program. On Windows it is a tab like any
@@ -179,7 +190,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/michaelou/RemoteFlow/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/michaelou/RemoteFlow/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/michaelou/RemoteFlow/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/michaelou/RemoteFlow/releases/tag/v0.1.0

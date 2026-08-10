@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using RemoteFlow.UI.ViewModels.Terminal;
 
 namespace RemoteFlow.UI.Views.Terminal;
@@ -69,8 +71,27 @@ public sealed class WorkspaceSessionContentHost : ContentControl
         };
         if (content is not null)
         {
+            if (content is Control control)
+            {
+                ReleaseFromPreviousHost(control);
+            }
+
             Content = content;
             _builtSession = Session;
+        }
+    }
+
+    /// <summary>A session that owns its content hands back the same control every time, so that an
+    /// embedded remote desktop keeps its native window. Leaving the page and coming back builds a
+    /// second host for that one control: without handing it over, the next layout pass throws inside
+    /// the layout manager and the window stops rendering until the application is restarted.</summary>
+    private void ReleaseFromPreviousHost(Control content)
+    {
+        var previous = content.Parent as ContentControl ??
+            (content.GetVisualParent() as ContentPresenter)?.TemplatedParent as ContentControl;
+        if (previous is not null && !ReferenceEquals(previous, this))
+        {
+            previous.Content = null;
         }
     }
 }
