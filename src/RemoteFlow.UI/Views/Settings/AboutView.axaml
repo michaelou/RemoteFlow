@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings">
   <ScrollViewer>
-    <Grid Margin="28" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
+    <Grid Margin="8" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
       <StackPanel Spacing="5">
         <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding ProductName}" />
         <TextBlock

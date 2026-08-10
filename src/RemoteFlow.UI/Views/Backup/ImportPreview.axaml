@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Backup">
   <ScrollViewer>
-    <StackPanel Margin="28" MaxWidth="760" HorizontalAlignment="Left" Spacing="16">
+    <StackPanel Margin="8" MaxWidth="760" HorizontalAlignment="Left" Spacing="16">
       <TextBlock FontSize="28" FontWeight="SemiBold" Text="Inspect backup" />
       <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Inspection is read-only. Nothing is imported until you review and apply a strategy." TextWrapping="Wrap" />
       <Button HorizontalAlignment="Left" Content="Choose archive" Command="{Binding InspectCommand}" />

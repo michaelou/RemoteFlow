@@ -216,4 +216,15 @@ public sealed partial class ConnectionsView : UserControl
             viewModel.ClearAllFilters();
         }
     }
+
+    /// <summary>Clearing from inside the filter menu closes it, and the button that cleared is gone with it,
+    /// so the keyboard is handed back to the search box rather than left on nothing.</summary>
+    private void ClearAll_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ConnectionsPageViewModel viewModel)
+        {
+            viewModel.ClearAllFilters();
+            _ = SearchTextBox.Focus();
+        }
+    }
 }

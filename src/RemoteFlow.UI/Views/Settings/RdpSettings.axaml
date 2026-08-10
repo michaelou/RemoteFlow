@@ -5,7 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings">
   <ScrollViewer>
-    <StackPanel Margin="28" MaxWidth="640" HorizontalAlignment="Left" Spacing="18">
+    <StackPanel Margin="8" MaxWidth="640" HorizontalAlignment="Left" Spacing="18">
       <StackPanel Spacing="5">
         <TextBlock FontSize="28" FontWeight="SemiBold" Text="Remote desktop" />
         <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Choose where RDP connections open by default on Windows." />

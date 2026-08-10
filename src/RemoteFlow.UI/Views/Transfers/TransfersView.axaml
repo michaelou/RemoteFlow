@@ -37,7 +37,7 @@
   </UserControl.Resources>
 
   <ScrollViewer>
-    <Grid Margin="24" RowDefinitions="Auto,Auto" RowSpacing="18">
+    <Grid Margin="8" RowDefinitions="Auto,Auto" RowSpacing="18">
       <Grid ColumnDefinitions="*,Auto">
         <StackPanel>
           <TextBlock FontSize="28" FontWeight="SemiBold" Text="Transfers" />

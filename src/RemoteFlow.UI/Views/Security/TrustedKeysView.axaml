@@ -6,7 +6,7 @@
     xmlns:application="using:RemoteFlow.Application.Abstractions"
     xmlns:security="using:RemoteFlow.UI.ViewModels.Security">
   <ScrollViewer>
-    <StackPanel Margin="28" MaxWidth="1040" HorizontalAlignment="Left" Spacing="18">
+    <StackPanel Margin="8" MaxWidth="1040" HorizontalAlignment="Left" Spacing="18">
       <StackPanel Spacing="5">
         <TextBlock FontSize="28" FontWeight="SemiBold" Text="Trusted SSH keys" />
         <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Search, revoke, delete, or import OpenSSH host identities." />

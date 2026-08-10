@@ -7,6 +7,33 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-10
+
+The Connections page reads as a list of hosts rather than a column of text, and every page sits closer to
+the sidebar.
+
+### Changed
+
+- **The connections list has rules between its rows.** Every row is the same height, each name and its
+  `host:port` start on the same edge, and the environment badge is held at the right of the row instead of
+  trailing the host name — so the badges form a column of their own. The two group rows, Favorites and
+  Recent, are set in a smaller, quieter type than the hosts underneath them. Selecting a row now marks its
+  name and glyph in the accent colour: hover and selection raise a row to the same surface, and without
+  that the row the details pane belongs to was indistinguishable from whichever row the pointer was over.
+- **The right-click menu answers anywhere on a row.** The blank space between a host's name and its badge
+  was not hit-testable, so the menu — and the drag that reorders hosts into folders — only responded over
+  the glyph, the name, and the badge. One consequence worth knowing: dropping onto the blank part of a
+  *connection* row now resolves to that connection and is refused, where before it read as "move to the top
+  level". The empty area below the list still moves a host to the top level.
+- **The Connections header is a card.** The page title and its subtitle are gone; the sidebar already names
+  the page. The search box sits at the top of a card with **New connection**, **New folder** and **Clear
+  recent** below it, and the protocol, environment and tag filters — previously three rows of loose
+  checkboxes taking more room than the list they filter — now live behind a **Filters** button, together
+  with the summary of what is active and the way to clear it.
+- **Every page sits closer to the sidebar.** Connections, Terminals, SFTP, Transfers, Backup and Settings
+  had page margins of 16, 20, 24 and 28 between them; they are all 8 now, so switching pages no longer
+  shifts where the content starts. Dialogs keep their own wider margins.
+
 ## [0.2.1] - 2026-08-10
 
 ### Fixed
@@ -190,7 +217,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/michaelou/RemoteFlow/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/michaelou/RemoteFlow/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/michaelou/RemoteFlow/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/michaelou/RemoteFlow/compare/v0.1.0...v0.1.1

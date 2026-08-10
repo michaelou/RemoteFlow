@@ -19,7 +19,7 @@
     </Style>
   </UserControl.Styles>
   <Grid RowDefinitions="*,Auto">
-  <Grid Margin="20,20,20,10" RowDefinitions="Auto,Auto,Auto,*">
+  <Grid Margin="8" RowDefinitions="Auto,Auto,Auto,*">
     <!-- Connection picker: the workspace can be opened straight from here, not only by connecting
          from the explorer. -->
     <Border Classes="panel" Margin="0,0,0,10" Padding="12,10">

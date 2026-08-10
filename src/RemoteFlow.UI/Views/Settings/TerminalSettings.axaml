@@ -6,7 +6,7 @@
     xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings"
     xmlns:terminal="using:SvcSystems.UI.Terminal">
   <ScrollViewer>
-    <Grid Margin="28" RowDefinitions="Auto,Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
+    <Grid Margin="8" RowDefinitions="Auto,Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
       <StackPanel Spacing="5">
         <TextBlock FontSize="28" FontWeight="SemiBold" Text="Terminal appearance" />
         <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Configure every embedded terminal with a live preview." />

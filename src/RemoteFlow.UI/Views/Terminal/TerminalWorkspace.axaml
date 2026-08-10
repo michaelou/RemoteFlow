@@ -11,7 +11,7 @@
       <Setter Property="BorderThickness" Value="2,2,2,3" />
     </Style>
   </UserControl.Styles>
-  <Grid Margin="16" RowDefinitions="Auto,Auto,*,Auto">
+  <Grid Margin="8" RowDefinitions="Auto,Auto,*,Auto">
     <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
       <StackPanel>
         <TextBlock FontSize="24" FontWeight="SemiBold" Text="Terminal workspace" />

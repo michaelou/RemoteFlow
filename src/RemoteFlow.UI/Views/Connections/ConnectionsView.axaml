@@ -16,23 +16,96 @@
       <connectionViews:ConnectionDetailsView />
     </DataTemplate>
   </UserControl.DataTemplates>
-  <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,*">
-    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-      <StackPanel>
-        <TextBlock FontSize="28" FontWeight="SemiBold" Text="Connections" />
-        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Favorites, recent sessions, and all saved connections" />
-      </StackPanel>
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-        <Button Classes="accent" Click="CreateConnection_OnClick" Content="New connection" />
-        <Button Click="NewFolder_OnClick" Content="New folder" ToolTip.Tip="Create a top-level folder. Right-click a folder to add one inside it." />
-        <Button Click="ClearRecent_OnClick" Content="Clear recent" />
-      </StackPanel>
-    </Grid>
+  <UserControl.Styles>
+    <!-- The filter menu is a stack of sections, and each one needs a quieter word above its choices than
+         the choices themselves. -->
+    <Style Selector="TextBlock.filter-section">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+    </Style>
+  </UserControl.Styles>
+  <!-- The page carries the name of the item selected in the sidebar and the list says what it holds, so a
+       heading here would only repeat one of them. The search and the actions go in a card instead: it is
+       the one band of controls on the page, and it should read as one thing. -->
+  <Grid Margin="8" RowDefinitions="Auto,Auto,*">
+    <Border Classes="panel" Margin="0,0,0,8" Padding="12">
+      <StackPanel Spacing="10">
+        <TextBox
+            x:Name="SearchTextBox"
+            AutomationProperties.Name="Search connections"
+            PlaceholderText="Search name, host, user, notes, or tags"
+            Text="{Binding SearchText, Mode=TwoWay}" />
+        <Grid ColumnDefinitions="Auto,*,Auto">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="accent" Click="CreateConnection_OnClick" Content="New connection" />
+            <Button Click="NewFolder_OnClick" Content="New folder" ToolTip.Tip="Create a top-level folder. Right-click a folder to add one inside it." />
+            <Button Click="ClearRecent_OnClick" Content="Clear recent" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+            <!-- Protocol, environment and tags used to sit on the page as three rows of checkboxes, which
+                 cost more room than the list they filter. They live behind this button now; the summary and
+                 the way out of them travel with them, so the whole state of the filter is in one place. -->
+            <Button Content="Filters" ToolTip.Tip="Filter by protocol, environment, or tag">
+              <Button.Flyout>
+                <Flyout Placement="BottomEdgeAlignedRight">
+                  <StackPanel MinWidth="220" MaxWidth="320" Spacing="12">
+                    <StackPanel Spacing="4">
+                      <TextBlock Classes="filter-section" Text="Protocol" />
+                      <ItemsControl ItemsSource="{Binding ProtocolFilters}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="connectionViewModels:ConnectionFilterChipViewModel">
+                            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
 
-    <connectionViews:SearchBar Grid.Row="1" Margin="0,0,0,12" />
+                    <StackPanel Spacing="4">
+                      <TextBlock Classes="filter-section" Text="Environment" />
+                      <ItemsControl ItemsSource="{Binding EnvironmentFilters}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="connectionViewModels:ConnectionFilterChipViewModel">
+                            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                      <TextBlock Classes="filter-section" Text="Tags" />
+                      <ItemsControl ItemsSource="{Binding TagFilters}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="connectionViewModels:ConnectionFilterChipViewModel">
+                            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+
+                    <CheckBox Content="Favorites only" IsChecked="{Binding FavoritesOnly, Mode=TwoWay}" />
+
+                    <TextBlock
+                        Foreground="{DynamicResource Brush.Text.Secondary}"
+                        IsVisible="{Binding HasActiveFilters}"
+                        Text="{Binding ActiveFilterSummary}"
+                        TextWrapping="Wrap" />
+                    <Button
+                        Click="ClearAll_OnClick"
+                        Content="Clear all filters"
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding HasActiveFilters}" />
+                  </StackPanel>
+                </Flyout>
+              </Button.Flyout>
+            </Button>
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+    </Border>
 
     <Border
-        Grid.Row="2"
+        Grid.Row="1"
         Margin="0,0,0,8"
         Padding="10,6"
         Background="{DynamicResource Brush.Surface.2}"
@@ -47,25 +120,114 @@
       </StackPanel>
     </Border>
 
-    <Grid Grid.Row="3" ColumnDefinitions="*,500" ColumnSpacing="16">
+    <Grid Grid.Row="2" ColumnDefinitions="*,500" ColumnSpacing="8">
       <!-- Both halves of the page sit on their own card, so the tree and whatever is open beside it read
            as two panels rather than as content poured straight onto the window. -->
-      <Border Classes="panel" Padding="8" IsVisible="{Binding !IsEmpty}">
+      <!-- No horizontal padding, and clipped: the rows run to the card's edges so the rules between them
+           read as one list rather than as a stack of separate strips, and the card's own corners cut them. -->
+      <Border Classes="panel" ClipToBounds="True" Padding="0,8" IsVisible="{Binding !IsEmpty}">
         <TreeView
             x:Name="ConnectionTree"
             Background="Transparent"
             BorderThickness="0"
+            Classes="explorer"
             DragDrop.AllowDrop="True"
             ItemsSource="{Binding RootNodes}"
             DragDrop.DragOver="ConnectionTree_OnDragOver"
             DragDrop.Drop="ConnectionTree_OnDrop"
             KeyDown="ConnectionTree_OnKeyDown"
             DoubleTapped="ConnectionTree_OnDoubleTapped"
+            ScrollViewer.HorizontalScrollBarVisibility="Disabled"
             SelectionChanged="ConnectionTree_OnSelectionChanged"
             SelectionMode="Multiple">
+          <TreeView.Resources>
+            <!-- Fluent indents a level by 16. The rows already carry a fixed icon gutter, so a narrower step
+                 is enough to show depth without pushing deep names off the card. -->
+            <x:Double x:Key="TreeViewItemIndent">14</x:Double>
+          </TreeView.Resources>
+          <!-- Every selector below is prefixed with the tree's own class. A bare "TreeViewItem /template/" rule
+               is weaker than the values the control template itself set, so it would silently do nothing; the
+               class turns the selector into a trigger, which outranks both the template and Fluent's own state
+               styles. The rules are scoped to this tree rather than to Controls.axaml because this is the only
+               TreeView in the application, and a list of hosts is not the same thing as a generic tree. -->
           <TreeView.Styles>
             <Style Selector="TreeViewItem">
               <Setter Property="IsExpanded" Value="{ReflectionBinding IsExpanded, Mode=TwoWay}" />
+            </Style>
+
+            <!-- The row's own border is the rule between it and the row below. PART_LayoutRoot wraps the header
+                 and not the subtree, and the per-level indent lives on the header inside it, so one setter here
+                 draws exactly one full-width line per row at every depth. The corners have to go: a border on
+                 one edge only takes the rounded-geometry path, which would curl the line away from both ends. -->
+            <Style Selector="TreeView.explorer TreeViewItem">
+              <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+              <Setter Property="BorderThickness" Value="0,0,0,1" />
+              <Setter Property="CornerRadius" Value="0" />
+              <Setter Property="MinHeight" Value="40" />
+              <Setter Property="Padding" Value="0,6" />
+            </Style>
+
+            <!-- Fluent reserves 36px for the chevron whether or not a node has children. That is the gutter that
+                 sets where every name begins, and at 36 it leaves the icons stranded from the text. -->
+            <Style Selector="TreeView.explorer TreeViewItem /template/ Panel#PART_ExpandCollapseChevronContainer">
+              <Setter Property="Margin" Value="4,0,6,0" />
+              <Setter Property="Width" Value="12" />
+            </Style>
+
+            <!-- Fluent paints the row's states straight onto PART_LayoutRoot, at a strength that beats the
+                 border set above, so each state has to name the rule's colour again or the line changes shade
+                 as the pointer moves down the list. The selected fill is Fluent's accent by default; on this
+                 surface it reads as a foreign blue, so it takes the same raised surface the sidebar uses.
+                 The pointerover sits on the border rather than on the item: a child row is a visual descendant
+                 of its parent, so hovering a host would otherwise light up every folder above it. -->
+            <Style Selector="TreeView.explorer TreeViewItem /template/ Border#PART_LayoutRoot:pointerover">
+              <Setter Property="Background" Value="{DynamicResource Brush.Surface.2}" />
+              <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+            </Style>
+            <Style Selector="TreeView.explorer TreeViewItem:pressed /template/ Border#PART_LayoutRoot:pointerover">
+              <Setter Property="Background" Value="{DynamicResource Brush.Surface.2}" />
+              <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+            </Style>
+            <Style Selector="TreeView.explorer TreeViewItem:selected /template/ Border#PART_LayoutRoot">
+              <Setter Property="Background" Value="{DynamicResource Brush.Surface.2}" />
+              <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+            </Style>
+            <Style Selector="TreeView.explorer TreeViewItem:selected /template/ Border#PART_LayoutRoot:pointerover">
+              <Setter Property="Background" Value="{DynamicResource Brush.Surface.2}" />
+              <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+            </Style>
+            <Style Selector="TreeView.explorer TreeViewItem:pressed:selected /template/ Border#PART_LayoutRoot:pointerover">
+              <Setter Property="Background" Value="{DynamicResource Brush.Surface.2}" />
+              <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+            </Style>
+            <!-- Hover and selection both raise the row to the same surface, so the fill alone cannot say which
+                 row the details beside the list belong to. The name and its glyph carry the accent instead:
+                 it survives the pointer moving away, and it is the one foreground already measured against
+                 this surface. The host and the badge set their own colours and stay put. -->
+            <Style Selector="TreeView.explorer TreeViewItem:selected /template/ ContentPresenter#PART_HeaderPresenter">
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Accent}" />
+            </Style>
+
+            <!-- Controls.axaml marks keyboard focus by thickening this border to two pixels on all four sides.
+                 Against a one-pixel rule on one side that grows the row and shoves its content sideways on every
+                 arrow key. The thickness is pinned back here and focus is carried by the fill and the adorner
+                 the template already draws around this part, so the row stays exactly where it was. -->
+            <Style Selector="TreeView.explorer TreeViewItem:focus-visible /template/ Border#PART_LayoutRoot">
+              <Setter Property="Background" Value="{DynamicResource Brush.Surface.2}" />
+              <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+              <Setter Property="BorderThickness" Value="0,0,0,1" />
+            </Style>
+
+            <!-- Favorites and Recent are headings for the rows underneath them, not rows in their own right. -->
+            <Style Selector="TreeView.explorer Grid.group TextBlock">
+              <Setter Property="FontSize" Value="11" />
+              <Setter Property="FontWeight" Value="SemiBold" />
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+            </Style>
+            <Style Selector="TreeView.explorer Grid.group PathIcon">
+              <Setter Property="Width" Value="13" />
+              <Setter Property="Height" Value="13" />
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Muted}" />
             </Style>
           </TreeView.Styles>
           <TreeView.ItemsPanel>
@@ -78,18 +240,27 @@
                 DataType="{x:Type connectionViewModels:ExplorerNodeViewModel}"
                 ItemsSource="{Binding Children}"
                 x:DataType="connectionViewModels:ExplorerNodeViewModel">
-              <Grid ColumnDefinitions="24,Auto,Auto" Margin="2" PointerPressed="Node_OnPointerPressed">
+              <!-- A fixed glyph in a spaced column rather than a wider one the glyph floats inside, so the
+                   names line up down the list on the same edge the sidebar's own labels use. -->
+              <!-- The transparent background is what makes the whole line hit-testable: a panel with no
+                   background of its own is skipped by hit testing, so the right-click menu and the drag only
+                   answered over the glyph, the name, and the badge, with dead air in between. -->
+              <Grid
+                  Background="Transparent"
+                  Classes.group="{Binding IsVirtual}"
+                  ColumnDefinitions="Auto,*,Auto"
+                  ColumnSpacing="10"
+                  PointerPressed="Node_OnPointerPressed">
                 <!-- No Foreground: the glyph inherits the row's, so it turns with the text when the row
                      is selected instead of staying grey against the highlight. -->
                 <PathIcon
-                    Width="15"
-                    Height="15"
-                    HorizontalAlignment="Left"
+                    Width="16"
+                    Height="16"
                     VerticalAlignment="Center"
                     Data="{Binding IconKey, Converter={x:Static converters:ResourceKeyConverter.Instance}}" />
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                   <Grid>
-                    <TextBlock IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" />
+                    <TextBlock IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                     <TextBox
                         x:Name="InlineRenameBox"
                         AutomationProperties.Name="Rename"
@@ -100,14 +271,19 @@
                   </Grid>
                   <TextBlock
                       FontSize="11"
+                      Margin="0,1,0,0"
                       Foreground="{DynamicResource Brush.Text.Muted}"
                       IsVisible="{Binding SecondaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                      Text="{Binding SecondaryText}" />
+                      Text="{Binding SecondaryText}"
+                      TextTrimming="CharacterEllipsis" />
                 </StackPanel>
+                <!-- Held at the row's right edge rather than trailing the host name, so the badges form their
+                     own column instead of starting at a different place on every row. -->
                 <Border
                     Grid.Column="2"
-                    Margin="8,0,0,0"
+                    Margin="0,0,4,0"
                     Padding="5,1"
+                    HorizontalAlignment="Right"
                     VerticalAlignment="Center"
                     Background="{DynamicResource Brush.Badge.Background}"
                     CornerRadius="{DynamicResource Radius.Small}"
