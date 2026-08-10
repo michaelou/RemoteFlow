@@ -19,6 +19,18 @@ Nothing here changes the credential rule. Embedding removes the `.rdp` file from
 which is strictly less exposure than ADR-0015 describes, and the `cmdkey` handover is not needed at all
 when the control takes the credential in memory.
 
+The embedded path resolves the connection's existing `StoreProvider` and `StoreKey` through
+`ICredentialProvider` immediately before every connect or reconnect. If a secret exists, it is assigned
+once to the control's write-only `ClearTextPassword` property; no process starts, no file is written and
+no Credential Manager handover entry is created. If the reference or secret is absent, the control's
+password is reset and its own credential prompt remains enabled. `AllowCredentialSaving` is always false.
+
+`SecretHandle` zeroes its mutable character buffer after the assignment. COM requires a BSTR, however,
+so the assignment necessarily creates one short-lived .NET `string`; .NET strings cannot be reliably
+zeroed. The implementation therefore keeps that string to the single property call and never retains,
+logs, formats or includes it in an exception. Reconnect reads the provider again, so deleting a stored
+credential takes effect immediately instead of reusing an earlier value.
+
 RemoteFlow implements no RDP protocol code. FreeRDP is out of scope.
 
 ## Decisions
@@ -215,6 +227,12 @@ The holder is a normal hidden `WS_POPUP` window, not a message-only window. A me
 desktop lineage, and moving a live RDP control's window tree off the desktop is a larger gamble than a
 window that is simply never shown.
 
+**Embedded sessions always occupy one RemoteFlow viewport.** The stored `FullScreen` and `Multimon`
+options remain external-client requests: the mapper does not apply either to the ActiveX control, and it
+retains both requests in `IgnoredExternalRdpDisplayOptions` so the editor can explain the limitation.
+Embedded fullscreen continues to mean making the RemoteFlow window fullscreen, and multi-monitor RDP is
+out of scope for this milestone.
+
 **`RemoteFlow.Desktop` must gain an application manifest with a `supportedOS` list.** This is not optional
 and it is not currently there. Without it, Avalonia's Win32 `NativeControlHost` throws on the first
 attach:
@@ -275,7 +293,9 @@ IMsRdpExtendedSettings[DeviceScaleFactor]  = 100: put -> 0x00000000, get -> 0x00
 ```
 
 The protocol accepts only 100, 140 and 180 for either factor, so Avalonia's `RenderScaling` is quantised
-rather than passed through. A monitor at 125% is sent as 100.
+rather than passed through. RemoteFlow chooses the highest supported value that does not exceed the
+monitor scale: a monitor at 125% is sent as 100 and the hosted surface scales it up; 150% is sent as 140,
+and 200% as 180.
 
 On a monitor change, Avalonia raises `RenderScaling`; the response is `UpdateSessionDisplaySettings` with
 the new size and the new quantised factors. What that does to a live session is untested — see below.
@@ -304,6 +324,21 @@ on either separates the RCW that the container is still holding, and the contain
 fails with `InvalidComObjectException`. The spike hit this exactly once and it is written down so #82 does
 not. Release the object that `get_AdvancedSettings9` hands out if you like — it is a distinct COM identity
 — but let one owner release the control.
+
+The production shutdown sequence is therefore fixed and covered by a fake-control ordering test:
+
+1. Unsubscribe workspace, view, size, layout, and native-focus observers so teardown cannot re-enter UI.
+2. Call `Disconnect()` and keep the native event subscription only long enough to await `OnDisconnected`.
+   The wait is bounded to 750 ms; timeout is logged and cleanup continues.
+3. Unhook the thread-local keyboard hook, close the OLE object, and destroy its container HWND.
+4. Unsubscribe the native event sink and call `FinalReleaseComObject` on the control RCW. The credential
+   handle was already disposed immediately after its pre-connect handoff and is never session-owned state.
+
+The 20-cycle harness warms mstscax once, then measures the same process before and after 20
+activate/container-create/container-destroy/release cycles. On Windows 11 24H2 on 2026-08-10 it retained
+0 GDI handles, 0 USER handles, 0 live control instances, and 2.9 MiB of private memory. The regression
+budget is +8 GDI handles, +8 USER handles, and +16 MiB private memory; mstscax is in-process, so there is
+no child process to orphan.
 
 ### 8. win-arm64
 

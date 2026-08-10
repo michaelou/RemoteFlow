@@ -1,10 +1,5 @@
-# Build and test on Windows. This transcribes the checks contributors have run locally since Milestone 1
-# (see CONTRIBUTING.md); it does not add new gates.
-#
-# Windows only, deliberately. RemoteFlow ships on Windows first, and the Linux and macOS legs are the ones
-# that would have to carry the Docker-backed SSH suite and the timing-sensitive terminal tests. Bringing
-# them back means restoring a matrix over windows/ubuntu/macos and running the integration step on the
-# Linux leg, which is the only runner with a Docker engine.
+# Build and test on Windows, plus a Linux boundary build that proves the Windows-only RDP projects are
+# excluded by the CrossPlatform solution configuration. The Docker-backed SSH suite remains opt-in.
 #
 # Wall-time budget: 15 minutes, and the job times out at 20. A run that regularly approaches the budget is
 # a signal to split it, not to raise the timeout.
@@ -109,3 +104,36 @@ jobs:
             tests/**/TestResults/**
           if-no-files-found: warn
           retention-days: 14
+
+  build-cross-platform:
+    name: build (linux, no embedded RDP)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('global.json', 'Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore shared projects
+        run: dotnet restore RemoteFlow.slnx -p:Platform=CrossPlatform
+
+      - name: Build shared projects
+        run: dotnet build RemoteFlow.slnx --no-restore -c Release -p:Platform=CrossPlatform
+
+      - name: Test shared projects
+        run: dotnet test RemoteFlow.slnx --no-build -c Release -p:Platform=CrossPlatform

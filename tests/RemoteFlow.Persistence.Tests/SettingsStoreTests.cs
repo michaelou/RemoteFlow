@@ -27,7 +27,9 @@ public sealed class SettingsStoreTests
         Assert.Equal("registered default", await store.Get(unknown, cancellationToken));
         Assert.Equal(AppTheme.Dark, await store.Get(SettingKeys.Theme, cancellationToken));
         Assert.False(await store.Get(SettingKeys.SuppressPasteWarning, cancellationToken));
-        Assert.Equal(29, SettingKeys.All.Count);
+        // One key fewer off Windows: WindowsRdpOpenMode joins All only where the embedded RDP control
+        // can be hosted, so a Linux or macOS database is never seeded with a setting it cannot honour.
+        Assert.Equal(OperatingSystem.IsWindows() ? 30 : 29, SettingKeys.All.Count);
         await using var context = await database.Factory.CreateDbContextAsync(cancellationToken);
         Assert.Equal(SettingKeys.All.Count, await context.Settings.CountAsync(cancellationToken));
     }

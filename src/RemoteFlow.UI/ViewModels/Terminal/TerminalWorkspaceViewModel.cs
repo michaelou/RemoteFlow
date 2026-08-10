@@ -102,7 +102,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         }
     }
 
-    public ObservableCollection<TerminalSessionViewModel> Sessions { get; } = [];
+    public ObservableCollection<IWorkspaceSessionViewModel> Sessions { get; } = [];
 
     public ObservableCollection<ShellProfileMenuItemViewModel> ShellProfiles { get; } = [];
 
@@ -110,9 +110,11 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
 
     public TerminalClipboardController? ClipboardController { get; }
 
-    public TerminalSessionViewModel? SelectedSession { get; private set; }
+    public IWorkspaceSessionViewModel? SelectedSession { get; private set; }
 
-    public TerminalSessionViewModel? Session => SelectedSession;
+    public TerminalSessionViewModel? SelectedTerminalSession => SelectedSession as TerminalSessionViewModel;
+
+    public TerminalSessionViewModel? Session => SelectedTerminalSession;
 
     public bool IsStarting => Volatile.Read(ref _startingCount) > 0;
 
@@ -230,7 +232,24 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         }
     }
 
-    public void SelectSession(TerminalSessionViewModel? session)
+    public void AddWorkspaceSession(IWorkspaceSessionViewModel session)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposeStarted) != 0, this);
+        ArgumentNullException.ThrowIfNull(session);
+        if (Sessions.Contains(session))
+        {
+            return;
+        }
+
+        Sessions.Add(session);
+        if (session is IWorkspaceSessionCloseRequestSource closeSource)
+        {
+            closeSource.CloseRequested += OnSessionCloseRequested;
+        }
+        SelectSession(session);
+    }
+
+    public void SelectSession(IWorkspaceSessionViewModel? session)
     {
         if (session is not null && !Sessions.Contains(session))
         {
@@ -250,6 +269,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         SetActive(current, true);
 
         OnPropertyChanged(nameof(SelectedSession));
+        OnPropertyChanged(nameof(SelectedTerminalSession));
         OnPropertyChanged(nameof(Session));
     }
 
@@ -277,7 +297,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         SelectSession(Sessions[next]);
     }
 
-    public void MoveSession(TerminalSessionViewModel session, TerminalSessionViewModel beforeSession)
+    public void MoveSession(IWorkspaceSessionViewModel session, IWorkspaceSessionViewModel beforeSession)
     {
         var oldIndex = Sessions.IndexOf(session);
         var newIndex = Sessions.IndexOf(beforeSession);
@@ -290,7 +310,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     }
 
     public async Task<bool> CloseSessionAsync(
-        TerminalSessionViewModel session,
+        IWorkspaceSessionViewModel session,
         bool skipConfirmation = false,
         CancellationToken cancellationToken = default)
     {
@@ -303,10 +323,13 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
 
         if (!skipConfirmation && session.IsLive && await ShouldConfirmActiveSessionCloseAsync(cancellationToken).ConfigureAwait(true))
         {
+            var isTerminal = session is TerminalSessionViewModel;
             if (_confirmation is null || !await _confirmation.ConfirmAsync(
-                    "Close active terminal?",
-                    $"'{session.Title}' is still running. Closing it will terminate the process.",
-                    "Close terminal",
+                    isTerminal ? "Close active terminal?" : "Close active remote desktop?",
+                    isTerminal
+                        ? $"'{session.Title}' is still running. Closing it will terminate the process."
+                        : $"'{session.Title}' is still connected. Closing it will disconnect the remote desktop.",
+                    isTerminal ? "Close terminal" : "Close remote desktop",
                     cancellationToken).ConfigureAwait(true))
             {
                 return false;
@@ -314,7 +337,11 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         }
 
         var wasSelected = ReferenceEquals(SelectedSession, session);
-        ClipboardController?.Detach(session);
+        if (session is TerminalSessionViewModel terminal)
+        {
+            ClipboardController?.Detach(terminal);
+        }
+        UnsubscribeCloseRequest(session);
         Sessions.RemoveAt(index);
         if (wasSelected)
         {
@@ -331,10 +358,11 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         if (live.Length > 0 && await ShouldConfirmActiveSessionCloseAsync(cancellationToken).ConfigureAwait(true))
         {
             var names = string.Join(Environment.NewLine, live.Select(session => $"• {session.Title}"));
+            var terminalsOnly = live.All(session => session is TerminalSessionViewModel);
             if (_confirmation is null || !await _confirmation.ConfirmAsync(
-                    "Close active terminals?",
+                    terminalsOnly ? "Close active terminals?" : "Close active sessions?",
                     $"The following sessions are still running:{Environment.NewLine}{Environment.NewLine}{names}",
-                    "Close all terminals",
+                    terminalsOnly ? "Close all terminals" : "Close all sessions",
                     cancellationToken).ConfigureAwait(true))
             {
                 return false;
@@ -410,7 +438,11 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         var sessions = Sessions.ToArray();
         foreach (var session in sessions)
         {
-            ClipboardController?.Detach(session);
+            if (session is TerminalSessionViewModel terminal)
+            {
+                ClipboardController?.Detach(terminal);
+            }
+            UnsubscribeCloseRequest(session);
         }
 
         Sessions.Clear();
@@ -469,7 +501,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         return CtrlCPolicy;
     }
 
-    private static void SetActive(TerminalSessionViewModel? session, bool isActive)
+    private static void SetActive(IWorkspaceSessionViewModel? session, bool isActive)
     {
         session?.SetActive(isActive);
     }
@@ -481,7 +513,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
             return;
         }
 
-        foreach (var session in Sessions)
+        foreach (var session in Sessions.OfType<TerminalSessionViewModel>())
         {
             session.ApplyAppearance(_terminalSettings.Current);
         }
@@ -563,7 +595,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         }
         await _dispatcher.InvokeAsync(() =>
         {
-            if (Sessions.Any(item => item.ManagedSessionId == managed.SessionId))
+            if (Sessions.OfType<TerminalSessionViewModel>().Any(item => item.ManagedSessionId == managed.SessionId))
             {
                 return;
             }
@@ -601,7 +633,8 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         }
         await _dispatcher.InvokeAsync(() =>
         {
-            var session = Sessions.FirstOrDefault(item => item.ManagedSessionId == e.Session.SessionId);
+            var session = Sessions.OfType<TerminalSessionViewModel>()
+                .FirstOrDefault(item => item.ManagedSessionId == e.Session.SessionId);
             session?.ApplyManagedState(e.CurrentState, e.Session.FailureReason);
         }).ConfigureAwait(false);
     }
@@ -619,7 +652,8 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         }
         await _dispatcher.InvokeAsync(() =>
         {
-            var session = Sessions.FirstOrDefault(item => item.ManagedSessionId == sessionId);
+            var session = Sessions.OfType<TerminalSessionViewModel>()
+                .FirstOrDefault(item => item.ManagedSessionId == sessionId);
             if (session is null)
             {
                 return;
@@ -633,6 +667,22 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
                 SelectSession(Sessions.Count == 0 ? null : Sessions[Math.Min(index, Sessions.Count - 1)]);
             }
         }).ConfigureAwait(false);
+    }
+
+    private async void OnSessionCloseRequested(object? sender, EventArgs e)
+    {
+        if (sender is IWorkspaceSessionViewModel session)
+        {
+            _ = await CloseSessionAsync(session).ConfigureAwait(true);
+        }
+    }
+
+    private void UnsubscribeCloseRequest(IWorkspaceSessionViewModel session)
+    {
+        if (session is IWorkspaceSessionCloseRequestSource closeSource)
+        {
+            closeSource.CloseRequested -= OnSessionCloseRequested;
+        }
     }
 }
 

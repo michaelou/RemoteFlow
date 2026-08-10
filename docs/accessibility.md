@@ -26,7 +26,8 @@ Opening the **connection editor** puts the caret in the Name field. Fields run i
 **Save** and **Cancel**; closing the editor returns the keyboard to the tree rather than dropping it.
 
 In the **terminal workspace**: `Ctrl+Shift+T` opens a session, `Ctrl+Tab` and `Ctrl+Shift+Tab` cycle,
-`Alt+1`–`Alt+9` jump to one, and `Ctrl+Shift+W` closes the active one. Tabs themselves take focus:
+`Alt+1`–`Alt+9` jump to one, and `Ctrl+Shift+W` closes the active one. These selection shortcuts include
+RDP tabs when embedded desktops are open. Tabs themselves take focus:
 `Enter` or `Space` selects, `Delete` closes. Everything else the keymap does not claim belongs to the
 terminal — see [keybindings.md](keybindings.md).
 
@@ -46,7 +47,8 @@ crosses — carry an explicit one, because a tooltip is not a name and is never 
 
 - The terminal announces as a **text** control named for its session and environment, not as an
   unlabelled custom control.
-- Terminal tabs announce their title and environment: *"web-01, production"*.
+- Terminal tabs announce their title and environment: *"web-01, production"*. RDP tabs additionally
+  announce the protocol and live connection status: *"DC01, RDP, production, Connected"*.
 - Committing a navigation moves focus into the page region, which is named for the page, so the change
   of page is announced.
 - The transfer status line is a polite live region: a transfer finishing is announced without taking

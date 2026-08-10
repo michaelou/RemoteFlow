@@ -35,6 +35,19 @@ That is enough to use the application. `dotnet test` runs the unit suite; see
 [docs/manual-test-terminal.md](manual-test-terminal.md) for the manual terminal pass to run when the
 terminal stack changes.
 
+The embedded RDP control is the one platform-specific part of the source tree. On Windows the normal
+solution build includes `RemoteFlow.Rdp.Windows` and its tests. On Linux and macOS use the solution's
+cross-platform configuration, which builds and tests everything except those two Windows-only projects:
+
+```shell
+dotnet build RemoteFlow.slnx -p:Platform=CrossPlatform
+dotnet test RemoteFlow.slnx -p:Platform=CrossPlatform --no-build
+```
+
+The desktop project itself still targets plain `net10.0` on every platform. Its reference to the native
+RDP assembly and the corresponding DI registration are enabled only when MSBuild is running on Windows.
+Linux and macOS builds therefore keep the external-client behavior and never load Windows code.
+
 To check what a build claims to be:
 
 ```shell

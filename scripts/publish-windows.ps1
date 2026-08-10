@@ -208,6 +208,13 @@ foreach ($rid in $Runtime) {
         throw "Publish for $rid did not produce RemoteFlow.exe."
     }
 
+    # The desktop project deliberately takes the RDP reference only when the build host is Windows. A
+    # cross-publish from another OS would otherwise succeed and silently ship without embedded RDP.
+    $rdpAssemblyPath = Join-Path $publishDirectory 'RemoteFlow.Rdp.Windows.dll'
+    if (-not (Test-Path -LiteralPath $rdpAssemblyPath)) {
+        throw "Publish for $rid did not include RemoteFlow.Rdp.Windows.dll. Publish Windows releases on a Windows build host."
+    }
+
     $version = Get-PublishedVersion -ExePath $exePath
     $fileVersion = Get-FileVersion -ExePath $exePath
     $architecture = $rid -replace '^win-', ''

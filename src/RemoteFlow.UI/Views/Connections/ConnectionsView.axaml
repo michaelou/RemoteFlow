@@ -38,7 +38,13 @@
         Background="{DynamicResource Brush.Surface.2}"
         CornerRadius="{DynamicResource Radius.Control}"
         IsVisible="{Binding FeedbackMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-      <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding FeedbackMessage}" />
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <TextBlock Foreground="{DynamicResource Brush.Warning}" Text="{Binding FeedbackMessage}" TextWrapping="Wrap" VerticalAlignment="Center" />
+        <Button
+            Command="{Binding RunFeedbackActionCommand}"
+            Content="{Binding FeedbackActionLabel}"
+            IsVisible="{Binding FeedbackActionLabel, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
     </Border>
 
     <Grid Grid.Row="3" ColumnDefinitions="*,500" ColumnSpacing="16">

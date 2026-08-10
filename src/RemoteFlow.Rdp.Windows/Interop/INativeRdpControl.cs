@@ -1,0 +1,61 @@
+namespace RemoteFlow.Rdp.Windows.Interop;
+
+// All mstscax COM calls stay behind this seam. The session state machine can therefore be exercised with
+// a managed fake and without creating a window or activating COM.
+internal interface INativeRdpControl : IAsyncDisposable
+{
+    event EventHandler<NativeRdpEventArgs>? EventReceived;
+
+    /// <summary>The one COM identity that the Avalonia host will site in #84.</summary>
+    object NativeInstance { get; }
+
+    void Connect(CancellationToken cancellationToken);
+
+    void Disconnect(CancellationToken cancellationToken);
+
+    void ConfigureCredentialPolicy(bool allowCredentialSaving, bool allowPromptingForCredentials);
+
+    void SetClearTextPassword(ReadOnlySpan<char> password);
+
+    void ResetPassword();
+
+    NativeRdpResizeResult ConfigureInitialDisplaySettings(
+        int width,
+        int height,
+        uint desktopScaleFactor,
+        uint deviceScaleFactor);
+
+    NativeRdpResizeResult UpdateSessionDisplaySettings(
+        int width,
+        int height,
+        uint desktopScaleFactor,
+        uint deviceScaleFactor);
+
+    NativeRdpResizeResult SetSmartSizing(bool enabled);
+
+    string DescribeDisconnect(uint disconnectReason, uint extendedDisconnectReason);
+
+    uint ExtendedDisconnectReason { get; }
+}
+
+internal readonly record struct NativeRdpResizeResult(bool Succeeded, string? FailureReason)
+{
+    public static NativeRdpResizeResult Success { get; } = new(true, null);
+
+    public static NativeRdpResizeResult Failure(string reason)
+    {
+        return new(false, reason);
+    }
+}
+
+internal sealed class NativeRdpEventArgs(int dispatchId, IReadOnlyList<object?> arguments) : EventArgs
+{
+    public int DispatchId { get; } = dispatchId;
+
+    public IReadOnlyList<object?> Arguments { get; } = arguments;
+}
+
+internal interface INativeRdpControlFactory
+{
+    INativeRdpControl Create(RdpControlSettings settings, CancellationToken cancellationToken);
+}

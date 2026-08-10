@@ -1,10 +1,20 @@
 using System.Reflection;
+using System.Xml.Linq;
 using Xunit;
 
 namespace RemoteFlow.Architecture.Tests;
 
 public sealed class DependencyDirectionTests
 {
+    private static readonly string[] _sharedProjects =
+    [
+        "RemoteFlow.Domain",
+        "RemoteFlow.Application",
+        "RemoteFlow.UI",
+        "RemoteFlow.Infrastructure",
+        "RemoteFlow.Persistence",
+    ];
+
     private static readonly string[] _applicationReferences =
     [
         "RemoteFlow.Domain",
@@ -59,6 +69,43 @@ public sealed class DependencyDirectionTests
             "RemoteFlow.UI");
     }
 
+    [Fact]
+    public void SharedProjectsDoNotReferenceWindowsRdpOrTargetWindows()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+
+        foreach (var projectName in _sharedProjects)
+        {
+            var projectPath = Path.Combine(repositoryRoot, "src", projectName, $"{projectName}.csproj");
+            var project = XDocument.Load(projectPath);
+            var targetFrameworks = project.Descendants()
+                .Where(element => element.Name.LocalName is "TargetFramework" or "TargetFrameworks")
+                .Select(element => element.Value)
+                .ToArray();
+            var projectReferences = project.Descendants()
+                .Where(element => element.Name.LocalName == "ProjectReference")
+                .Select(element => element.Attribute("Include")?.Value)
+                .Where(value => value is not null)
+                .ToArray();
+
+            Assert.DoesNotContain(targetFrameworks, framework => framework.Contains("-windows", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(projectReferences, reference => reference!.Contains("RemoteFlow.Rdp.Windows", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Fact]
+    public void DesktopManifestDeclaresSupportedWindowsWithoutOverridingDpiAwareness()
+    {
+        var repositoryRoot = FindRepositoryRoot();
+        var manifestPath = Path.Combine(repositoryRoot, "src", "RemoteFlow.Desktop", "app.manifest");
+        var manifest = XDocument.Load(manifestPath);
+        var elementNames = manifest.Descendants().Select(element => element.Name.LocalName).ToArray();
+
+        Assert.Contains("supportedOS", elementNames);
+        Assert.DoesNotContain("dpiAware", elementNames);
+        Assert.DoesNotContain("dpiAwareness", elementNames);
+    }
+
     private static void AssertDoesNotReference(Assembly assembly, params string[] forbiddenReferences)
     {
         var actualReferences = GetReferences(assembly);
@@ -76,5 +123,16 @@ public sealed class DependencyDirectionTests
     {
         return assemblyName.StartsWith("System", StringComparison.Ordinal) ||
         assemblyName is "Microsoft.CSharp" or "Microsoft.VisualBasic" or "mscorlib" or "netstandard";
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "RemoteFlow.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        return directory?.FullName ?? throw new DirectoryNotFoundException("Could not find the repository root.");
     }
 }

@@ -36,19 +36,90 @@ and you get the warning again per file.
 
 **Symptom.** Launching an RDP connection on Windows fails immediately with that message.
 
-**Why.** RemoteFlow does not embed RDP; it hands the connection to Windows' own client, and could not find
-`mstsc.exe` on `PATH` or in the usual location.
+**Why.** This message comes from the external RDP path. RemoteFlow could not find `mstsc.exe` on `PATH` or
+in the usual location. The Windows-only embedded path uses `mstscax.dll` instead.
 
 **Fix.** Check that **Remote Desktop Connection** is present under Windows Tools. If it is missing,
 reinstall it from **Settings → System → Optional features**. RemoteFlow reports which client it found on
 the connection's RDP section, so you can confirm the fix without starting a session.
 
+## "The embedded RDP control could not be activated"
+
+**Symptom.** Opening an RDP connection inside RemoteFlow fails immediately with **"The embedded RDP
+control could not be activated"**, **"Embedded RDP is unavailable on this Windows installation"**, or
+**"The embedded RDP session could not start"**.
+
+**Why.** Embedded RDP is Windows-only and loads Microsoft's Remote Desktop ActiveX control from
+`mstscax.dll` inside the RemoteFlow process. The control may be missing, unregistered, blocked by local
+policy, or incompatible with this Windows installation.
+
+**Fix.** The connection is still usable. On its details page click **Open in external RDP client**, or set
+**Settings → RDP → System RDP client** and open it again. That launches Remote Desktop Connection in a
+separate process. Repair or reinstall **Remote Desktop Connection** under **Settings → System → Optional
+features**, reboot, and then try **Inside RemoteFlow** again. Include the RemoteFlow version, Windows build,
+architecture, and the exact error from the local log when filing a bug; never include a password.
+
+## "mstscax.dll does not match the version of the client shell"
+
+**Symptom.** Embedded activation fails with text containing **"mstscax.dll does not match the version of
+the client shell"** or **"The version of Remote Desktop Connection does not match the version of
+mstscax.dll"**.
+
+**Why.** Windows has mismatched Remote Desktop components, commonly after an incomplete Optional Features
+or Windows update. RemoteFlow cannot safely combine those binaries and does not ship replacements for
+either one.
+
+**Fix.** Use **Open in external RDP client** immediately. Finish pending Windows updates, then remove and
+reinstall Remote Desktop Connection from Optional Features and reboot. If the external client reports the
+same mismatch, repair Windows components before retrying embedded mode.
+
+## RDP stays connected but does not change remote resolution when resized
+
+**Symptom.** The desktop continues to fill the embedded tab, but the remote resolution does not change
+with the RemoteFlow window. Text can look slightly soft. The log says dynamic RDP resize failed and that
+the **SmartSizing fallback was enabled**.
+
+**Why.** The host or session does not support the display-control channel used for dynamic resolution.
+RemoteFlow keeps the session connected and scales its existing bitmap with SmartSizing instead of
+reconnecting or adding scrollbars.
+
+**Fix.** This is usable fallback behavior. Update the remote host and its RDP services if true dynamic
+resolution is required, or click **Open in external RDP client** and use that client's display options.
+Do not repeatedly reconnect: it does not add display-control support.
+
+## Embedded RDP looks softer at 125% or 150% display scaling
+
+**Symptom.** Local UI is sharp but the remote desktop is a little softer, especially at 125%, while the
+pointer still lands correctly.
+
+**Why.** RDP accepts only 100%, 140%, and 180% for `DesktopScaleFactor` and `DeviceScaleFactor` in this
+path. RemoteFlow quantises down to a supported value and lets the hosted surface scale the result: 125%
+uses 100%, 150% uses 140%, and 200% uses 180%. It can look like a DPI bug, but avoids sending an invalid
+factor or reconnecting when a window crosses monitors.
+
+**Fix.** No setting is required. If the softness is unacceptable, use a display scale matching one of
+those factors or **Open in external RDP client**. A displaced pointer, clipped desktop, or reconnect on a
+monitor move is not this limitation and should be reported.
+
+## RemoteFlow closes when the embedded RDP component crashes
+
+**Symptom.** RemoteFlow itself exits at the same moment an embedded desktop fails, and Windows Error
+Reporting names `mstscax.dll`.
+
+**Why.** The Microsoft ActiveX control is in-process. Unlike `mstsc.exe`, it has no process boundary that
+can keep RemoteFlow alive after a native crash.
+
+**Fix.** Reopen RemoteFlow and use **Open in external RDP client**, which runs the client separately and is
+the isolation fallback. Include the Windows Error Reporting fault details and RemoteFlow version in a bug
+report, but do not attach credentials or a memory dump containing session secrets publicly.
+
 ## RDP says RemoteFlow does not launch it on this platform
 
 **Symptom.** On macOS or Linux, an RDP connection reports that RemoteFlow does not launch RDP here.
 
-**Why.** v1 launches RDP on Windows only. The message is deliberate: the alternative is failing somewhere
-further down with something less useful.
+**Why.** Embedded RDP is Windows-only. macOS and Linux keep the external-client workflow; when RemoteFlow
+cannot launch a supported native client itself, it stops with guidance instead of attempting Windows COM
+or failing later with something less useful.
 
 **Fix.** Use a native client for now and connect to the same host from there.
 

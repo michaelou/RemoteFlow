@@ -51,3 +51,41 @@ This file is generated from `KeymapService.Bindings`. Changes must be made in th
 | All | `F12` | F12 |
 
 All other control-key combinations are sent to the PTY. `Alt` plus text is encoded as an ESC prefix. Ctrl+C sends byte `03` unless the optional, default-off CopyWhenSelected policy is enabled and a selection exists.
+
+## Embedded RDP on Windows
+
+The embedded Microsoft RDP control owns keyboard input while its surface has focus. RemoteFlow uses
+`KeyboardHookMode = OnRemoteComputer`: ordinary typing, function keys, and Ctrl+C/Ctrl+V belong to the
+remote computer. Ctrl+Alt+End is the supported remote equivalent of Ctrl+Alt+Del.
+
+RemoteFlow reserves exactly one unmodified key inside the surface:
+
+| Binding | Result |
+| --- | --- |
+| `F6` | Move focus from the RDP surface to the selected session tab. |
+| `Shift+F6` | Send F6 to the remote computer. |
+
+F6 is handled by a `WH_GETMESSAGE` hook installed only on RemoteFlow's UI thread. It examines only
+messages addressed to the hosted RDP window, removes the F6 message before the control sees it, and does
+not inject into another process. This is necessary because the hosting spike measured zero
+`IOleControlSite::TranslateAccelerator` calls: keys addressed to the child HWND bypass Avalonia entirely.
+
+The following limitations are deliberate and apply while the RDP surface has focus:
+
+| Shortcut | Limitation and reason |
+| --- | --- |
+| `Ctrl+Tab`, `Ctrl+Shift+Tab`, `Alt+1` … `Alt+9` | RemoteFlow cannot switch tabs because Avalonia never receives these keys. Press F6 first, then use the normal tab shortcut. The key itself remains available to the remote session. |
+| `Ctrl+Shift+T`, `Ctrl+Shift+W`, `Ctrl+Shift+F`, `F11`, and other RemoteFlow bindings | They do not run while RDP has focus; their keystrokes go to the remote session. This prevents an app shortcut from silently stealing remote input. |
+| `Alt+Tab` | Windows keeps this local in a windowed embedded session, so it is not a reliable remote task switcher. |
+| Windows key and Windows-key combinations | The local Windows shell can reserve these in a windowed embedded session even with remote keyboard-hook mode selected. |
+| `Ctrl+Alt+Del` | Windows reserves the secure-attention sequence locally. Use Ctrl+Alt+End for the remote computer. |
+| `F6` | Reserved by RemoteFlow as the documented keyboard-trap escape. Use Shift+F6 when the remote application needs F6. |
+
+Clicking the RDP surface returns keyboard focus to it. Clicking its tab, or pressing F6, returns focus to
+the visibly focused tab. No other RemoteFlow shortcut is intercepted inside the embedded session.
+
+Clipboard text redirection is configured per connection before the session starts. Saving a different
+**Share my clipboard** value does not reconfigure an open session; reconnect to apply it. With sharing
+enabled in two open RDP sessions, text can move between them through the shared local Windows clipboard.
+If either connection disables sharing, that session neither reads nor writes local clipboard text.
+RemoteFlow does not add file, image, or rich-text transfer channels.

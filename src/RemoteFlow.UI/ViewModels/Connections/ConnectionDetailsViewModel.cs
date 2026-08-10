@@ -16,7 +16,8 @@ public sealed partial class ConnectionDetailsViewModel(
     Func<Task> edit,
     Func<Task> duplicate,
     Func<Task> delete,
-    Func<Task<SystemTerminalLaunchResult>>? openSystemTerminal = null) : ObservableObject
+    Func<Task<SystemTerminalLaunchResult>>? openSystemTerminal = null,
+    bool showExplicitExternalRdpAction = false) : ObservableObject
 {
     public Connection Connection { get; } = connection;
 
@@ -48,6 +49,13 @@ public sealed partial class ConnectionDetailsViewModel(
     public IAsyncRelayCommand LaunchRdpCommand { get; } = new AsyncRelayCommand(
         () => open(ConnectionOpenMode.Rdp),
         () => connection.Protocol == ProtocolType.Rdp);
+
+    public bool ShowExplicitExternalRdpAction { get; } =
+        showExplicitExternalRdpAction && connection.Protocol == ProtocolType.Rdp;
+
+    public IAsyncRelayCommand OpenExternalRdpCommand { get; } = new AsyncRelayCommand(
+        () => open(ConnectionOpenMode.RdpExternal),
+        () => connection.Protocol == ProtocolType.Rdp && showExplicitExternalRdpAction);
 
     public IAsyncRelayCommand EditCommand { get; } = new AsyncRelayCommand(edit);
 

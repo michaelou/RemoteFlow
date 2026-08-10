@@ -1,0 +1,622 @@
+using System.Globalization;
+using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Rdp.Windows.Interop;
+using RemoteFlow.UI.Services;
+
+namespace RemoteFlow.Rdp.Windows;
+
+internal sealed class WindowsEmbeddedRdpSession : IEmbeddedRdpSession
+{
+    internal static readonly TimeSpan ResizeDebounce = TimeSpan.FromMilliseconds(150);
+    internal static readonly TimeSpan DisconnectTimeout = TimeSpan.FromMilliseconds(750);
+
+    private readonly Lock _disconnectLock = new();
+    private readonly Lock _resizeLock = new();
+    private readonly Lock _stateLock = new();
+    private CancellationTokenSource? _resizeCancellation;
+    private TaskCompletionSource? _disconnectCompletion;
+    private RdpViewportSize? _lastAppliedSize;
+    private bool _smartSizingFallback;
+    private int _disposeStarted;
+    private int _disposed;
+
+    public WindowsEmbeddedRdpSession(
+        INativeRdpControl control,
+        IUiDispatcher dispatcher,
+        IEmbeddedRdpCredentialSource? credentialSource = null,
+        ILogger<WindowsEmbeddedRdpSession>? logger = null,
+        TimeProvider? timeProvider = null)
+    {
+        Control = control ?? throw new ArgumentNullException(nameof(control));
+        Dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        CredentialSource = credentialSource ?? NoEmbeddedRdpCredentialSource.Instance;
+        Logger = logger ?? NullLogger<WindowsEmbeddedRdpSession>.Instance;
+        TimeProvider = timeProvider ?? TimeProvider.System;
+        Control.EventReceived += OnNativeEventReceived;
+    }
+
+    public event EventHandler<EmbeddedRdpSessionStateChangedEventArgs>? StateChanged;
+
+    public EmbeddedRdpSessionState State
+    {
+        get
+        {
+            lock (_stateLock)
+            {
+                return CurrentState;
+            }
+        }
+    }
+
+    public string? StatusMessage
+    {
+        get
+        {
+            lock (_stateLock)
+            {
+                return CurrentStatusMessage;
+            }
+        }
+    }
+
+    internal INativeRdpControl NativeControl => Control;
+
+    private INativeRdpControl Control { get; }
+
+    private IUiDispatcher Dispatcher { get; }
+
+    private IEmbeddedRdpCredentialSource CredentialSource { get; }
+
+    private ILogger<WindowsEmbeddedRdpSession> Logger { get; }
+
+    private TimeProvider TimeProvider { get; }
+
+    private EmbeddedRdpSessionState CurrentState { get; set; } = EmbeddedRdpSessionState.Created;
+
+    private string? CurrentStatusMessage { get; set; }
+
+    public async Task ConnectAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        try
+        {
+            await TransitionAsync(EmbeddedRdpSessionState.Connecting, null, cancellationToken).ConfigureAwait(false);
+            if (!await ApplyCredentialAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+            await Dispatcher.InvokeAsync(
+                () => Control.Connect(cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            await FailWithoutThrowingAsync("The embedded RDP connection was cancelled.").ConfigureAwait(false);
+        }
+        catch (COMException exception)
+        {
+            LogFailure("connect", exception);
+            await FailWithoutThrowingAsync("The embedded RDP control could not connect.").ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            LogFailure("connect", exception);
+            await FailWithoutThrowingAsync("The embedded RDP session could not connect.").ConfigureAwait(false);
+        }
+    }
+
+    public async Task DisconnectAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        await DisconnectCoreAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task DisconnectCoreAsync(CancellationToken cancellationToken)
+    {
+        if (State is EmbeddedRdpSessionState.Created or
+            EmbeddedRdpSessionState.Disconnected or
+            EmbeddedRdpSessionState.Failed)
+        {
+            return;
+        }
+
+        TaskCompletionSource completion;
+        var initiateDisconnect = false;
+        lock (_disconnectLock)
+        {
+            completion = _disconnectCompletion ?? new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            if (_disconnectCompletion is null)
+            {
+                _disconnectCompletion = completion;
+                initiateDisconnect = true;
+            }
+        }
+        try
+        {
+            if (initiateDisconnect)
+            {
+                await Dispatcher.InvokeAsync(
+                    () => Control.Disconnect(cancellationToken),
+                    cancellationToken).ConfigureAwait(false);
+            }
+            try
+            {
+                await completion.Task
+                    .WaitAsync(DisconnectTimeout, TimeProvider, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                if (initiateDisconnect)
+                {
+                    Logger.LogWarning(
+                        "The embedded RDP control did not report OnDisconnected within {DisconnectTimeoutMs} ms; teardown will continue.",
+                        DisconnectTimeout.TotalMilliseconds);
+                    await TransitionAsync(
+                        EmbeddedRdpSessionState.Disconnected,
+                        "The RDP control did not confirm disconnection; local cleanup continued.",
+                        CancellationToken.None).ConfigureAwait(false);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            await FailWithoutThrowingAsync("Disconnecting the embedded RDP session was cancelled.").ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            LogFailure("disconnect", exception);
+            await FailWithoutThrowingAsync("The embedded RDP session could not disconnect.").ConfigureAwait(false);
+        }
+        finally
+        {
+            if (initiateDisconnect)
+            {
+                lock (_disconnectLock)
+                {
+                    if (ReferenceEquals(_disconnectCompletion, completion))
+                    {
+                        _disconnectCompletion = null;
+                    }
+                }
+            }
+        }
+    }
+
+    public async Task ReconnectAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        try
+        {
+            await TransitionAsync(EmbeddedRdpSessionState.Reconnecting, null, cancellationToken).ConfigureAwait(false);
+            if (!await ApplyCredentialAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+            await Dispatcher.InvokeAsync(
+                () => Control.Connect(cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            await FailWithoutThrowingAsync("Reconnecting the embedded RDP session was cancelled.").ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            LogFailure("reconnect", exception);
+            await FailWithoutThrowingAsync("The embedded RDP session could not reconnect.").ConfigureAwait(false);
+        }
+    }
+
+    public void Resize(int width, int height, double scaling)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        if (State != EmbeddedRdpSessionState.Connected)
+        {
+            return;
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(scaling);
+
+        var size = new RdpViewportSize(width, height, RdpControlSettingsMapper.MapScaleFactor(scaling));
+        CancellationTokenSource cancellation;
+        lock (_resizeLock)
+        {
+            if (_smartSizingFallback || size == _lastAppliedSize)
+            {
+                return;
+            }
+
+            _resizeCancellation?.Cancel();
+            _resizeCancellation?.Dispose();
+            cancellation = new CancellationTokenSource();
+            _resizeCancellation = cancellation;
+        }
+
+        _ = ApplyResizeAfterDebounceAsync(size, cancellation);
+    }
+
+    internal void ConfigureInitialViewport(int width, int height, double scaling)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        if (State != EmbeddedRdpSessionState.Created)
+        {
+            Resize(width, height, scaling);
+            return;
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(scaling);
+        var scaleFactor = RdpControlSettingsMapper.MapScaleFactor(scaling);
+        var result = Control.ConfigureInitialDisplaySettings(
+            width,
+            height,
+            scaleFactor,
+            scaleFactor);
+        if (result.Succeeded)
+        {
+            return;
+        }
+
+        var fallback = Control.SetSmartSizing(true);
+        lock (_resizeLock)
+        {
+            _smartSizingFallback = true;
+        }
+        Logger.LogWarning(
+            "Initial RDP display scaling could not be configured ({FailureReason}); SmartSizing fallback {FallbackStatus}.",
+            result.FailureReason ?? "unknown native failure",
+            fallback.Succeeded ? "was enabled" : $"could not be enabled ({fallback.FailureReason})");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposeStarted, 1) != 0)
+        {
+            return;
+        }
+
+        await DisconnectCoreAsync(CancellationToken.None).ConfigureAwait(false);
+        _ = Interlocked.Exchange(ref _disposed, 1);
+        Control.EventReceived -= OnNativeEventReceived;
+        CancelPendingResize();
+        var disposalRan = false;
+        try
+        {
+            await Dispatcher.InvokeAsync(() =>
+                {
+                    disposalRan = true;
+                    Control.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                })
+                .ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            if (!disposalRan)
+            {
+                try
+                {
+                    await Control.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                    // Teardown is best effort. A native cleanup failure must not escape application shutdown.
+                }
+            }
+        }
+
+        GC.SuppressFinalize(this);
+    }
+
+    private void OnNativeEventReceived(object? sender, NativeRdpEventArgs e)
+    {
+        _ = DispatchNativeEventAsync(e);
+    }
+
+    private async Task DispatchNativeEventAsync(NativeRdpEventArgs e)
+    {
+        try
+        {
+            await Dispatcher.InvokeAsync(() => HandleNativeEvent(e)).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            LogFailure("event callback", exception);
+            await FailWithoutThrowingAsync("The embedded RDP control reported an error.")
+                .ConfigureAwait(false);
+        }
+    }
+
+    private void HandleNativeEvent(NativeRdpEventArgs e)
+    {
+        switch (e.DispatchId)
+        {
+            case 1: // OnConnecting
+            case 2: // OnConnected: transport is up, but the desktop is not usable until OnLoginComplete.
+                break;
+            case 3: // OnLoginComplete
+            case 33: // OnAutoReconnected
+                TransitionCore(EmbeddedRdpSessionState.Connected, null);
+                break;
+            case 4: // OnDisconnected
+                HandleDisconnected(e.Arguments);
+                break;
+            case 10: // OnFatalError
+                TransitionCore(
+                    EmbeddedRdpSessionState.Failed,
+                    $"The embedded RDP control reported a fatal error{FormatCode(e.Arguments)}.");
+                break;
+            case 18: // OnAuthenticationWarningDisplayed
+                TransitionCore(
+                    State,
+                    "Windows is displaying an RDP certificate or identity warning. Review it before continuing.");
+                break;
+            case 19: // OnAuthenticationWarningDismissed
+                TransitionCore(State, null);
+                break;
+            case 22: // OnLogonError
+                TransitionCore(
+                    EmbeddedRdpSessionState.Failed,
+                    "The RDP credentials were rejected. Check the username, password, and domain.");
+                break;
+            case 34: // OnAutoReconnecting2
+                TransitionCore(EmbeddedRdpSessionState.Reconnecting, "The RDP connection was interrupted. Reconnecting…");
+                break;
+            default:
+                // MSTSCLib has emitted undocumented dispids in production. Unknown events are benign.
+                break;
+        }
+    }
+
+    private void HandleDisconnected(IReadOnlyList<object?> arguments)
+    {
+        var disconnectReason = ReadUInt32(arguments, 0);
+        var extendedReason = Control.ExtendedDisconnectReason;
+        var message = RdpDisconnectReasonMessages.ToUserMessage(
+            disconnectReason,
+            extendedReason,
+            Control.DescribeDisconnect(disconnectReason, extendedReason));
+        TransitionCore(
+            State is EmbeddedRdpSessionState.Connecting
+                ? EmbeddedRdpSessionState.Failed
+                : EmbeddedRdpSessionState.Disconnected,
+            message);
+        lock (_disconnectLock)
+        {
+            _ = _disconnectCompletion?.TrySetResult();
+        }
+    }
+
+    private async ValueTask TransitionAsync(
+        EmbeddedRdpSessionState nextState,
+        string? message,
+        CancellationToken cancellationToken)
+    {
+        await Dispatcher.InvokeAsync(() => TransitionCore(nextState, message), cancellationToken).ConfigureAwait(false);
+    }
+
+    private void TransitionCore(EmbeddedRdpSessionState nextState, string? message)
+    {
+        EmbeddedRdpSessionState previous;
+        lock (_stateLock)
+        {
+            previous = CurrentState;
+            if (previous == nextState)
+            {
+                if (string.Equals(CurrentStatusMessage, message, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                CurrentStatusMessage = message;
+            }
+            else if (!IsLegal(previous, nextState))
+            {
+                return;
+            }
+            else
+            {
+                CurrentState = nextState;
+                CurrentStatusMessage = message;
+            }
+        }
+
+        if (nextState != EmbeddedRdpSessionState.Connected)
+        {
+            CancelPendingResize();
+        }
+
+        try
+        {
+            if (Logger.IsEnabled(LogLevel.Trace))
+            {
+                Logger.LogTrace(
+                    "Embedded RDP state changed from {PreviousState} to {CurrentState}: {StatusMessage}",
+                    previous,
+                    nextState,
+                    message);
+            }
+            StateChanged?.Invoke(this, new(previous, nextState, message));
+        }
+        catch (Exception)
+        {
+            // A UI subscriber is part of the COM callback path. It must never unwind into mstscax.
+        }
+    }
+
+    private async Task ApplyResizeAfterDebounceAsync(
+        RdpViewportSize size,
+        CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(ResizeDebounce, TimeProvider, cancellation.Token).ConfigureAwait(false);
+            await Dispatcher.InvokeAsync(
+                () => ApplyResizeCore(size, cancellation),
+                cancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer viewport superseded this request, the session left Connected, or it was disposed.
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(
+                "Dynamic RDP resize could not be dispatched ({FailureType}); the session remains connected.",
+                exception.GetType().Name);
+        }
+        finally
+        {
+            lock (_resizeLock)
+            {
+                if (ReferenceEquals(_resizeCancellation, cancellation))
+                {
+                    _resizeCancellation = null;
+                }
+            }
+
+            cancellation.Dispose();
+        }
+    }
+
+    private void ApplyResizeCore(RdpViewportSize size, CancellationTokenSource cancellation)
+    {
+        if (cancellation.IsCancellationRequested ||
+            Volatile.Read(ref _disposed) != 0 ||
+            State != EmbeddedRdpSessionState.Connected)
+        {
+            return;
+        }
+
+        var result = Control.UpdateSessionDisplaySettings(
+            size.Width,
+            size.Height,
+            size.ScaleFactor,
+            size.ScaleFactor);
+        if (result.Succeeded)
+        {
+            lock (_resizeLock)
+            {
+                _lastAppliedSize = size;
+            }
+            return;
+        }
+
+        var fallback = Control.SetSmartSizing(true);
+        lock (_resizeLock)
+        {
+            _smartSizingFallback = true;
+        }
+        Logger.LogWarning(
+            "Dynamic RDP resize failed ({FailureReason}); SmartSizing fallback {FallbackStatus}.",
+            result.FailureReason ?? "unknown native failure",
+            fallback.Succeeded ? "was enabled" : $"could not be enabled ({fallback.FailureReason})");
+    }
+
+    private void CancelPendingResize()
+    {
+        lock (_resizeLock)
+        {
+            _resizeCancellation?.Cancel();
+            _resizeCancellation = null;
+        }
+    }
+
+    private readonly record struct RdpViewportSize(int Width, int Height, uint ScaleFactor);
+
+    private async Task FailWithoutThrowingAsync(string message)
+    {
+        try
+        {
+            await Dispatcher.InvokeAsync(() => TransitionCore(EmbeddedRdpSessionState.Failed, message))
+                .ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            lock (_stateLock)
+            {
+                CurrentState = EmbeddedRdpSessionState.Failed;
+                CurrentStatusMessage = message;
+            }
+        }
+    }
+
+    private async Task<bool> ApplyCredentialAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var credential = await CredentialSource.GetAsync(cancellationToken).ConfigureAwait(false);
+            await Dispatcher.InvokeAsync(() =>
+                {
+                    Control.ConfigureCredentialPolicy(
+                        allowCredentialSaving: false,
+                        allowPromptingForCredentials: true);
+                    Control.ResetPassword();
+                    if (credential is not null && !credential.Secret.IsEmpty)
+                    {
+                        Control.SetClearTextPassword(credential.Secret.Span);
+                    }
+                }, cancellationToken)
+                .ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            LogFailure("credential handover", exception);
+            await FailWithoutThrowingAsync("The stored RDP credential could not be read or applied.")
+                .ConfigureAwait(false);
+            return false;
+        }
+    }
+
+    private void LogFailure(string operation, Exception exception)
+    {
+        if (Logger.IsEnabled(LogLevel.Trace))
+        {
+            Logger.LogTrace(
+                "Embedded RDP {Operation} failed with {ExceptionType} (0x{ErrorCode:X8}).",
+                operation,
+                exception.GetType().Name,
+                exception.HResult);
+        }
+    }
+
+    private static bool IsLegal(EmbeddedRdpSessionState current, EmbeddedRdpSessionState next)
+    {
+        return current switch
+        {
+            EmbeddedRdpSessionState.Created => next is EmbeddedRdpSessionState.Connecting or EmbeddedRdpSessionState.Failed,
+            EmbeddedRdpSessionState.Connecting => next is EmbeddedRdpSessionState.Connected or EmbeddedRdpSessionState.Disconnected or EmbeddedRdpSessionState.Failed,
+            EmbeddedRdpSessionState.Connected => next is EmbeddedRdpSessionState.Reconnecting or EmbeddedRdpSessionState.Disconnected or EmbeddedRdpSessionState.Failed,
+            EmbeddedRdpSessionState.Reconnecting => next is EmbeddedRdpSessionState.Connected or EmbeddedRdpSessionState.Disconnected or EmbeddedRdpSessionState.Failed,
+            EmbeddedRdpSessionState.Disconnected => next is EmbeddedRdpSessionState.Reconnecting or EmbeddedRdpSessionState.Failed,
+            EmbeddedRdpSessionState.Failed => next is EmbeddedRdpSessionState.Connecting or EmbeddedRdpSessionState.Reconnecting,
+            _ => false,
+        };
+    }
+
+    private static uint ReadUInt32(IReadOnlyList<object?> arguments, int index)
+    {
+        return index < arguments.Count && arguments[index] is not null
+            ? Convert.ToUInt32(arguments[index], CultureInfo.InvariantCulture)
+            : 0u;
+    }
+
+    private static string FormatCode(IReadOnlyList<object?> arguments)
+    {
+        return arguments.Count == 0 || arguments[0] is null
+            ? string.Empty
+            : $" (code {Convert.ToString(arguments[0], CultureInfo.InvariantCulture)})";
+    }
+}

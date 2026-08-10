@@ -219,6 +219,19 @@ public sealed class RdpOptionsEditorTests
         window.Close();
     }
 
+    [AvaloniaFact]
+    public void ClipboardOptionSaysThatChangesApplyOnReconnect()
+    {
+        var view = new ConnectionEditorView();
+        var section = view.GetLogicalDescendants().OfType<RdpOptionsSection>().Single();
+
+        var disclosure = section.GetLogicalDescendants()
+            .OfType<TextBlock>()
+            .Single(block => block.Text?.Contains("does not alter sessions", StringComparison.Ordinal) == true);
+
+        Assert.Contains("reconnect", disclosure.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static int[] TabIndexes(Control root)
     {
         return [.. root.GetLogicalDescendants()

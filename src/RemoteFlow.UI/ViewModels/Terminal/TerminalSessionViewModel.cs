@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 
 namespace RemoteFlow.UI.ViewModels.Terminal;
 
-public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncDisposable, IDisposable
+public sealed partial class TerminalSessionViewModel : ObservableObject, IWorkspaceSessionViewModel, IDisposable
 {
     internal static readonly TimeSpan ResizeDebounce = TimeSpan.FromMilliseconds(100);
     internal static readonly TimeSpan OutputFrameBudget = TimeSpan.FromMilliseconds(16);
@@ -71,7 +71,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         Title = string.IsNullOrWhiteSpace(initialTitle) ? "Terminal" : initialTitle.Trim();
         UserTitleOverride = managedSessionId is null ? null : Title;
         Environment = environment;
-        AccentColorHex = ResolveAccentColor(environment, colorOverrideHex);
+        AccentColorHex = WorkspaceSessionAppearance.ResolveAccentColor(environment, colorOverrideHex);
         ShellProfile = shellProfile;
         ManagedSessionId = managedSessionId;
         _retry = retry;
@@ -147,6 +147,22 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         EnvironmentKind.Unspecified => "LOCAL",
         _ => throw new ArgumentOutOfRangeException(nameof(Environment)),
     };
+
+    public string ProtocolCue => ManagedSessionId is null ? "TERM" : "SSH";
+
+    public string StatusText => State switch
+    {
+        SessionState.Created => "Created",
+        SessionState.Connecting => "Connecting",
+        SessionState.Connected => "Connected",
+        SessionState.Reconnecting => "Reconnecting",
+        SessionState.Disconnected => "Disconnected",
+        SessionState.Failed => "Failed",
+        SessionState.Closed => "Closed",
+        _ => throw new ArgumentOutOfRangeException(nameof(State)),
+    };
+
+    public bool CanOpenInSystemTerminal => ShellProfile is not null;
 
     public bool IsProduction => Environment == EnvironmentKind.Production;
 
@@ -280,7 +296,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         return _retry is not null && State is SessionState.Failed or SessionState.Disconnected;
     }
 
-    internal void SetActive(bool isActive)
+    public void SetActive(bool isActive)
     {
         IsActive = isActive;
     }
@@ -638,6 +654,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
     {
         OnPropertyChanged(nameof(IsLive));
         OnPropertyChanged(nameof(IsEnded));
+        OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(RecoveryActionLabel));
         RetryCommand.NotifyCanExecuteChanged();
     }
@@ -774,21 +791,6 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IAsyncD
         }
 
         return result;
-    }
-
-    private static string ResolveAccentColor(EnvironmentKind environment, string? colorOverrideHex)
-    {
-        return !string.IsNullOrWhiteSpace(colorOverrideHex) &&
-            System.Text.RegularExpressions.Regex.IsMatch(colorOverrideHex, "^#[0-9A-Fa-f]{6}$")
-            ? colorOverrideHex.ToUpperInvariant()
-            : environment switch
-            {
-                EnvironmentKind.Development => "#5DE28C",
-                EnvironmentKind.Staging => "#FFCA58",
-                EnvironmentKind.Production => "#FF7B72",
-                EnvironmentKind.Unspecified => "#7E8998",
-                _ => throw new ArgumentOutOfRangeException(nameof(environment)),
-            };
     }
 
     private sealed record SearchNavigationMatch(int Line, string Text);

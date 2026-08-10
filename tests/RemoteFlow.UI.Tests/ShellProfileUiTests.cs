@@ -28,7 +28,7 @@ public sealed class ShellProfileUiTests
 
         var menu = Assert.Single(workspace.ShellProfiles);
         Assert.Equal("Developer shell", menu.DisplayName);
-        Assert.Same(profile, Assert.Single(workspace.Sessions).ShellProfile);
+        Assert.Same(profile, Assert.IsType<TerminalSessionViewModel>(Assert.Single(workspace.Sessions)).ShellProfile);
         Assert.Equal("C:\\projects\\remote-flow", pty.Options!.WorkingDirectory);
         Assert.Equal("developer", pty.Options.EnvironmentVariables["PROFILE_MARKER"]);
     }
@@ -42,7 +42,7 @@ public sealed class ShellProfileUiTests
 
         await workspace.InitializeAsync(TestContext.Current.CancellationToken);
 
-        var failed = Assert.Single(workspace.Sessions);
+        var failed = Assert.IsType<TerminalSessionViewModel>(Assert.Single(workspace.Sessions));
         Assert.Equal(SessionState.Failed, failed.State);
         Assert.Contains("Broken shell", failed.EndedMessage, StringComparison.Ordinal);
         Assert.Contains("not found", failed.EndedMessage, StringComparison.OrdinalIgnoreCase);
@@ -61,7 +61,9 @@ public sealed class ShellProfileUiTests
             launcher);
         await workspace.InitializeAsync(token);
 
-        await workspace.OpenInSystemTerminalAsync(Assert.Single(workspace.Sessions), token);
+        await workspace.OpenInSystemTerminalAsync(
+            Assert.IsType<TerminalSessionViewModel>(Assert.Single(workspace.Sessions)),
+            token);
 
         Assert.Same(profile, Assert.Single(launcher.LocalProfiles));
         Assert.Null(workspace.ErrorMessage);

@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IHostKeyVerifier, HostKeyVerifier>();
         services.TryAddSingleton<IKnownHostsImportService, KnownHostsImportService>();
         services.TryAddSingleton<ISessionManager, SessionManager>();
+        services.TryAddSingleton<IEmbeddedRdpSessionProvider>(NoEmbeddedRdpSessionProvider.Instance);
         services.TryAddSingleton<IRemoteEditServiceFactory, RemoteEditServiceFactory>();
         return services;
     }

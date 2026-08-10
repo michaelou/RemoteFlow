@@ -54,8 +54,8 @@ public sealed record RdpLaunchResult(RdpLaunchStatus Status, string? Message = n
     }
 }
 
-/// <summary>Opens a connection in the platform's own RDP client. RemoteFlow does not embed RDP: the whole
-/// of the feature is generating the right client invocation and handing the session over.</summary>
+/// <summary>Opens a connection in the platform's own RDP client. This is the external path: it generates
+/// the right client invocation and hands the session over, independently of embedded RDP support.</summary>
 public interface IRdpLauncher
 {
     /// <summary>What to install, in the words of this platform, when <see cref="DetectClientsAsync"/>

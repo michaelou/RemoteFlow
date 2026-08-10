@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Queries;
 using RemoteFlow.Application.Services;
@@ -44,6 +45,8 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     private bool _suppressExpansionEvent;
     private bool _suppressFilterChanges;
     private bool _tagsLoaded;
+    private Guid? _feedbackConnectionId;
+    private ConnectionOpenMode? _feedbackRecoveryMode;
 
     public ConnectionsPageViewModel(
         IConnectionQueryService queries,
@@ -204,6 +207,14 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
     [ObservableProperty]
     public partial string? FeedbackMessage { get; private set; }
+
+    [ObservableProperty]
+    public partial string? FeedbackActionLabel { get; private set; }
+
+    partial void OnFeedbackMessageChanged(string? value)
+    {
+        ClearFeedbackAction();
+    }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -787,8 +798,10 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
                 }
                 else
                 {
-                    FeedbackMessage = opened.Message
-                        ?? "The connection did not open, so it was not added to Recent.";
+                    ShowOpenFailure(
+                        node.Id.Value,
+                        opened,
+                        "The connection did not open, so it was not added to Recent.");
                 }
 
                 break;
@@ -975,8 +988,52 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         }
         else if (opened.Message is { } message)
         {
-            FeedbackMessage = message;
+            ShowOpenFailure(connectionId, opened, message);
         }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRunFeedbackAction))]
+    private async Task RunFeedbackActionAsync()
+    {
+        if (_feedbackConnectionId is not { } connectionId ||
+            _feedbackRecoveryMode is not { } recoveryMode)
+        {
+            return;
+        }
+
+        var opened = await _sessionOpener.OpenAsync(connectionId, recoveryMode).ConfigureAwait(true);
+        if (opened.Opened)
+        {
+            FeedbackMessage = null;
+            ClearFeedbackAction();
+            await RefreshAsync().ConfigureAwait(true);
+        }
+        else
+        {
+            ShowOpenFailure(connectionId, opened, "The connection did not open.");
+        }
+    }
+
+    private bool CanRunFeedbackAction()
+    {
+        return _feedbackConnectionId is not null && _feedbackRecoveryMode is not null;
+    }
+
+    private void ShowOpenFailure(Guid connectionId, ConnectionOpenResult result, string fallbackMessage)
+    {
+        FeedbackMessage = result.Message ?? fallbackMessage;
+        _feedbackConnectionId = result.RecoveryMode is null ? null : connectionId;
+        _feedbackRecoveryMode = result.RecoveryMode;
+        FeedbackActionLabel = result.RecoveryActionLabel;
+        RunFeedbackActionCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ClearFeedbackAction()
+    {
+        _feedbackConnectionId = null;
+        _feedbackRecoveryMode = null;
+        FeedbackActionLabel = null;
+        RunFeedbackActionCommand.NotifyCanExecuteChanged();
     }
 
     private async Task DuplicateFromDetailsAsync(Guid connectionId)

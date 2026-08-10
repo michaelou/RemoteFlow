@@ -70,6 +70,12 @@ public enum SshTransport
     SshNet = 2,
 }
 
+public enum WindowsRdpOpenMode
+{
+    Embedded = 1,
+    External = 2,
+}
+
 public static class SettingKeys
 {
     public static SettingKey<AppTheme> Theme { get; } = new("Theme", AppTheme.Dark);
@@ -100,6 +106,8 @@ public static class SettingKeys
         new("DefaultHostKeyPolicy", HostKeyPolicy.TrustOnFirstUse);
     public static SettingKey<SshTransport> SshTransport { get; } =
         new("SshTransport", global::RemoteFlow.Application.Abstractions.SshTransport.Tmds);
+    public static SettingKey<WindowsRdpOpenMode> WindowsRdpOpenMode { get; } =
+        new("WindowsRdpOpenMode", global::RemoteFlow.Application.Abstractions.WindowsRdpOpenMode.Embedded);
     public static SettingKey<int> RecentLimit { get; } = new("RecentLimit", 20);
     public static SettingKey<string?> WindowLayout { get; } = new("WindowLayout", null);
     public static SettingKey<int> SchemaVersion { get; } = new("SchemaVersion", 1);
@@ -132,6 +140,7 @@ public static class SettingKeys
         RemoteEditConflictDefault,
         DefaultHostKeyPolicy,
         SshTransport,
+        .. OperatingSystem.IsWindows() ? new ISettingKey[] { WindowsRdpOpenMode } : [],
         RecentLimit,
         WindowLayout,
         SchemaVersion,

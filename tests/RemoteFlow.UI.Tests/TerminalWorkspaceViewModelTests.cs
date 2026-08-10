@@ -1,6 +1,10 @@
 using System.IO.Pipelines;
 using System.Text;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.TestSupport;
@@ -12,6 +16,92 @@ namespace RemoteFlow.UI.Tests;
 
 public sealed class TerminalWorkspaceViewModelTests
 {
+    [AvaloniaFact]
+    public async Task MixedSessionsShareSelectionCyclingReorderAndCloseLifecycle()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var workspace = new TerminalWorkspaceViewModel(new RecordingPtyService(), new UiDispatcher());
+        var terminal = await workspace.AddLocalSessionAsync(token);
+        var firstRdp = new FakeWorkspaceSession("DC01", "RDP");
+        var secondRdp = new FakeWorkspaceSession("SQL01", "RDP");
+        workspace.AddWorkspaceSession(firstRdp);
+        workspace.AddWorkspaceSession(secondRdp);
+
+        workspace.SelectSession(1);
+        Assert.Same(terminal, workspace.SelectedSession);
+        workspace.CycleSession();
+        Assert.Same(firstRdp, workspace.SelectedSession);
+        workspace.CycleSession();
+        Assert.Same(secondRdp, workspace.SelectedSession);
+        workspace.CycleSession();
+        Assert.Same(terminal, workspace.SelectedSession);
+
+        workspace.MoveSession(secondRdp, terminal!);
+        Assert.Same(secondRdp, workspace.Sessions[0]);
+        workspace.SelectSession(secondRdp);
+        Assert.True(await workspace.CloseSessionAsync(secondRdp, skipConfirmation: true, token));
+        Assert.True(secondRdp.IsDisposed);
+        Assert.Same(terminal, workspace.SelectedSession);
+    }
+
+    [AvaloniaFact]
+    public async Task EverySessionContentStaysAttachedAndOnlySelectionIsVisible()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var workspace = new TerminalWorkspaceViewModel(new RecordingPtyService(), new UiDispatcher());
+        var terminal = await workspace.AddLocalSessionAsync(token);
+        var sessions = Enumerable.Range(1, 2)
+            .Select(index => new FakeWorkspaceSession($"RDP {index}", "RDP"))
+            .ToArray();
+        foreach (var session in sessions)
+        {
+            workspace.AddWorkspaceSession(session);
+        }
+
+        var view = new RemoteFlow.UI.Views.Terminal.TerminalWorkspace { DataContext = workspace };
+        var window = new Window { Content = view };
+        window.Show();
+
+        var hosts = view.GetVisualDescendants()
+            .OfType<RemoteFlow.UI.Views.Terminal.WorkspaceSessionContentHost>()
+            .ToArray();
+        Assert.Equal(3, hosts.Length);
+        Assert.All(sessions, session => Assert.Equal(1, session.CreateContentCount));
+        var visibleHost = Assert.Single(hosts, host => host.IsVisible);
+        Assert.Same(sessions[1], visibleHost.Session);
+
+        workspace.SelectSession(terminal);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(3, hosts.Length);
+        Assert.Same(terminal, Assert.Single(hosts, host => host.IsVisible).Session);
+        Assert.NotNull(view.GetVisualDescendants().OfType<SvcSystems.UI.Terminal.TerminalControl>().SingleOrDefault());
+        Assert.All(sessions, session => Assert.Equal(1, session.CreateContentCount));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task NativeSessionFocusEscapeMovesFocusToItsVisibleTab()
+    {
+        await using var workspace = new TerminalWorkspaceViewModel(new RecordingPtyService(), new UiDispatcher());
+        var session = new FakeWorkspaceSession("DC01", "RDP");
+        workspace.AddWorkspaceSession(session);
+        var view = new RemoteFlow.UI.Views.Terminal.TerminalWorkspace { DataContext = workspace };
+        var window = new Window { Content = view };
+        window.Show();
+
+        var handled = RemoteFlow.UI.Views.Terminal.WorkspaceSessionContentHost.RequestFocusEscape(
+            session.LastContent!);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var tab = view.GetVisualDescendants()
+            .OfType<Border>()
+            .Single(border => border.Focusable && ReferenceEquals(border.DataContext, session));
+        Assert.True(handled);
+        Assert.True(tab.Focusable);
+        Assert.Contains("session-tab", tab.Classes);
+        window.Close();
+    }
+
     [AvaloniaFact]
     public async Task TenSessionsRunIndependentlyAndClosingAllDisposesEveryProcess()
     {
@@ -40,11 +130,34 @@ public sealed class TerminalWorkspaceViewModelTests
         for (var index = 0; index < 10; index++)
         {
             Assert.Equal($"session-{index}", workspace.Sessions[index].Title);
-            Assert.Equal(index + 1000, workspace.Sessions[index].ProcessId);
+            Assert.Equal(index + 1000, Assert.IsType<TerminalSessionViewModel>(workspace.Sessions[index]).ProcessId);
         }
 
         Assert.True(await workspace.RequestCloseAllAsync(token));
         Assert.Empty(workspace.Sessions);
+        Assert.All(pty.Sessions, session => Assert.True(session.IsDisposed));
+        Assert.Equal(1, confirmation.CallCount);
+    }
+
+    [AvaloniaFact]
+    public async Task RequestCloseAllDisposesRdpSessionsAlongsideTerminals()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var pty = new RecordingPtyService();
+        var confirmation = new RecordingConfirmationService(true);
+        await using var workspace = new TerminalsPageViewModel(
+            pty,
+            new UiDispatcher(),
+            new InMemorySettingsStore(),
+            confirmation);
+        _ = await workspace.AddLocalSessionAsync(token);
+        var rdp = new FakeWorkspaceSession("DC01", "RDP");
+        workspace.AddWorkspaceSession(rdp);
+
+        Assert.True(await workspace.RequestCloseAllAsync(token));
+
+        Assert.Empty(workspace.Sessions);
+        Assert.True(rdp.IsDisposed);
         Assert.All(pty.Sessions, session => Assert.True(session.IsDisposed));
         Assert.Equal(1, confirmation.CallCount);
     }
@@ -179,6 +292,72 @@ public sealed class TerminalWorkspaceViewModelTests
             CallCount++;
             LastMessage = message;
             return Task.FromResult(result);
+        }
+    }
+
+    private sealed class FakeWorkspaceSession(string title, string protocol) : ObservableObject,
+        IWorkspaceSessionViewModel,
+        IWorkspaceSessionContentProvider
+    {
+        public string Title { get; } = title;
+
+        public string TabTitle => Title;
+
+        public EnvironmentKind Environment => EnvironmentKind.Production;
+
+        public string AccentColorHex => "#FF7B72";
+
+        public string TabBackgroundHex => "#121821";
+
+        public string ChromeTintHex => "#101418";
+
+        public string EnvironmentCue => "PROD !";
+
+        public string ProtocolCue { get; } = protocol;
+
+        public string StatusText => "Connected";
+
+        public string TabAccessibleName => $"{Title}, {ProtocolCue}, production, Connected";
+
+        public string CloseTabAccessibleName => $"Close {ProtocolCue} session {Title}";
+
+        public bool IsActive { get; private set; }
+
+        public bool IsLive => true;
+
+        public bool IsEnded => false;
+
+        public bool CanOpenInSystemTerminal => false;
+
+        public string? EndedMessage => null;
+
+        public string RecoveryActionLabel => "Reconnect";
+
+        public IAsyncRelayCommand RetryCommand { get; } = new AsyncRelayCommand(() => Task.CompletedTask);
+
+        public int CreateContentCount { get; private set; }
+
+        public Border? LastContent { get; private set; }
+
+        public bool IsDisposed { get; private set; }
+
+        public void SetActive(bool isActive)
+        {
+            IsActive = isActive;
+            OnPropertyChanged(nameof(IsActive));
+        }
+
+        public Control CreateSessionContent()
+        {
+            CreateContentCount++;
+            LastContent = new Border { DataContext = this };
+            return LastContent;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            IsDisposed = true;
+            return ValueTask.CompletedTask;
         }
     }
 
