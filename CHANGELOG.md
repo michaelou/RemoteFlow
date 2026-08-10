@@ -7,6 +7,11 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-10
+
+Remote Desktop stops being a thing RemoteFlow hands to another program. On Windows it is a tab like any
+other, and the older way of opening it is still there for anyone who wants it.
+
 ### Added
 
 - **Windows-only embedded Remote Desktop.** Windows can now open multiple Microsoft RDP ActiveX sessions
@@ -174,6 +179,7 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/michaelou/RemoteFlow/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/michaelou/RemoteFlow/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/michaelou/RemoteFlow/releases/tag/v0.1.0
