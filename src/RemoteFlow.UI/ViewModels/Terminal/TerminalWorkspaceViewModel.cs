@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Services;
@@ -10,6 +11,9 @@ namespace RemoteFlow.UI.ViewModels.Terminal;
 
 public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisposable
 {
+    private const int _minimumGridColumns = 1;
+    private const int _maximumGridColumns = 6;
+
     private readonly IPtyService? _ptyService;
     private readonly IUiDispatcher? _dispatcher;
     private readonly ISettingsStore? _settings;
@@ -20,10 +24,15 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     private readonly ISessionManager? _sessionManager;
     private int _startingCount;
     private int _disposeStarted;
+    private bool _isGridLayout;
+    private int _maxGridColumns = 3;
+    private bool _layoutSettingsLoaded;
+    private Task _pendingLayoutSave = Task.CompletedTask;
 
     public TerminalWorkspaceViewModel()
         : base("Terminals")
     {
+        Sessions.CollectionChanged += OnSessionsChanged;
     }
 
     public TerminalWorkspaceViewModel(IPtyService ptyService, IUiDispatcher dispatcher)
@@ -86,6 +95,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         _shellProfileService = shellProfileService;
         _systemTerminalLauncher = systemTerminalLauncher;
         _sessionManager = sessionManager;
+        Sessions.CollectionChanged += OnSessionsChanged;
         if (_shellProfileService is { } activeProfileService)
         {
             activeProfileService.ProfilesChanged += OnShellProfilesChanged;
@@ -120,8 +130,55 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
 
     public string? ErrorMessage { get; private set; }
 
+    /// <summary>
+    /// Whether every session is on screen at once rather than one at a time.
+    /// </summary>
+    /// <remarks>
+    /// The sessions themselves carry the flag, because the content of all of them is always attached and
+    /// realized — an embedded remote desktop owns a native window that cannot survive being re-hosted — so
+    /// the only thing a layout change may do is decide which of them is visible.
+    /// </remarks>
+    public bool IsGridLayout
+    {
+        get => _isGridLayout;
+        set
+        {
+            if (_isGridLayout == value)
+            {
+                return;
+            }
+
+            _isGridLayout = value;
+            ApplyLayoutToSessions();
+            OnPropertyChanged();
+            PersistLayoutSettings();
+        }
+    }
+
+    /// <summary>How many tiles a grid row may hold before it starts a new row.</summary>
+    public int MaxGridColumns
+    {
+        get => _maxGridColumns;
+        set
+        {
+            var columns = Math.Clamp(value, _minimumGridColumns, _maximumGridColumns);
+            if (_maxGridColumns == columns)
+            {
+                return;
+            }
+
+            _maxGridColumns = columns;
+            OnPropertyChanged();
+            PersistLayoutSettings();
+        }
+    }
+
+    public IReadOnlyList<int> GridColumnOptions { get; } =
+        [.. Enumerable.Range(_minimumGridColumns, _maximumGridColumns - _minimumGridColumns + 1)];
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        await LoadLayoutSettingsAsync(cancellationToken).ConfigureAwait(true);
         _ = await GetCtrlCPolicyAsync(cancellationToken).ConfigureAwait(true);
         await LoadShellProfilesAsync(cancellationToken).ConfigureAwait(true);
         if (Sessions.Count == 0)
@@ -499,6 +556,78 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
 
         CtrlCPolicy = await _settings.Get(SettingKeys.CtrlCPolicy, cancellationToken).ConfigureAwait(true);
         return CtrlCPolicy;
+    }
+
+    /// <summary>Awaits the settings writes the layout controls started, so a test does not race them.</summary>
+    public async Task FlushLayoutSettingsAsync()
+    {
+        await _pendingLayoutSave.ConfigureAwait(false);
+    }
+
+    private async Task LoadLayoutSettingsAsync(CancellationToken cancellationToken)
+    {
+        if (_layoutSettingsLoaded)
+        {
+            return;
+        }
+
+        if (_settings is not null)
+        {
+            var layout = await _settings.Get(SettingKeys.WorkspaceLayout, cancellationToken).ConfigureAwait(true);
+            var columns = await _settings.Get(SettingKeys.WorkspaceGridMaxColumns, cancellationToken)
+                .ConfigureAwait(true);
+            _maxGridColumns = Math.Clamp(columns, _minimumGridColumns, _maximumGridColumns);
+            _isGridLayout = layout == WorkspaceLayoutMode.Grid;
+            ApplyLayoutToSessions();
+            OnPropertyChanged(nameof(MaxGridColumns));
+            OnPropertyChanged(nameof(IsGridLayout));
+        }
+
+        // Set last: until the stored layout has been read, a property change is the load itself and must
+        // not be written back.
+        _layoutSettingsLoaded = true;
+    }
+
+    private void PersistLayoutSettings()
+    {
+        if (!_layoutSettingsLoaded || _settings is null)
+        {
+            return;
+        }
+
+        _pendingLayoutSave = SaveLayoutSettingsAsync(
+            _pendingLayoutSave,
+            _isGridLayout ? WorkspaceLayoutMode.Grid : WorkspaceLayoutMode.Tabs,
+            _maxGridColumns);
+    }
+
+    private async Task SaveLayoutSettingsAsync(Task previousSave, WorkspaceLayoutMode layout, int columns)
+    {
+        await previousSave.ConfigureAwait(false);
+        await _settings!.Set(SettingKeys.WorkspaceLayout, layout).ConfigureAwait(false);
+        await _settings.Set(SettingKeys.WorkspaceGridMaxColumns, columns).ConfigureAwait(false);
+    }
+
+    private void ApplyLayoutToSessions()
+    {
+        foreach (var session in Sessions)
+        {
+            session.SetTiled(_isGridLayout);
+        }
+    }
+
+    /// <summary>Sessions arrive from four places; the collection is the one point they all pass through.</summary>
+    private void OnSessionsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems is null)
+        {
+            return;
+        }
+
+        foreach (var session in e.NewItems.OfType<IWorkspaceSessionViewModel>())
+        {
+            session.SetTiled(_isGridLayout);
+        }
     }
 
     private static void SetActive(IWorkspaceSessionViewModel? session, bool isActive)

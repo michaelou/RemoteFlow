@@ -76,6 +76,12 @@ public enum WindowsRdpOpenMode
     External = 2,
 }
 
+public enum WorkspaceLayoutMode
+{
+    Tabs = 1,
+    Grid = 2,
+}
+
 public static class SettingKeys
 {
     public static SettingKey<AppTheme> Theme { get; } = new("Theme", AppTheme.Dark);
@@ -108,6 +114,9 @@ public static class SettingKeys
         new("SshTransport", global::RemoteFlow.Application.Abstractions.SshTransport.Tmds);
     public static SettingKey<WindowsRdpOpenMode> WindowsRdpOpenMode { get; } =
         new("WindowsRdpOpenMode", global::RemoteFlow.Application.Abstractions.WindowsRdpOpenMode.Embedded);
+    public static SettingKey<WorkspaceLayoutMode> WorkspaceLayout { get; } =
+        new("WorkspaceLayout", WorkspaceLayoutMode.Tabs);
+    public static SettingKey<int> WorkspaceGridMaxColumns { get; } = new("WorkspaceGridMaxColumns", 3);
     public static SettingKey<int> RecentLimit { get; } = new("RecentLimit", 20);
     public static SettingKey<string?> WindowLayout { get; } = new("WindowLayout", null);
     public static SettingKey<int> SchemaVersion { get; } = new("SchemaVersion", 1);
@@ -141,6 +150,8 @@ public static class SettingKeys
         DefaultHostKeyPolicy,
         SshTransport,
         .. OperatingSystem.IsWindows() ? new ISettingKey[] { WindowsRdpOpenMode } : [],
+        WorkspaceLayout,
+        WorkspaceGridMaxColumns,
         RecentLimit,
         WindowLayout,
         SchemaVersion,

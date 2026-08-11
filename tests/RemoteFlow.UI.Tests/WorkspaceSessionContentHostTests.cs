@@ -104,6 +104,10 @@ public sealed class WorkspaceSessionContentHostTests
 
         public bool IsActive { get; private set; }
 
+        public bool IsTiled { get; private set; }
+
+        public bool IsContentVisible => IsTiled || IsActive;
+
         public bool IsLive => true;
 
         public bool IsEnded => false;
@@ -124,6 +128,14 @@ public sealed class WorkspaceSessionContentHostTests
         {
             IsActive = isActive;
             OnPropertyChanged(nameof(IsActive));
+            OnPropertyChanged(nameof(IsContentVisible));
+        }
+
+        public void SetTiled(bool isTiled)
+        {
+            IsTiled = isTiled;
+            OnPropertyChanged(nameof(IsTiled));
+            OnPropertyChanged(nameof(IsContentVisible));
         }
 
         public Control CreateSessionContent()

@@ -10,6 +10,21 @@
     <Style Selector="Border.session-tab:focus">
       <Setter Property="BorderThickness" Value="2,2,2,3" />
     </Style>
+    <!-- The column picker's minimum height is taller than a button's, and the row is taller still because
+         the page title beside it is two lines. Centring every control in the row is what puts the picker and
+         the buttons on one line. -->
+    <Style Selector="StackPanel#WorkspaceActions > :is(Control)">
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- Which tile has the keyboard decides what Close, Copy and Find act on, so in a grid it has to be
+         legible at a glance. The tint alone is nearly invisible for a session with a grey accent. Both
+         thicknesses are set here: a value set on the element itself would outrank the active one. -->
+    <Style Selector="Border.session-tile">
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Border.session-tile.active">
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
   </UserControl.Styles>
   <Grid Margin="8" RowDefinitions="Auto,Auto,*,Auto">
     <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
@@ -17,7 +32,22 @@
         <TextBlock FontSize="24" FontWeight="SemiBold" Text="Terminal workspace" />
         <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Independent local and remote sessions" />
       </StackPanel>
-      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+      <StackPanel x:Name="WorkspaceActions" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+        <ToggleButton
+            AutomationProperties.Name="Grid view"
+            Content="Grid"
+            IsChecked="{Binding IsGridLayout, Mode=TwoWay}"
+            ToolTip.Tip="Show every session at once instead of one tab at a time" />
+        <!-- MinHeight, not Height: the picker then measures to a button's height here without being pinned
+             to a number that a font or theme change would leave stranded. -->
+        <ComboBox
+            AutomationProperties.Name="Maximum grid columns"
+            IsVisible="{Binding IsGridLayout}"
+            ItemsSource="{Binding GridColumnOptions}"
+            MinHeight="30"
+            SelectedItem="{Binding MaxGridColumns, Mode=TwoWay}"
+            ToolTip.Tip="How many sessions a grid row holds before the next row starts"
+            Width="62" />
         <Button Click="Shortcuts_OnClick" Content="Help" ToolTip.Tip="Keyboard shortcuts for copy, paste, find, and switching terminals" />
         <Button Command="{Binding SelectedTerminalSession.OpenFindCommand}" Content="Find" ToolTip.Tip="Find in scrollback (Ctrl+Shift+F)" />
         <Button
@@ -147,15 +177,71 @@
         BorderThickness="1"
         CornerRadius="0,0,6,6"
         PointerPressed="TerminalBorder_OnPointerPressed">
-      <ItemsControl ItemsSource="{Binding Sessions}">
+      <ItemsControl
+          x:Name="SessionContent"
+          ContainerClearing="SessionContent_OnContainerClearing"
+          ContainerIndexChanged="SessionContent_OnContainerIndexChanged"
+          ContainerPrepared="SessionContent_OnContainerPrepared"
+          ItemsSource="{Binding Sessions}">
+        <!-- One panel for both layouts. A tab is this grid with a single visible tile, and swapping the
+             panel to change layout would rebuild the containers — which an embedded remote desktop, whose
+             native window may only be hosted once, does not survive. -->
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
-            <Grid />
+            <terminalViews:WorkspaceSessionTilePanel MaxColumns="{Binding MaxGridColumns}" TileSpacing="6" />
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="terminalViewModels:IWorkspaceSessionViewModel">
-            <terminalViews:WorkspaceSessionContentHost IsVisible="{Binding IsActive}" Session="{Binding}">
+            <!-- The tile header is a row rather than an overlay, and the tile has no corner radius: native
+                 remote desktop content draws above every Avalonia control and is not clipped by one. The
+                 tint and the accent already differ for the selected session, so the tile the keyboard is in
+                 is the one that looks lit. -->
+            <Border
+                Background="{Binding ChromeTintHex}"
+                BorderBrush="{Binding AccentColorHex}"
+                Classes="session-tile"
+                Classes.active="{Binding IsActive}">
+              <Grid RowDefinitions="Auto,*">
+                <Grid
+                    ColumnDefinitions="Auto,*,Auto"
+                    ColumnSpacing="7"
+                    IsVisible="{Binding IsTiled}"
+                    Margin="7,4,4,4">
+                  <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <Border Background="{Binding AccentColorHex}" CornerRadius="3" Padding="4,1">
+                      <TextBlock FontSize="10" FontWeight="Bold" Foreground="#0B0F14" Text="{Binding EnvironmentCue}" />
+                    </Border>
+                    <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3" Padding="4,1">
+                      <TextBlock FontSize="10" FontWeight="Bold" Text="{Binding ProtocolCue}" />
+                    </Border>
+                  </StackPanel>
+                  <TextBlock
+                      Grid.Column="1"
+                      Text="{Binding TabTitle}"
+                      TextTrimming="CharacterEllipsis"
+                      ToolTip.Tip="{Binding Title}"
+                      VerticalAlignment="Center" />
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <TextBlock
+                        FontSize="10"
+                        Foreground="{DynamicResource Brush.Text.Secondary}"
+                        Text="{Binding StatusText}"
+                        VerticalAlignment="Center" />
+                    <Button
+                        AutomationProperties.Name="{Binding CloseTabAccessibleName}"
+                        Click="CloseTab_OnClick"
+                        Content="×"
+                        FontSize="13"
+                        MinWidth="0"
+                        Padding="6,1"
+                        ToolTip.Tip="Close session (Ctrl+Shift+W)" />
+                  </StackPanel>
+                </Grid>
+                <terminalViews:WorkspaceSessionContentHost
+                    Grid.Row="1"
+                    IsVisible="{Binding IsContentVisible}"
+                    Session="{Binding}">
               <terminalViews:WorkspaceSessionContentHost.DataTemplates>
                 <DataTemplate x:DataType="terminalViewModels:TerminalSessionViewModel">
             <Grid RowDefinitions="Auto,*">
@@ -207,7 +293,9 @@
             </Grid>
                 </DataTemplate>
               </terminalViews:WorkspaceSessionContentHost.DataTemplates>
-            </terminalViews:WorkspaceSessionContentHost>
+                </terminalViews:WorkspaceSessionContentHost>
+              </Grid>
+            </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>

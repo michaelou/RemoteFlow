@@ -227,6 +227,16 @@ The holder is a normal hidden `WS_POPUP` window, not a message-only window. A me
 desktop lineage, and moving a live RDP control's window tree off the desktop is a larger gamble than a
 window that is simply never shown.
 
+**The grid layout is inside this decision, not an exception to it.** Showing every session at once still
+keeps every view attached and toggles `IsVisible`; what changes is that several surfaces are effectively
+visible together, each negotiating its own tile's resolution. Two consequences follow from that and are
+handled where they arise rather than by a second hosting path. A tile is arranged by
+`WorkspaceSessionTilePanel`, which lays *every* child out — a session that is not tiled is given the whole
+area exactly as a background tab is, because collapsing its container would stop its content from ever
+being realized and there is only ever one native window to realize. And the viewport handed to the control
+is clamped to the range it accepts (200–4096 physical pixels): a refused resize latches SmartSizing on the
+session permanently, and a dense grid produces tiles narrower than the floor.
+
 **Embedded sessions always occupy one RemoteFlow viewport.** The stored `FullScreen` and `Multimon`
 options remain external-client requests: the mapper does not apply either to the ActiveX control, and it
 retains both requests in `IgnoredExternalRdpDisplayOptions` so the editor can explain the limitation.

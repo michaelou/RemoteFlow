@@ -11,6 +11,12 @@ namespace RemoteFlow.Rdp.Windows.Hosting;
 /// <summary>An Avalonia view for one embedded RDP session. Parameterless construction never activates COM.</summary>
 public sealed class RdpSessionView : UserControl, IAsyncDisposable
 {
+    // The control accepts a desktop size between these bounds and fails outside them — and a failed resize
+    // latches SmartSizing on the session for good. A tile in a dense grid is narrower than the floor, so
+    // without the clamp opening one would cost that session DPI-aware resize for the rest of its life.
+    internal const int MinimumViewportPixels = 200;
+    internal const int MaximumViewportPixels = 4096;
+
     private readonly RdpNativeHost _nativeHost;
     private readonly Border _recoveryPanel;
     private readonly TextBlock _statusText;
@@ -181,6 +187,10 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
     private void OnNativeFocusChanged(object? sender, RdpControlFocusChangedEventArgs e)
     {
         PseudoClasses.Set(":native-focused", e.IsFocused);
+        if (e.IsFocused)
+        {
+            _ = WorkspaceSessionContentHost.RequestSelection(this);
+        }
     }
 
     private void OnSizeChanged(object? sender, SizeChangedEventArgs e)
@@ -221,8 +231,8 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
     private void RequestCurrentViewport(bool syncVisibility = true)
     {
         var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1d;
-        var width = (int)Math.Round(Bounds.Width * scaling, MidpointRounding.AwayFromZero);
-        var height = (int)Math.Round(Bounds.Height * scaling, MidpointRounding.AwayFromZero);
+        var width = ClampViewport(Bounds.Width * scaling);
+        var height = ClampViewport(Bounds.Height * scaling);
         if (width > 0 && height > 0 && _windowsSession?.State == EmbeddedRdpSessionState.Created)
         {
             _windowsSession.ConfigureInitialViewport(width, height, scaling);
@@ -235,6 +245,14 @@ public sealed class RdpSessionView : UserControl, IAsyncDisposable
             _resizeController?.SetVisible(IsEffectivelyVisible);
         }
         _resizeController?.RequestResize(width, height, scaling);
+    }
+
+    /// <summary>A viewport the control will accept, or zero for a view that has not been laid out yet. A
+    /// tile below the floor shows a cropped desktop, which is recoverable; a refused resize is not.</summary>
+    internal static int ClampViewport(double physicalPixels)
+    {
+        var pixels = (int)Math.Round(physicalPixels, MidpointRounding.AwayFromZero);
+        return pixels <= 0 ? 0 : Math.Clamp(pixels, MinimumViewportPixels, MaximumViewportPixels);
     }
 
     private void UpdateState(EmbeddedRdpSessionState state, string? message)

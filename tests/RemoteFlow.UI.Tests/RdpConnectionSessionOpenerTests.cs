@@ -250,6 +250,8 @@ public sealed class RdpConnectionSessionOpenerTests
         public string TabAccessibleName => $"{Title}, RDP, production, {StatusText}";
         public string CloseTabAccessibleName => $"Close RDP session {Title}";
         public bool IsActive { get; private set; }
+        public bool IsTiled { get; private set; }
+        public bool IsContentVisible => IsTiled || IsActive;
         public bool IsLive => true;
         public bool IsEnded => false;
         public bool CanOpenInSystemTerminal => false;
@@ -275,6 +277,14 @@ public sealed class RdpConnectionSessionOpenerTests
         {
             IsActive = isActive;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsActive)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsContentVisible)));
+        }
+
+        public void SetTiled(bool isTiled)
+        {
+            IsTiled = isTiled;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsTiled)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsContentVisible)));
         }
 
         public ValueTask DisposeAsync()

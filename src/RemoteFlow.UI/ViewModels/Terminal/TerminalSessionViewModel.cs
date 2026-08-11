@@ -218,6 +218,11 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IWorksp
     public partial bool IsActive { get; internal set; }
 
     [ObservableProperty]
+    public partial bool IsTiled { get; private set; }
+
+    public bool IsContentVisible => IsTiled || IsActive;
+
+    [ObservableProperty]
     public partial SessionState State { get; private set; } = SessionState.Created;
 
     [ObservableProperty]
@@ -299,6 +304,11 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IWorksp
     public void SetActive(bool isActive)
     {
         IsActive = isActive;
+    }
+
+    public void SetTiled(bool isTiled)
+    {
+        IsTiled = isTiled;
     }
 
     public async ValueTask SendInputAsync(
@@ -663,6 +673,12 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IWorksp
     {
         OnPropertyChanged(nameof(TabBackgroundHex));
         OnPropertyChanged(nameof(ChromeTintHex));
+        OnPropertyChanged(nameof(IsContentVisible));
+    }
+
+    partial void OnIsTiledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsContentVisible));
     }
 
     partial void OnSearchTextChanged(string value)

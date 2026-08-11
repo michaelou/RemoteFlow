@@ -16,6 +16,12 @@ public sealed class WorkspaceSessionContentHost : ContentControl
         "FocusEscapeRequested",
         RoutingStrategies.Bubble);
 
+    public static readonly RoutedEvent<RoutedEventArgs> SelectionRequestedEvent = RoutedEvent.Register<
+        WorkspaceSessionContentHost,
+        RoutedEventArgs>(
+        "SelectionRequested",
+        RoutingStrategies.Bubble);
+
     public static readonly StyledProperty<IWorkspaceSessionViewModel?> SessionProperty =
         AvaloniaProperty.Register<WorkspaceSessionContentHost, IWorkspaceSessionViewModel?>(nameof(Session));
 
@@ -32,6 +38,17 @@ public sealed class WorkspaceSessionContentHost : ContentControl
     {
         ArgumentNullException.ThrowIfNull(source);
         var request = new RoutedEventArgs(FocusEscapeRequestedEvent, source);
+        source.RaiseEvent(request);
+        return request.Handled;
+    }
+
+    /// <summary>Lets a native child HWND ask to become the selected session. Clicking one never reaches
+    /// Avalonia as a pointer event, and in a grid every session is on screen at once — so without this the
+    /// keyboard would be in one remote desktop while close, copy and find acted on another.</summary>
+    public static bool RequestSelection(Interactive source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var request = new RoutedEventArgs(SelectionRequestedEvent, source);
         source.RaiseEvent(request);
         return request.Handled;
     }

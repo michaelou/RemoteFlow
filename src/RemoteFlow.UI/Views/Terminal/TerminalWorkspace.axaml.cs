@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
@@ -12,6 +13,7 @@ namespace RemoteFlow.UI.Views.Terminal;
 
 public sealed partial class TerminalWorkspace : UserControl
 {
+    private readonly Dictionary<Control, IDisposable> _containerTiling = [];
     private IWorkspaceSessionViewModel? _pressedTab;
     private Point _pressPosition;
     private bool _isDraggingTab;
@@ -25,6 +27,13 @@ public sealed partial class TerminalWorkspace : UserControl
             WorkspaceSessionContentHost.FocusEscapeRequestedEvent,
             OnFocusEscapeRequested,
             RoutingStrategies.Bubble);
+        AddHandler(
+            WorkspaceSessionContentHost.SelectionRequestedEvent,
+            OnSelectionRequested,
+            RoutingStrategies.Bubble);
+        // Selection follows the keyboard. Every application command — close, copy, paste, find — acts on the
+        // selected session, and in a grid the session being typed into is no longer the only one on screen.
+        AddHandler(GotFocusEvent, OnSessionContentGotFocus, RoutingStrategies.Bubble);
     }
 
     private async void OnLoaded(object? sender, RoutedEventArgs e)
@@ -165,13 +174,99 @@ public sealed partial class TerminalWorkspace : UserControl
 
     private void TerminalBorder_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        // Clicking into a tile selects that tile, not whichever one was selected before.
+        _ = SelectSessionFrom(e.Source);
         FocusTerminal();
     }
 
     private void OnFocusEscapeRequested(object? sender, RoutedEventArgs e)
     {
+        // The surface asking to be left is not necessarily the selected one when every session is on screen,
+        // and the tab focus below follows the selection.
+        _ = SelectSessionFrom(e.Source);
         FocusTabStrip();
         e.Handled = true;
+    }
+
+    private void OnSelectionRequested(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = SelectSessionFrom(e.Source);
+    }
+
+    private void OnSessionContentGotFocus(object? sender, FocusChangedEventArgs e)
+    {
+        _ = SelectSessionFrom(e.Source);
+    }
+
+    /// <summary>Selects the session whose content the event came from, if it came from one at all. Focus
+    /// moves nothing here, so this cannot loop back on itself.</summary>
+    private bool SelectSessionFrom(object? source)
+    {
+        if (DataContext is not TerminalWorkspaceViewModel viewModel || source is not Visual visual)
+        {
+            return false;
+        }
+
+        var session = visual.GetSelfAndVisualAncestors()
+            .OfType<WorkspaceSessionContentHost>()
+            .FirstOrDefault()?.Session;
+        if (session is null || !viewModel.Sessions.Contains(session))
+        {
+            return false;
+        }
+
+        viewModel.SelectSession(session);
+        return true;
+    }
+
+    /// <summary>
+    /// Tells each item container whether its session holds a cell of the grid.
+    /// </summary>
+    /// <remarks>
+    /// The panel lays out the containers the <c>ItemsControl</c> generates, and a container is always visible
+    /// however hidden its contents are — so the panel is told which ones to tile rather than reading it off
+    /// their visibility. Collapsing the container instead would stop its content from ever being realized,
+    /// and every session's content has to stay attached for a remote desktop to keep its native window.
+    /// </remarks>
+    private void BindContainerTiling(Control container, int index)
+    {
+        ReleaseContainerTiling(container);
+        if (DataContext is not TerminalWorkspaceViewModel viewModel ||
+            index < 0 || index >= viewModel.Sessions.Count)
+        {
+            return;
+        }
+
+        _containerTiling[container] = container.Bind(
+            WorkspaceSessionTilePanel.IsTileShownProperty,
+            new Binding(nameof(IWorkspaceSessionViewModel.IsContentVisible))
+            {
+                Source = viewModel.Sessions[index],
+            });
+    }
+
+    private void ReleaseContainerTiling(Control container)
+    {
+        if (_containerTiling.Remove(container, out var binding))
+        {
+            binding.Dispose();
+        }
+    }
+
+    private void SessionContent_OnContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        BindContainerTiling(e.Container, e.Index);
+    }
+
+    /// <summary>Reordering hands a container a different session without clearing it.</summary>
+    private void SessionContent_OnContainerIndexChanged(object? sender, ContainerIndexChangedEventArgs e)
+    {
+        BindContainerTiling(e.Container, e.NewIndex);
+    }
+
+    private void SessionContent_OnContainerClearing(object? sender, ContainerClearingEventArgs e)
+    {
+        ReleaseContainerTiling(e.Container);
     }
 
     private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
@@ -278,8 +373,11 @@ public sealed partial class TerminalWorkspace : UserControl
 
     private void FocusFindBox()
     {
+        // Every tile carries its own find bar, so the visible one is not necessarily the right one.
+        var selected = (DataContext as TerminalWorkspaceViewModel)?.SelectedTerminalSession;
         var find = this.GetVisualDescendants().OfType<TextBox>()
-            .FirstOrDefault(textBox => textBox.Name == "FindTextBox" && textBox.IsVisible);
+            .FirstOrDefault(textBox => textBox.Name == "FindTextBox" && textBox.IsVisible &&
+                ReferenceEquals(textBox.DataContext, selected));
         _ = find?.Focus();
         find?.SelectAll();
     }

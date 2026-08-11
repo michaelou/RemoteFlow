@@ -32,6 +32,14 @@ public interface IWorkspaceSessionViewModel : INotifyPropertyChanged, IAsyncDisp
 
     bool IsActive { get; }
 
+    /// <summary>Whether the workspace is showing every session side by side rather than one at a time.</summary>
+    bool IsTiled { get; }
+
+    /// <summary>Whether this session's content belongs on screen: <c>IsTiled || IsActive</c>. Selection and
+    /// visibility are separate in a grid, where every session is on screen but only one has the keyboard —
+    /// and the accent chrome, the recovery panel and every keyboard command still follow that one.</summary>
+    bool IsContentVisible { get; }
+
     bool IsLive { get; }
 
     bool IsEnded { get; }
@@ -45,6 +53,8 @@ public interface IWorkspaceSessionViewModel : INotifyPropertyChanged, IAsyncDisp
     IAsyncRelayCommand RetryCommand { get; }
 
     void SetActive(bool isActive);
+
+    void SetTiled(bool isTiled);
 }
 
 /// <summary>Optional view seam for protocol implementations owned by another platform assembly.</summary>

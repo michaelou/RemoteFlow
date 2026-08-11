@@ -72,6 +72,10 @@ public sealed class RdpSessionViewModel : ObservableObject,
 
     public bool IsActive { get; private set; }
 
+    public bool IsTiled { get; private set; }
+
+    public bool IsContentVisible => IsTiled || IsActive;
+
     public bool IsLive => _session.State is EmbeddedRdpSessionState.Created or
         EmbeddedRdpSessionState.Connecting or EmbeddedRdpSessionState.Connected or
         EmbeddedRdpSessionState.Reconnecting;
@@ -113,6 +117,19 @@ public sealed class RdpSessionViewModel : ObservableObject,
         OnPropertyChanged(nameof(IsActive));
         OnPropertyChanged(nameof(TabBackgroundHex));
         OnPropertyChanged(nameof(ChromeTintHex));
+        OnPropertyChanged(nameof(IsContentVisible));
+    }
+
+    public void SetTiled(bool isTiled)
+    {
+        if (IsTiled == isTiled)
+        {
+            return;
+        }
+
+        IsTiled = isTiled;
+        OnPropertyChanged(nameof(IsTiled));
+        OnPropertyChanged(nameof(IsContentVisible));
     }
 
     public Control CreateSessionContent()

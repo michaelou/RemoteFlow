@@ -102,6 +102,10 @@ rows from its active monospace font metrics, while RemoteFlow coalesces resize n
 3. Produce at least 200 numbered normal-buffer lines, shrink the window, then expand it. Capture the known historical-line reflow gap caused by `ReflowOnResize = false`.
 4. Print another 100 numbered lines after resizing. Confirm only historical layout is affected and all subsequent output is correct.
 
+5. Open four terminals, run a TUI (`htop`, `vim`) in each, and press **Grid**. Change the column picker
+   between 1 and 4, then return to tabs. Every terminal resizes to its own tile, so each TUI must repaint
+   cleanly at its new size and keep taking input; the historical-line gap above applies to each of them.
+
 Capture the result using this framing (replace the image below with the current release candidate's
 screenshot when recording release evidence):
 

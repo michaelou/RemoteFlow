@@ -7,6 +7,38 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **The terminal workspace can show every session at once.** A **Grid** button next to the tab strip lays
+  the open sessions out side by side instead of one at a time, and the picker beside it sets how many
+  columns a row may hold. The tiles fill the area rather than leaving gaps: one session takes the whole
+  workspace, two take half each, three under a limit of three take a third each — and a fourth makes it two
+  rows of two rather than three tiles and a lone one. Each tile carries its own header with the session's
+  name, environment and protocol, and its own **×** to close it. Remote desktops tile like anything else, so
+  several remote screens can be watched together. The tab strip stays where it is: it remains the way to
+  reorder sessions with the keyboard, and the way back out of a remote desktop surface with F6. The layout
+  and its column count are remembered for the next run.
+
+### Changed
+
+- **Selection follows the keyboard.** Clicking or tabbing into a session makes it the selected one, which it
+  had no need to be when only one session was ever on screen. Without it, **Close**, copy, paste and find —
+  all of which act on the selection — would act on a different session than the one being typed into as soon
+  as more than one is visible. Clicking into an embedded remote desktop counts too, even though that click
+  never reaches RemoteFlow: the session asks to be selected when its surface takes focus.
+- **Tiling resizes every live session.** Switching layouts or changing the column count resizes each
+  terminal to its tile, so full-screen programs repaint and — because `ReflowOnResize` is off by default —
+  output that was already wrapped keeps its old wrapping. Each remote desktop renegotiates its resolution
+  to its own tile.
+
+### Fixed
+
+- **A remote desktop no longer loses live resizing at extreme viewport sizes.** The RDP control accepts a
+  desktop between 200 and 4096 pixels and fails outside it, and a failed resize turned on SmartSizing for
+  the rest of that session's life — nothing ever turned it back off. The requested viewport is now clamped
+  to that range, so a very small tile crops or scales its picture and recovers when it grows, and an
+  ultrawide monitor past 4096 pixels no longer costs the session true remote-resolution resize.
+
 ## [0.2.2] - 2026-08-10
 
 The Connections page reads as a list of hosts rather than a column of text, and every page sits closer to

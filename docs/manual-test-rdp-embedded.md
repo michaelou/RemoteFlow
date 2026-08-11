@@ -96,6 +96,32 @@ names the external-client path; it never shows an embedded option or a Windows C
    Expected: order and selection remain correct and closing one session does not detach another session's
    native window.
 
+## Grid layout
+
+Every session is on screen at once here, so this is the only pass that exercises several live remote
+desktops rendering, resizing and being clicked simultaneously. Headless tests cannot reach any of it.
+
+1. With two RDP tabs and one SSH tab open, press **Grid**.
+   Expected: all three surfaces render at once, each in its own tile with a header naming the session; no
+   tile is black, blank, or drawn over its header. No session reconnects or prompts for credentials.
+2. Set the column picker to 1, then 2, then 3, and resize the window at each setting.
+   Expected: after the short debounce each remote desktop follows its own tile, and none of them shows
+   scrollbars or a misaligned pointer. Three sessions at two columns is two tiles above and one full-width
+   tile below.
+3. Make the window small enough that a tile is under 200 physical pixels wide, then enlarge it again.
+   Expected: the small tile crops or scales its remote desktop, and — the point of the check — enlarging it
+   restores true remote-resolution resize. A session that stays soft and stops following its tile for the
+   rest of its life means the viewport clamp has regressed. The log must not report that dynamic resize
+   failed and SmartSizing was enabled.
+4. Click into each RDP tile in turn and type.
+   Expected: the keystrokes reach the tile you clicked, that tile's tab is the selected one, and Ctrl+Shift+W
+   after F6 closes that session and not another.
+5. Close a tile with the **×** in its own header, then press **Grid** again to return to tabs.
+   Expected: the remaining tiles re-flow, the closed session's window is gone, and the surviving remote
+   desktops are still live in tab layout without reconnecting.
+6. Restart the application.
+   Expected: it reopens in the layout and column count you left it in.
+
 ## Keyboard and focus
 
 Use an application in the remote desktop that visibly reports keys.

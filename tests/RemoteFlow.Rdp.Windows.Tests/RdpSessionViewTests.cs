@@ -18,6 +18,25 @@ public sealed class RdpSessionViewTests
         await view.DisposeAsync();
     }
 
+    /// <summary>
+    /// The control refuses a desktop outside the range it supports, and a refused resize latches SmartSizing
+    /// on the session for the rest of its life — there is no path that clears it. A tile in a dense grid is
+    /// narrower than the floor and an ultrawide monitor is past the ceiling, so both ends are clamped: a
+    /// cropped desktop is recoverable, and losing DPI-aware resize for the whole session is not.
+    /// </summary>
+    [Theory]
+    [InlineData(0d, 0)]
+    [InlineData(-4d, 0)]
+    [InlineData(120.4d, 200)]
+    [InlineData(199.6d, 200)]
+    [InlineData(640d, 640)]
+    [InlineData(4096d, 4096)]
+    [InlineData(5120d, 4096)]
+    public void AViewportOutsideTheControlsRangeIsClampedRatherThanRefused(double physicalPixels, int expected)
+    {
+        Assert.Equal(expected, RdpSessionView.ClampViewport(physicalPixels));
+    }
+
     [Fact]
     public void HiddenViewportKeepsLatestResizeAndAppliesItExactlyOnceWhenShown()
     {

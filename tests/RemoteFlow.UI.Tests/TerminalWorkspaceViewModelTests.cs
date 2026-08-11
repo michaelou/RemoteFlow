@@ -79,6 +79,165 @@ public sealed class TerminalWorkspaceViewModelTests
         window.Close();
     }
 
+    /// <summary>
+    /// The grid is the same hosts in a different arrangement. Nothing may be re-created when the layout
+    /// changes: a session that owns its content — an embedded remote desktop and its native window — hands
+    /// back the one control it has, and building a second host for it is what breaks rendering outright.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task GridLayoutShowsEverySessionSideBySideWithoutRehostingAny()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var workspace = new TerminalWorkspaceViewModel(new RecordingPtyService(), new UiDispatcher());
+        _ = await workspace.AddLocalSessionAsync(token);
+        var sessions = Enumerable.Range(1, 2)
+            .Select(index => new FakeWorkspaceSession($"RDP {index}", "RDP"))
+            .ToArray();
+        foreach (var session in sessions)
+        {
+            workspace.AddWorkspaceSession(session);
+        }
+
+        workspace.MaxGridColumns = 2;
+        var view = new RemoteFlow.UI.Views.Terminal.TerminalWorkspace { DataContext = workspace };
+        var window = new Window { Width = 1200, Height = 800, Content = view };
+        window.Show();
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var panel = view.GetVisualDescendants()
+            .OfType<RemoteFlow.UI.Views.Terminal.WorkspaceSessionTilePanel>()
+            .Single();
+        var hosts = view.GetVisualDescendants()
+            .OfType<RemoteFlow.UI.Views.Terminal.WorkspaceSessionContentHost>()
+            .ToArray();
+        Assert.Equal(2, panel.MaxColumns);
+        Assert.Equal(3, hosts.Length);
+        Assert.Same(sessions[1], Assert.Single(hosts, host => host.IsVisible).Session);
+        // A tab gives every session the whole area and hides all but one, which is what keeps their content
+        // realized and attached rather than rebuilt on the way back.
+        Assert.All(panel.Children, container => Assert.Equal(panel.Bounds.Size, container.Bounds.Size));
+
+        workspace.IsGridLayout = true;
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(3, hosts.Count(host => host.IsVisible));
+        Assert.All(panel.Children, container => Assert.True(container.Bounds is { Width: > 0, Height: > 0 }));
+        // Two columns and three sessions is two rows: two tiles above sharing the width, one below taking it.
+        var topRow = panel.Children.Where(container => container.Bounds.Top == 0).ToArray();
+        Assert.Equal(2, topRow.Length);
+        Assert.All(topRow, container => Assert.True(container.Bounds.Width < panel.Bounds.Width / 1.5));
+        var bottomRow = Assert.Single(panel.Children, container => container.Bounds.Top > 0);
+        Assert.Equal(panel.Bounds.Width, bottomRow.Bounds.Width);
+
+        workspace.IsGridLayout = false;
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Assert.Same(sessions[1], Assert.Single(hosts, host => host.IsVisible).Session);
+        Assert.All(panel.Children, container => Assert.Equal(panel.Bounds.Size, container.Bounds.Size));
+        Assert.All(sessions, session => Assert.Equal(1, session.CreateContentCount));
+        window.Close();
+    }
+
+    /// <summary>
+    /// Every keyboard command — close, copy, paste, find — acts on the selected session, so in a grid the
+    /// session holding the keyboard has to be the selected one. A native remote desktop cannot say so with a
+    /// pointer event, because the click never reaches Avalonia; it asks through the content host instead.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task FocusingATileSelectsItsSessionForEveryKeyboardCommand()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var workspace = new TerminalWorkspaceViewModel(new RecordingPtyService(), new UiDispatcher());
+        var first = await workspace.AddLocalSessionAsync(token);
+        var second = await workspace.AddLocalSessionAsync(token);
+        var remote = new FakeWorkspaceSession("DC01", "RDP");
+        workspace.AddWorkspaceSession(remote);
+        workspace.IsGridLayout = true;
+
+        var view = new RemoteFlow.UI.Views.Terminal.TerminalWorkspace { DataContext = workspace };
+        var window = new Window { Width = 1200, Height = 800, Content = view };
+        window.Show();
+        workspace.SelectSession(second);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var terminal = view.GetVisualDescendants()
+            .OfType<SvcSystems.UI.Terminal.TerminalControl>()
+            .Single(control => ReferenceEquals(control.DataContext, first));
+        _ = terminal.Focus();
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Same(first, workspace.SelectedSession);
+
+        var requested = RemoteFlow.UI.Views.Terminal.WorkspaceSessionContentHost.RequestSelection(
+            remote.LastContent!);
+
+        Assert.True(requested);
+        Assert.Same(remote, workspace.SelectedSession);
+        window.Close();
+    }
+
+    /// <summary>Which tile holds the keyboard decides what Close, Copy and Find act on, so it has to be
+    /// marked. The tint the tabs use is nearly invisible on a session with a grey accent.</summary>
+    [AvaloniaFact]
+    public async Task TheTileHoldingTheKeyboardIsTheOneMarkedAsActive()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var workspace = new TerminalWorkspaceViewModel(new RecordingPtyService(), new UiDispatcher());
+        var first = await workspace.AddLocalSessionAsync(token);
+        var second = await workspace.AddLocalSessionAsync(token);
+        workspace.IsGridLayout = true;
+        var view = new RemoteFlow.UI.Views.Terminal.TerminalWorkspace { DataContext = workspace };
+        var window = new Window { Width = 1200, Height = 800, Content = view };
+        window.Show();
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var tiles = view.GetVisualDescendants()
+            .OfType<Border>()
+            .Where(border => border.Classes.Contains("session-tile"))
+            .ToArray();
+        Assert.Equal(2, tiles.Length);
+        Assert.Same(second, Assert.Single(tiles, tile => tile.BorderThickness.Left == 2).DataContext);
+
+        workspace.SelectSession(first);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Assert.Same(first, Assert.Single(tiles, tile => tile.BorderThickness.Left == 2).DataContext);
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task TheLayoutAndItsColumnCountAreRememberedForTheNextRun()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var settings = new InMemorySettingsStore();
+        await using (var workspace = new TerminalsPageViewModel(
+            new RecordingPtyService(),
+            new UiDispatcher(),
+            settings,
+            new RecordingConfirmationService(true)))
+        {
+            await workspace.InitializeAsync(token);
+            Assert.False(workspace.IsGridLayout);
+            Assert.Equal(3, workspace.MaxGridColumns);
+
+            workspace.IsGridLayout = true;
+            workspace.MaxGridColumns = 99;
+            Assert.Equal(6, workspace.MaxGridColumns);
+            await workspace.FlushLayoutSettingsAsync();
+        }
+
+        await using var reopened = new TerminalsPageViewModel(
+            new RecordingPtyService(),
+            new UiDispatcher(),
+            settings,
+            new RecordingConfirmationService(true));
+        await reopened.InitializeAsync(token);
+
+        Assert.True(reopened.IsGridLayout);
+        Assert.Equal(6, reopened.MaxGridColumns);
+        // The session this opened with arrived after the layout was read, through the collection itself.
+        Assert.All(reopened.Sessions, session => Assert.True(session.IsTiled));
+    }
+
     [AvaloniaFact]
     public async Task NativeSessionFocusEscapeMovesFocusToItsVisibleTab()
     {
@@ -323,6 +482,10 @@ public sealed class TerminalWorkspaceViewModelTests
 
         public bool IsActive { get; private set; }
 
+        public bool IsTiled { get; private set; }
+
+        public bool IsContentVisible => IsTiled || IsActive;
+
         public bool IsLive => true;
 
         public bool IsEnded => false;
@@ -345,6 +508,14 @@ public sealed class TerminalWorkspaceViewModelTests
         {
             IsActive = isActive;
             OnPropertyChanged(nameof(IsActive));
+            OnPropertyChanged(nameof(IsContentVisible));
+        }
+
+        public void SetTiled(bool isTiled)
+        {
+            IsTiled = isTiled;
+            OnPropertyChanged(nameof(IsTiled));
+            OnPropertyChanged(nameof(IsContentVisible));
         }
 
         public Control CreateSessionContent()
