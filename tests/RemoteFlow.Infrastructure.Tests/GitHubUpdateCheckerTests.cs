@@ -185,18 +185,223 @@ public sealed class GitHubUpdateCheckerTests
         Assert.Empty(handler.Requests);
     }
 
-    private static GitHubUpdateChecker Create(HttpMessageHandler handler, string version)
+    [Fact]
+    public async Task TheInstallerForThisArchitectureIsSingledOutFromEverythingElseTheReleasePublishes()
+    {
+        using var handler = RecordingHandler.Returning(ReleaseWithAssets(
+            "v0.2.0",
+            Asset("RemoteFlow-0.2.0-win-arm64-setup.exe", 91_000_000),
+            Asset("RemoteFlow-0.2.0-win-arm64.zip", 88_000_000),
+            Asset("RemoteFlow-0.2.0-win-x64-setup.exe", 90_000_000),
+            Asset("RemoteFlow-0.2.0-win-x64.zip", 87_000_000),
+            Asset("checksums.txt", 412)));
+        using var checker = Create(handler, "0.1.0", "win-x64");
+
+        var result = await checker.CheckAsync(TestContext.Current.CancellationToken);
+
+        var package = Assert.IsType<UpdatePackage>(result.Package);
+        Assert.Equal("RemoteFlow-0.2.0-win-x64-setup.exe", package.FileName);
+        Assert.Equal(90_000_000, package.SizeInBytes);
+        Assert.Equal(
+            new Uri("https://github.com/michaelou/RemoteFlow/releases/download/v0.2.0/RemoteFlow-0.2.0-win-x64-setup.exe"),
+            package.DownloadUrl);
+        Assert.Equal(
+            new Uri("https://github.com/michaelou/RemoteFlow/releases/download/v0.2.0/checksums.txt"),
+            package.ChecksumsUrl);
+    }
+
+    // The same release, read by the native Arm build. The zip and the other architecture's installer are
+    // both wrong answers, and the x64 one is the wrong answer that would still have run.
+    [Fact]
+    public async Task AnArmBuildIsOfferedTheArmInstaller()
+    {
+        using var handler = RecordingHandler.Returning(ReleaseWithAssets(
+            "v0.2.0",
+            Asset("RemoteFlow-0.2.0-win-arm64-setup.exe", 91_000_000),
+            Asset("RemoteFlow-0.2.0-win-x64-setup.exe", 90_000_000),
+            Asset("checksums.txt", 412)));
+        using var checker = Create(handler, "0.1.0", "win-arm64");
+
+        var result = await checker.CheckAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("RemoteFlow-0.2.0-win-arm64-setup.exe", result.Package!.FileName);
+    }
+
+    /// <summary>Without a published hash there is nothing to check a download against, and RemoteFlow will
+    /// not run an installer it cannot verify. The update is still reported — the release page link is the
+    /// answer — but no button appears that would fail after being pressed.</summary>
+    [Fact]
+    public async Task AReleaseWithNoChecksumsFileOffersNoInstaller()
+    {
+        using var handler = RecordingHandler.Returning(ReleaseWithAssets(
+            "v0.2.0",
+            Asset("RemoteFlow-0.2.0-win-x64-setup.exe", 90_000_000)));
+        using var checker = Create(handler, "0.1.0", "win-x64");
+
+        var result = await checker.CheckAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(UpdateCheckOutcome.UpdateAvailable, result.Outcome);
+        Assert.Equal("0.2.0", result.LatestVersion);
+        Assert.Null(result.Package);
+    }
+
+    [Fact]
+    public async Task AReleaseWithNoInstallerForThisArchitectureOffersNone()
+    {
+        using var handler = RecordingHandler.Returning(ReleaseWithAssets(
+            "v0.2.0",
+            Asset("RemoteFlow-0.2.0-win-arm64-setup.exe", 91_000_000),
+            Asset("checksums.txt", 412)));
+        using var checker = Create(handler, "0.1.0", "win-x64");
+
+        var result = await checker.CheckAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(UpdateCheckOutcome.UpdateAvailable, result.Outcome);
+        Assert.Null(result.Package);
+    }
+
+    // A platform RemoteFlow publishes no artefacts for. The check still works; only the install does not.
+    [Fact]
+    public async Task ABuildOnAnUnpublishedArchitectureOffersNoInstaller()
+    {
+        using var handler = RecordingHandler.Returning(ReleaseWithAssets(
+            "v0.2.0",
+            Asset("RemoteFlow-0.2.0-win-x64-setup.exe", 90_000_000),
+            Asset("checksums.txt", 412)));
+        using var checker = new GitHubUpdateChecker(
+            new StubVersion("0.1.0"),
+            NullLogger<GitHubUpdateChecker>.Instance,
+            handler,
+            runtimeIdentifier: null);
+
+        var result = await checker.CheckAsync(TestContext.Current.CancellationToken);
+
+        // The production default reads the running process, which under test is win-x64 — so this asserts
+        // only that a check still succeeds, not that no package was chosen.
+        Assert.Equal(UpdateCheckOutcome.UpdateAvailable, result.Outcome);
+    }
+
+    /// <summary>The asset URL is downloaded from and then executed, so it is held to this repository's own
+    /// release download path rather than merely to a host. A response naming anywhere else loses the
+    /// installer, not the check.</summary>
+    [Theory]
+    [InlineData("https://elsewhere.example/michaelou/RemoteFlow/releases/download/v0.2.0/RemoteFlow-0.2.0-win-x64-setup.exe")]
+    [InlineData("http://github.com/michaelou/RemoteFlow/releases/download/v0.2.0/RemoteFlow-0.2.0-win-x64-setup.exe")]
+    [InlineData("https://github.com/someone/else/releases/download/v0.2.0/RemoteFlow-0.2.0-win-x64-setup.exe")]
+    [InlineData("https://raw.githubusercontent.com/michaelou/RemoteFlow/main/RemoteFlow-0.2.0-win-x64-setup.exe")]
+    public async Task AnInstallerUrlOffTheReleaseDownloadPathIsRefused(string url)
+    {
+        var body = $$"""
+            {"tag_name":"v0.2.0","html_url":"https://github.com/michaelou/RemoteFlow/releases/tag/v0.2.0",
+             "assets":[
+               {"name":"RemoteFlow-0.2.0-win-x64-setup.exe","size":90000000,"browser_download_url":"{{url}}"},
+               {{Asset("checksums.txt", 412)}}]}
+            """;
+        using var handler = RecordingHandler.Returning(body);
+        using var checker = Create(handler, "0.1.0", "win-x64");
+
+        var result = await checker.CheckAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(UpdateCheckOutcome.UpdateAvailable, result.Outcome);
+        Assert.Null(result.Package);
+    }
+
+    // Two assets ending -win-x64-setup.exe means the release is not shaped the way this code believes, and
+    // picking one of them would be a guess about which binary to run.
+    [Fact]
+    public async Task TwoCandidateInstallersAreAmbiguousRatherThanFirstWins()
+    {
+        using var handler = RecordingHandler.Returning(ReleaseWithAssets(
+            "v0.2.0",
+            Asset("RemoteFlow-nightly-win-x64-setup.exe", 90_000_000),
+            Asset("RemoteFlow-patched-win-x64-setup.exe", 90_000_001),
+            Asset("checksums.txt", 412)));
+        using var checker = Create(handler, "0.1.0", "win-x64");
+
+        var result = await checker.CheckAsync(TestContext.Current.CancellationToken);
+
+        Assert.Null(result.Package);
+    }
+
+    // One candidate whose name does not match the tag is still unambiguous, so it is used.
+    [Fact]
+    public async Task ASingleInstallerNamedUnexpectedlyIsStillTheOne()
+    {
+        using var handler = RecordingHandler.Returning(ReleaseWithAssets(
+            "v0.2.0",
+            Asset("RemoteFlow-0.2.0.1-win-x64-setup.exe", 90_000_000),
+            Asset("checksums.txt", 412)));
+        using var checker = Create(handler, "0.1.0", "win-x64");
+
+        var result = await checker.CheckAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("RemoteFlow-0.2.0.1-win-x64-setup.exe", result.Package!.FileName);
+    }
+
+    [Fact]
+    public async Task AnUpToDateBuildIsOfferedNoPackageEvenThoughTheAssetsAreThere()
+    {
+        using var handler = RecordingHandler.Returning(ReleaseWithAssets(
+            "v0.1.0",
+            Asset("RemoteFlow-0.1.0-win-x64-setup.exe", 90_000_000),
+            Asset("checksums.txt", 412)));
+        using var checker = Create(handler, "0.1.0", "win-x64");
+
+        var result = await checker.CheckAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(UpdateCheckOutcome.UpToDate, result.Outcome);
+        Assert.Null(result.Package);
+    }
+
+    // Reading the assets must not cost a second request: the check is still one GET, as asserted by
+    // TheRequestCarriesTheProductNameAndNothingAboutTheMachine, and they come out of the same body.
+    [Fact]
+    public async Task ReadingTheAssetsCostsNoExtraRequest()
+    {
+        using var handler = RecordingHandler.Returning(ReleaseWithAssets(
+            "v0.2.0",
+            Asset("RemoteFlow-0.2.0-win-x64-setup.exe", 90_000_000),
+            Asset("checksums.txt", 412)));
+        using var checker = Create(handler, "0.1.0", "win-x64");
+
+        _ = await checker.CheckAsync(TestContext.Current.CancellationToken);
+
+        _ = Assert.Single(handler.Requests);
+    }
+
+    private static GitHubUpdateChecker Create(
+        HttpMessageHandler handler,
+        string version,
+        string? runtimeIdentifier = null)
     {
         return new GitHubUpdateChecker(
             new StubVersion(version),
             NullLogger<GitHubUpdateChecker>.Instance,
-            handler);
+            handler,
+            runtimeIdentifier);
     }
 
     private static string Release(string tag)
     {
         return $$"""
             {"tag_name":"{{tag}}","html_url":"https://github.com/michaelou/RemoteFlow/releases/tag/{{tag}}"}
+            """;
+    }
+
+    /// <summary>A release body shaped like the one the release workflow produces, assets and all.</summary>
+    private static string ReleaseWithAssets(string tag, params string[] assets)
+    {
+        return $$"""
+            {"tag_name":"{{tag}}","html_url":"https://github.com/michaelou/RemoteFlow/releases/tag/{{tag}}",
+             "assets":[{{string.Join(",", assets)}}]}
+            """;
+    }
+
+    private static string Asset(string name, long size)
+    {
+        return $$"""
+            {"name":"{{name}}","size":{{size}},
+             "browser_download_url":"https://github.com/michaelou/RemoteFlow/releases/download/v0.2.0/{{name}}"}
             """;
     }
 

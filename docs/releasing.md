@@ -3,17 +3,33 @@
 A release is a tag plus a human decision. Pushing the tag builds and tests the artefacts and writes a
 **draft** release; publishing it is a separate, manual act. Nothing in the automation publishes anything.
 
-There is no auto-update mechanism. RemoteFlow never downloads or installs anything, so a published release
-reaches a machine only because someone chose to fetch it — which is also what keeps `checksums.txt` worth
-publishing. What it does have is an update *check*: an opt-in, off by default, that reads `tag_name` from
-this repository's `releases/latest` and offers a link. That is the whole of it, and it constrains what a
-release may be tagged: **the tag has to be a version this application can compare.** `v0.2.0` and
-`v0.2.0-rc.1` are; `nightly` is not, and a build that met it would tell the user it could not compare
-rather than guess. See [`SemanticVersion`](../src/RemoteFlow.Application/Services/SemanticVersion.cs).
+A published release reaches a machine one of two ways: someone fetches it, or someone presses **Download
+and install** on the About tab, which fetches that release's own installer and runs it
+([ADR-0018](adr/0018-self-update.md)). Both start with an opt-in check that reads `tag_name` from this
+repository's `releases/latest`, and that constrains what a release may be tagged: **the tag has to be a
+version this application can compare.** `v0.2.0` and `v0.2.0-rc.1` are; `nightly` is not, and a build that
+met it would tell the user it could not compare rather than guess. See
+[`SemanticVersion`](../src/RemoteFlow.Application/Services/SemanticVersion.cs).
 
 Because `releases/latest` skips drafts and prereleases, tagging `v0.2.0-rc.1` never offers itself to
 anyone running a stable build. A draft release is invisible to the check until it is published, which is
 the behaviour to want: the check reflects what people can actually download.
+
+### What the application now parses
+
+Self-update reads two things out of a published release, so both are interfaces rather than conventions,
+and the release workflow asserts them:
+
+- **The installer asset name**, `RemoteFlow-<version>-<rid>-setup.exe`. Renaming it does not break the
+  release; it breaks self-update for everyone already running an older build, silently, because the button
+  simply stops appearing.
+- **`checksums.txt`**, in `sha256sum` format: a lowercase 64-character digest, two spaces, a bare filename
+  with no directory part. An installer whose digest is not listed there is one RemoteFlow refuses to run,
+  so a release missing it offers no install button at all.
+
+Neither is something to change without changing
+[`GitHubUpdateChecker`](../src/RemoteFlow.Infrastructure/Updates/GitHubUpdateChecker.cs) and
+[`Sha256Checksums`](../src/RemoteFlow.Application/Services/Sha256Checksums.cs) with it.
 
 ## Cutting a release
 
@@ -129,3 +145,8 @@ There is no code-signing certificate yet, so releases ship unsigned and SmartScr
 publisher unknown. `scripts/sign-windows.ps1` is the only place that knows the difference, and it fails
 rather than silently shipping unsigned when a certificate is configured but `signtool.exe` is missing. See
 [packaging-windows.md](packaging-windows.md#signing).
+
+An in-app update does not meet that SmartScreen prompt, because a file written by `HttpClient` carries no
+Mark-of-the-Web and `CreateProcess` does not consult the attachment service. The mandatory SHA-256 check is
+what stands in its place, and [ADR-0018](adr/0018-self-update.md) is explicit that an integrity check is
+not an authorship check. Signing is still worth doing.

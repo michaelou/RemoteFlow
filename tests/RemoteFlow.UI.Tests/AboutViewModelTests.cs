@@ -372,16 +372,379 @@ public sealed class AboutViewModelTests
         Assert.Same(ThirdPartyNotices.Text, about.Notices);
     }
 
+    /// <summary>An available update whose release publishes an installer this machine could verify. Anything
+    /// less than that has to leave the install button hidden.</summary>
+    private static UpdateCheckResult AvailableWithInstaller()
+    {
+        return UpdateCheckResult.UpdateAvailable(
+            "0.2.0",
+            new Uri("https://github.com/michaelou/RemoteFlow/releases/tag/v0.2.0"),
+            new UpdatePackage(
+                "RemoteFlow-0.2.0-win-x64-setup.exe",
+                new Uri("https://github.com/michaelou/RemoteFlow/releases/download/v0.2.0/RemoteFlow-0.2.0-win-x64-setup.exe"),
+                90_000_000,
+                new Uri("https://github.com/michaelou/RemoteFlow/releases/download/v0.2.0/checksums.txt")));
+    }
+
+    [Fact]
+    public async Task AnAvailableUpdateWithAVerifiableInstallerOffersToInstallIt()
+    {
+        var checker = new RecordingUpdateChecker { Result = AvailableWithInstaller() };
+        var about = Create(
+            checker,
+            installer: new RecordingUpdateInstaller(),
+            confirmation: new RecordingConfirmation());
+
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.True(about.CanInstallUpdate);
+        Assert.False(about.HasInstallObstacle);
+        Assert.Equal("0.2.0", about.LatestVersion);
+    }
+
+    /// <summary>The dialog is where the version, the size, and the unsigned-installer caveat are stated, so
+    /// a host that cannot show one must not offer the button either.</summary>
+    [Fact]
+    public async Task WithNowhereToAskTheQuestionThereIsNoInstallButton()
+    {
+        var checker = new RecordingUpdateChecker { Result = AvailableWithInstaller() };
+        var about = Create(checker, installer: new RecordingUpdateInstaller());
+
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.False(about.CanInstallUpdate);
+    }
+
+    /// <summary>Three separate ways the button must stay hidden, and each says why rather than leaving an
+    /// absence to puzzle over. A button that would fail after being pressed is worse than no button.</summary>
+    [Fact]
+    public async Task AReleaseWithNoVerifiableInstallerSaysSoInsteadOfOfferingAButton()
+    {
+        var checker = new RecordingUpdateChecker
+        {
+            Result = UpdateCheckResult.UpdateAvailable(
+                "0.2.0",
+                new Uri("https://github.com/michaelou/RemoteFlow/releases/tag/v0.2.0")),
+        };
+        var about = Create(
+            checker,
+            installer: new RecordingUpdateInstaller(),
+            confirmation: new RecordingConfirmation());
+
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.False(about.CanInstallUpdate);
+        Assert.True(about.HasInstallObstacle);
+        Assert.Contains(
+            "release page",
+            Assert.IsType<string>(about.InstallObstacle),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task APortableCopyIsToldWhyItCannotInstallTheUpdateItFound()
+    {
+        var checker = new RecordingUpdateChecker { Result = AvailableWithInstaller() };
+        var installer = new RecordingUpdateInstaller
+        {
+            CanInstall = false,
+            Unavailable = "This is a portable copy of RemoteFlow.",
+        };
+        var about = Create(checker, installer: installer, confirmation: new RecordingConfirmation());
+
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.False(about.CanInstallUpdate);
+        Assert.True(about.HasInstallObstacle);
+        Assert.Equal("This is a portable copy of RemoteFlow.", about.InstallObstacle);
+    }
+
+    [Fact]
+    public async Task ABuildWithNoInstallerAtAllStillChecksAndOffersTheReleasePage()
+    {
+        var checker = new RecordingUpdateChecker { Result = AvailableWithInstaller() };
+        var about = Create(checker);
+
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        Assert.False(about.CanInstallUpdate);
+        Assert.False(about.HasInstallObstacle);
+        Assert.True(about.IsUpdateAvailable);
+    }
+
+    /// <summary>The dialog is the disclosure, so declining it has to mean nothing happened at all — not
+    /// a download already taken and discarded.</summary>
+    [Fact]
+    public async Task DecliningTheConfirmationDownloadsNothingAndSchedulesNothing()
+    {
+        var checker = new RecordingUpdateChecker { Result = AvailableWithInstaller() };
+        var installer = new RecordingUpdateInstaller();
+        var confirmation = new RecordingConfirmation { Answer = false };
+        var shutdown = new RecordingShutdown();
+        var about = Create(checker, installer: installer, confirmation: confirmation, shutdown: shutdown);
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        await about.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, confirmation.Calls);
+        Assert.Equal(0, installer.Downloads);
+        Assert.Empty(installer.Scheduled);
+        Assert.Equal(0, shutdown.Requests);
+    }
+
+    /// <summary>The order is the safety property: nothing is scheduled before it has been verified, and
+    /// nothing asks the application to close before something is scheduled.</summary>
+    [Fact]
+    public async Task AcceptingDownloadsThenSchedulesThenAsksToClose()
+    {
+        var checker = new RecordingUpdateChecker { Result = AvailableWithInstaller() };
+        var order = new List<string>();
+        var installer = new RecordingUpdateInstaller { Order = order };
+        var shutdown = new RecordingShutdown { Order = order };
+        var about = Create(
+            checker,
+            installer: installer,
+            confirmation: new RecordingConfirmation { Answer = true },
+            shutdown: shutdown);
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        await about.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal(["download", "schedule", "shutdown"], order);
+        Assert.False(about.IsInstallingUpdate);
+        Assert.Contains("verified", about.UpdateStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task TheConfirmationSaysWhatIsCheckedAndWhatIsNot()
+    {
+        var checker = new RecordingUpdateChecker { Result = AvailableWithInstaller() };
+        var confirmation = new RecordingConfirmation { Answer = false };
+        var about = Create(
+            checker,
+            installer: new RecordingUpdateInstaller(),
+            confirmation: confirmation);
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        await about.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.Contains("0.2.0", confirmation.Title, StringComparison.Ordinal);
+        Assert.Contains("SHA-256", confirmation.Message, StringComparison.Ordinal);
+        // The honest half: an integrity check is not an authorship check, and the dialog has to say so.
+        Assert.Contains("not code-signed", confirmation.Message, StringComparison.Ordinal);
+        Assert.Contains("close", confirmation.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AFailedDownloadLeavesTheReasonOnScreenAndSchedulesNothing()
+    {
+        var checker = new RecordingUpdateChecker { Result = AvailableWithInstaller() };
+        var installer = new RecordingUpdateInstaller
+        {
+            DownloadResult = UpdateDownloadResult.Failed("The download does not match the checksum."),
+        };
+        var shutdown = new RecordingShutdown();
+        var about = Create(
+            checker,
+            installer: installer,
+            confirmation: new RecordingConfirmation { Answer = true },
+            shutdown: shutdown);
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        await about.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal("The download does not match the checksum.", about.UpdateStatus);
+        Assert.Empty(installer.Scheduled);
+        Assert.Equal(0, shutdown.Requests);
+        Assert.False(about.IsInstallingUpdate);
+    }
+
+    [Fact]
+    public async Task ACancelledDownloadSaysNothingWasInstalled()
+    {
+        var checker = new RecordingUpdateChecker { Result = AvailableWithInstaller() };
+        var installer = new RecordingUpdateInstaller { CancelDuringDownload = true };
+        var shutdown = new RecordingShutdown();
+        var about = Create(
+            checker,
+            installer: installer,
+            confirmation: new RecordingConfirmation { Answer = true },
+            shutdown: shutdown);
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+
+        await about.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.Contains("cancelled", about.UpdateStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(installer.Scheduled);
+        Assert.Equal(0, shutdown.Requests);
+        Assert.False(about.IsInstallingUpdate);
+    }
+
+    [Fact]
+    public async Task TheProgressBarFollowsTheDownloadAndTheSentenceDoesNot()
+    {
+        var checker = new RecordingUpdateChecker { Result = AvailableWithInstaller() };
+        var installer = new RecordingUpdateInstaller { ProgressToReport = 0.42 };
+        var about = Create(
+            checker,
+            installer: installer,
+            confirmation: new RecordingConfirmation { Answer = true });
+        await about.CheckForUpdatesCommand.ExecuteAsync(null);
+        // Progress<T> marshals through the synchronization context, which is how the real download reaches
+        // the UI thread from a background read. With no context under test it lands on the thread pool
+        // instead, so the property change is the thing to wait on rather than the command completing.
+        var reported = new TaskCompletionSource<double>(TaskCreationOptions.RunContinuationsAsynchronously);
+        about.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AboutViewModel.UpdateDownloadPercent) &&
+                about.UpdateDownloadPercent > 0)
+            {
+                _ = reported.TrySetResult(about.UpdateDownloadPercent);
+            }
+        };
+
+        await about.InstallUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal(42, await reported.Task.WaitAsync(TestContext.Current.CancellationToken));
+        // A screen reader re-reading a sentence on every buffer would be worse than useless, so the
+        // percentage must never reach it.
+        Assert.DoesNotContain("42", about.UpdateStatus, StringComparison.Ordinal);
+    }
+
+    /// <summary>An install that never arrived is invisible from inside the application that was replaced,
+    /// so the next launch is the only chance to say so.</summary>
+    [Fact]
+    public async Task AnUpdateThatNeverArrivedIsReportedOnTheNextStart()
+    {
+        var installer = new RecordingUpdateInstaller
+        {
+            FailedUpdateReport = "The update to RemoteFlow 0.2.0 did not finish.",
+        };
+        var about = Create(new RecordingUpdateChecker(), installer: installer);
+
+        await about.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("The update to RemoteFlow 0.2.0 did not finish.", about.UpdateStatus);
+    }
+
     private static AboutViewModel Create(
         RecordingUpdateChecker checker,
-        ISettingsStore? settings = null)
+        ISettingsStore? settings = null,
+        IUpdateInstaller? installer = null,
+        IConfirmationDialogService? confirmation = null,
+        IApplicationShutdown? shutdown = null)
     {
         return new AboutViewModel(
             AssemblyVersionInfo.Parse("0.1.0"),
             new StubPaths(),
             new RecordingShell(),
             updateChecker: checker,
-            settings: settings);
+            settings: settings,
+            installer: installer,
+            confirmation: confirmation,
+            shutdown: shutdown);
+    }
+
+    private sealed class RecordingUpdateInstaller : IUpdateInstaller
+    {
+        public bool CanInstall { get; init; } = true;
+
+        public string? Unavailable { get; init; }
+
+        public UpdateDownloadResult DownloadResult { get; init; } = UpdateDownloadResult.Verified(
+            new VerifiedUpdate(@"C:\cache\Updates\RemoteFlow-0.2.0-win-x64-setup.exe", "0.2.0", "abc123"));
+
+        public string? FailedUpdateReport { get; init; }
+
+        public double? ProgressToReport { get; init; }
+
+        public bool CancelDuringDownload { get; init; }
+
+        /// <summary>Shared with the shutdown fake, so a test can assert the sequence across both.</summary>
+        public List<string>? Order { get; init; }
+
+        public int Downloads { get; private set; }
+
+        public List<VerifiedUpdate> Scheduled { get; } = [];
+
+        public Task<UpdateDownloadResult> DownloadAsync(
+            UpdatePackage package,
+            string version,
+            IProgress<double>? progress,
+            CancellationToken cancellationToken = default)
+        {
+            Downloads++;
+            Order?.Add("download");
+            if (CancelDuringDownload)
+            {
+                return Task.FromException<UpdateDownloadResult>(new OperationCanceledException());
+            }
+
+            if (ProgressToReport is { } fraction)
+            {
+                progress?.Report(fraction);
+            }
+
+            return Task.FromResult(DownloadResult);
+        }
+
+        public void ScheduleInstall(VerifiedUpdate update)
+        {
+            Order?.Add("schedule");
+            Scheduled.Add(update);
+        }
+
+        public void RunPendingInstall()
+        {
+            Order?.Add("run");
+        }
+
+        public Task<string?> TakeFailedUpdateReportAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(FailedUpdateReport);
+        }
+
+        public Task SweepStaleFilesAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingConfirmation : IConfirmationDialogService
+    {
+        public bool Answer { get; init; }
+
+        public int Calls { get; private set; }
+
+        public string Title { get; private set; } = string.Empty;
+
+        public string Message { get; private set; } = string.Empty;
+
+        public Task<bool> ConfirmAsync(
+            string title,
+            string message,
+            string confirmLabel,
+            CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            Title = title;
+            Message = message;
+            return Task.FromResult(Answer);
+        }
+    }
+
+    private sealed class RecordingShutdown : IApplicationShutdown
+    {
+        public List<string>? Order { get; init; }
+
+        public int Requests { get; private set; }
+
+        public bool Request()
+        {
+            Requests++;
+            Order?.Add("shutdown");
+            return true;
+        }
     }
 
     private sealed class RecordingUpdateChecker : IUpdateChecker

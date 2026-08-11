@@ -109,11 +109,22 @@ It is off until you turn it on, and it is the whole of RemoteFlow's contact with
   licence key, no installation identifier, and nothing describing your machine, your connections, or your
   use of the application. GitHub sees a request from your IP address, as any website you visit does.
 - **What it does with the answer.** Reads the version number, compares it with this build, and puts a
-  sentence on screen. If a newer release exists you get a button that opens the release page in your
-  browser.
-- **There is no auto-updater.** RemoteFlow never downloads, installs, or replaces anything. Updating is
-  you, deliberately, from the [Releases](../../releases) page — which also means you keep the chance to
-  check the release against `checksums.txt` before running it.
+  sentence on screen. The check itself downloads nothing.
+- **Installing is a separate press.** If a newer release exists you get **Download and install** as well as
+  a link to the release page. Pressing it asks first, and says what it is about to do: it downloads that
+  release's installer from `github.com`, checks it against the SHA-256 in the `checksums.txt` published
+  with the release, and — only if that matches — closes RemoteFlow, installs, and opens it again. Your
+  connections and settings are untouched. If the checksum does not match, nothing is installed and the
+  download is deleted.
+- **What that check is, and what it is not.** It proves the download arrived intact. It does not prove who
+  built it: `checksums.txt` comes from the same place as the installer, so the real guarantee is the HTTPS
+  connection to `github.com`. RemoteFlow's releases are not code-signed yet, which means Windows cannot
+  tell you who published the installer either. If you would rather judge that yourself, leave the check off
+  and install from the [Releases](../../releases) page by hand — it is the same file, and the same
+  `checksums.txt`.
+- **Portable copies still update by hand,** and say so. Only an installed RemoteFlow, running from where
+  its own uninstall entry says it is, will replace itself; anything else explains why the button is not
+  there rather than leaving you to guess.
 
 ### What is stored, and where
 

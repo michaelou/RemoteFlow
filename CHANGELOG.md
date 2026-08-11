@@ -7,6 +7,25 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **RemoteFlow can install its own updates.** When a check finds a newer release, the About tab offers
+  **Download and install** beside the link to the release page. It asks first, and the dialog says what it
+  is about to do: download that release's installer from `github.com`, check it against the SHA-256 in the
+  `checksums.txt` published with the release, then close RemoteFlow, install, and open it again. Nothing is
+  downloaded until that button is pressed, and a download whose checksum does not match is deleted rather
+  than run — there is no way to install one anyway. This replaces the position taken in
+  [ADR-0016](docs/adr/0016-update-check.md); [ADR-0018](docs/adr/0018-self-update.md) explains what changed
+  and is explicit that a checksum proves the download arrived intact, not who built it. Releases are still
+  not code-signed, and the confirmation dialog says so.
+- Only an installed copy updates itself. A portable copy, one that has been moved, or a build output
+  directory says why the button is not there rather than leaving it to be guessed at, and a release with no
+  installer this machine can verify does the same.
+- An update that starts and never arrives is reported at the next launch, with the installer's log named
+  and the downloaded installer kept so it can be run by hand.
+- The installer now declares an `AppMutex`, so it and the uninstaller stop and ask rather than replacing
+  files underneath a running RemoteFlow. The uninstaller had no such check before.
+
 ## [0.2.4] - 2026-08-11
 
 Two things in the terminal that were plainly wrong: copying with the keyboard, and the colour of a

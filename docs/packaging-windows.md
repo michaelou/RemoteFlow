@@ -55,6 +55,33 @@ Behaviour:
 - A single Start-menu shortcut, not a folder containing one shortcut. A desktop shortcut only if the user
   ticks the box, which is unticked (`/TASKS=desktopicon` for an unattended install that wants one).
 - Upgrades in place, recognised by a fixed `AppId` that must never change.
+- **`AppMutex`.** RemoteFlow holds a mutex of the same name for its lifetime, so Setup and the uninstaller
+  stop and ask rather than replacing files underneath a running copy. The name must stay byte-for-byte
+  identical to `RunningInstanceMutex.Name` — Windows compares mutex names case-sensitively, and a mismatch
+  fails in the unhelpful direction, with Setup concluding nothing is running.
+
+### `/UPDATE`, and the second `[Run]` entry
+
+RemoteFlow updates itself by downloading a release's own installer and running it
+([ADR-0018](adr/0018-self-update.md)). The command line it uses is:
+
+```shell
+RemoteFlow-<version>-<rid>-setup.exe /SILENT /NOCANCEL /NORESTART /UPDATE "/LOG=<logdir>\update-<version>.log"
+```
+
+`/UPDATE` is not an Inno switch. Setup passes parameters it does not recognise through to `[Code]`, the
+same way `/PURGEDATA` already works on the uninstall side, where `RelaunchAfterUpdateRequested` reads it.
+The interactive `[Run]` entry is `skipifsilent`, so a silent install never relaunches; a second entry,
+flagged `skipifnotsilent` and gated on that `Check`, is what starts RemoteFlow again after an in-app
+update. A CI smoke test or an unattended deployment passes no `/UPDATE` and gets no window.
+
+No `/DIR` is passed: Setup reads `Inno Setup: App Path` from its own uninstall entry and lands where the
+copy already is. No `/TASKS` either, because `UsePreviousTasks` restores whatever the user chose — both
+verified by `smoke-test-artifacts.ps1 -IncludeUpgrade`.
+
+Both `[Run]` entries carry `WorkingDir: "{app}"`. Without it the relaunched application inherits Setup's
+current directory inside SetupLdr's temp folder, which SetupLdr then cannot delete — a leaked directory per
+update.
 
 ### Uninstall keeps your data
 
@@ -111,3 +138,9 @@ before publishing that draft.
    removes it.
 5. Check `RemoteFlow.exe` in Explorer: the icon appears, and Properties → Details shows the product,
    version, and copyright.
+6. **An in-place upgrade,** which CI cannot prove because it builds one version per run. Install the
+   previous release, tick the desktop icon, launch it, then press **Check for updates** and **Download and
+   install** on the About tab. Confirm the dialog names the version and the on-disk installer path, that
+   RemoteFlow closes and reopens on the new version, that it landed in the *same* directory, that both
+   shortcuts survived, and that `%APPDATA%\RemoteFlow` is untouched. `-IncludeUpgrade` covers everything
+   about this except the version actually changing.

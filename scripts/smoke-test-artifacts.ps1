@@ -30,17 +30,37 @@ Off by default because it is not free of side effects: the installer writes the 
 under HKCU that identifies an existing RemoteFlow install, so running this on a machine with RemoteFlow
 installed will point that entry at the temporary directory. CI passes it; on a workstation, only do so if
 you do not have RemoteFlow installed.
+
+.PARAMETER IncludeUpgrade
+Also run the installer again over the first install, twice, to cover the parts of an in-app update that a
+single install cannot reach: that a silent run with no /DIR finds the previous install through its HKCU
+uninstall entry and lands there rather than in the default location, and that the relaunch [Run] entry
+fires only when /UPDATE is passed.
+
+CI builds one version per run, so "N+1 replaced N" is not provable here and stays in the manual release
+checklist. What is provable is everything an upgrade depends on other than the version number.
+
+Implies -IncludeInstaller, and inherits its side effects.
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$ExpectedVersion,
     [Parameter(Mandatory)][ValidateSet('win-x64', 'win-arm64')][string]$Runtime,
     [string]$ArtifactDirectory,
-    [switch]$IncludeInstaller
+    [switch]$IncludeInstaller,
+    [switch]$IncludeUpgrade
 )
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+if ($IncludeUpgrade) {
+    $IncludeInstaller = $true
+}
+
+# The AppId from build/windows/RemoteFlow.iss, with the _is1 suffix Inno appends. This is where Setup
+# records where it installed, and where it reads that back from when an upgrade runs with no /DIR.
+$uninstallKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{6A084A9C-3CFB-4C8F-A7A8-AA5B34D9C91F}_is1'
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 if (-not $ArtifactDirectory) {
@@ -178,8 +198,88 @@ else {
             -Description "The $Runtime installed binary"
         Write-Host "installer $(Split-Path -Leaf $installerPath) -> $reported"
         $results.Add([pscustomobject]@{ Artefact = Split-Path -Leaf $installerPath; Reported = $reported })
+
+        if ($IncludeUpgrade) {
+            # An upgrade is not a fresh install. What makes it land in the right place is a registry value
+            # the first run wrote, and nothing above touches it.
+            $recordedPath = (Get-ItemProperty -LiteralPath $uninstallKey -Name 'Inno Setup: App Path').'Inno Setup: App Path'
+            if ($recordedPath.TrimEnd('\') -ine $installDirectory.TrimEnd('\')) {
+                throw "Setup recorded its location as '$recordedPath', not $installDirectory. An in-app update runs with no /DIR and depends on this value."
+            }
+
+            # Deleting the binary is the unambiguous assertion: only a run that resolved the previous
+            # install directory can put it back. Comparing timestamps would not do, because Inno preserves
+            # the source file's write time and an overwritten file looks untouched.
+            Remove-Item -LiteralPath (Join-Path $installDirectory 'RemoteFlow.exe') -Force
+
+            # Compared before and after rather than merely tested afterwards: a workstation running this by
+            # hand may already have RemoteFlow installed in the default location, and the question is
+            # whether this run put something there, not whether anything is there.
+            $defaultExe = Join-Path $env:LOCALAPPDATA 'Programs\RemoteFlow\RemoteFlow.exe'
+            $defaultExisted = Test-Path -LiteralPath $defaultExe
+
+            $upgradeLog = Join-Path $ArtifactDirectory "upgrade-$Runtime.log"
+            $process = Start-Process -FilePath $installerPath `
+                -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=$upgradeLog" `
+                -Wait -PassThru
+            if ($process.ExitCode -ne 0) {
+                throw "The $Runtime installer exited with code $($process.ExitCode) on the upgrade run. See $upgradeLog."
+            }
+
+            if (-not $defaultExisted -and (Test-Path -LiteralPath $defaultExe)) {
+                throw "The upgrade run installed into the default location instead of reusing $installDirectory."
+            }
+
+            $reported = Assert-VersionOutput `
+                -ExePath (Join-Path $installDirectory 'RemoteFlow.exe') `
+                -Description "The $Runtime binary restored by the upgrade run"
+
+            # Without /UPDATE nothing may be launched, or a silent deployment puts a window on somebody's
+            # screen. Inno logs a "-- Run entry --" header for every [Run] entry it processes.
+            if (Select-String -LiteralPath $upgradeLog -Pattern '-- Run entry --' -Quiet) {
+                throw "The upgrade run processed a [Run] entry without /UPDATE. See $upgradeLog."
+            }
+
+            Write-Host "upgrade   no /DIR -> reused $installDirectory, no relaunch -> $reported"
+
+            # And with /UPDATE it must, or an in-app update leaves the user with no application on screen.
+            #
+            # Deliberately not -Wait: this run relaunches RemoteFlow, and Start-Process -Wait waits for the
+            # whole process tree, so it would block until somebody closed the window. WaitForExit on the
+            # returned object waits for Setup alone, which is what "did the install finish" means here.
+            $relaunchLog = Join-Path $ArtifactDirectory "relaunch-$Runtime.log"
+            $process = Start-Process -FilePath $installerPath `
+                -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/UPDATE', "/LOG=$relaunchLog" `
+                -PassThru
+            if (-not $process.WaitForExit(300000)) {
+                throw "The $Runtime installer did not finish within five minutes on the /UPDATE run. See $relaunchLog."
+            }
+
+            if ($process.ExitCode -ne 0) {
+                throw "The $Runtime installer exited with code $($process.ExitCode) on the /UPDATE run. See $relaunchLog."
+            }
+
+            # The relaunched application starts after Setup exits, so give it a moment to appear in the log
+            # and on the process list before asserting and before the finally block closes it.
+            Start-Sleep -Seconds 3
+
+            # The log records the entry before CreateProcess is called, so this asserts the [Run] entry was
+            # selected -- the part under test -- without depending on a window surviving on a build runner.
+            $expectedRelaunch = [regex]::Escape((Join-Path $installDirectory 'RemoteFlow.exe'))
+            if (-not (Select-String -LiteralPath $relaunchLog -Pattern $expectedRelaunch -Quiet)) {
+                throw "The /UPDATE run did not launch $installDirectory\RemoteFlow.exe. See $relaunchLog."
+            }
+
+            Write-Host "relaunch  /UPDATE -> launched $installDirectory\RemoteFlow.exe"
+            $results.Add([pscustomobject]@{ Artefact = 'upgrade + relaunch'; Reported = $reported })
+        }
     }
     finally {
+        # The /UPDATE run above starts RemoteFlow, and AppMutex means the uninstaller refuses while it is
+        # running. Closing it is what a user does by closing the window.
+        Stop-Process -Name 'RemoteFlow' -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+
         # Best effort. Inno's uninstaller relaunches itself from a temporary copy and returns before the
         # work is done, so a failure here says nothing reliable about the artefact; the release checklist
         # in docs/packaging-windows.md covers uninstall behaviour properly, by hand.

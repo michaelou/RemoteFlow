@@ -84,6 +84,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IPasteWarningService, PasteWarningDialogService>();
         services.TryAddSingleton<TerminalClipboardController>();
         services.TryAddSingleton<IConfirmationDialogService, ConfirmationDialogService>();
+        services.TryAddSingleton<IApplicationShutdown, ApplicationShutdownService>();
         services.TryAddSingleton<IRemoteEditCloseGuard, RemoteEditCloseGuard>();
         services.TryAddSingleton<IRemoteEditConflictDialogService, RemoteEditConflictDialogService>();
         services.TryAddSingleton<IRemoteEditConflictResolver, RemoteEditConflictResolver>();
@@ -108,8 +109,12 @@ public static class DependencyInjection
                     .SweepStaleFilesAsync().ConfigureAwait(true);
                 await provider.GetRequiredService<IRdpLauncher>()
                     .SweepStaleFilesAsync().ConfigureAwait(true);
-                // Reads the update opt-in and, only if it is on, starts one check. This awaits the
-                // settings read, not the network call — see AboutViewModel.InitializeAsync.
+                // Not straight after an install: until RemoteFlow has started again, the downloaded
+                // installer is the only way back from one that destroyed what it was replacing.
+                await provider.GetRequiredService<IUpdateInstaller>()
+                    .SweepStaleFilesAsync().ConfigureAwait(true);
+                // Reads the update opt-in and, only if it is on, starts one check. Also reports an update
+                // that was started and never arrived, which is a thing only the next launch can notice.
                 await provider.GetRequiredService<AboutViewModel>()
                     .InitializeAsync().ConfigureAwait(true);
             },

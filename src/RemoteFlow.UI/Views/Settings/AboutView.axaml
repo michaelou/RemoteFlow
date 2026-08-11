@@ -57,7 +57,7 @@
         <TextBlock FontSize="18" FontWeight="SemiBold" Text="Updates" />
         <TextBlock
             Foreground="{DynamicResource Brush.Text.Secondary}"
-            Text="RemoteFlow does not update itself. A check asks github.com for the version number of the newest release and nothing else: no account, no identifier, nothing about this machine, and nothing is downloaded or installed."
+            Text="A check asks github.com for the version number of the newest release and nothing else: no account, no identifier, nothing about this machine. Nothing is downloaded until you ask for it. If you do, RemoteFlow checks what it downloaded against the SHA-256 the release published, then closes, installs, and opens again."
             TextWrapping="Wrap" />
 
         <StackPanel Orientation="Horizontal" Spacing="10">
@@ -66,6 +66,20 @@
               Command="{Binding CheckForUpdatesCommand}"
               Content="Check for updates"
               IsEnabled="{Binding !IsCheckingForUpdates}" />
+          <!-- A second, separate press, and it opens a dialog before anything is downloaded. Hidden unless
+               there is an installer this machine can both use and verify, so it is never a button that
+               would fail after being pressed. -->
+          <Button
+              x:Name="InstallUpdateButton"
+              Classes="accent"
+              Command="{Binding InstallUpdateCommand}"
+              Content="Download and install"
+              IsVisible="{Binding CanInstallUpdate}" />
+          <Button
+              x:Name="CancelUpdateDownloadButton"
+              Command="{Binding CancelUpdateDownloadCommand}"
+              Content="Cancel the download"
+              IsVisible="{Binding IsInstallingUpdate}" />
           <!-- Only appears when there is somewhere useful to go. Sending someone who is already current
                to a download page invites them to reinstall what they are running. -->
           <Button
@@ -75,6 +89,16 @@
               IsVisible="{Binding IsUpdateAvailable}" />
         </StackPanel>
 
+        <!-- The percentage lives here and never in the sentence below: a progress bar announces its own
+             value, and a screen reader re-reading a sentence on every buffer would be unusable. -->
+        <ProgressBar
+            x:Name="UpdateDownloadProgress"
+            AutomationProperties.Name="Update download progress"
+            IsVisible="{Binding IsInstallingUpdate}"
+            Maximum="100"
+            Minimum="0"
+            Value="{Binding UpdateDownloadPercent}" />
+
         <!-- The whole result is in the sentence. Nothing here is carried by a colour or an icon, so it
              reads the same to a screen reader as it does on screen. -->
         <SelectableTextBlock
@@ -82,6 +106,15 @@
             Foreground="{DynamicResource Brush.Text.Primary}"
             IsVisible="{Binding HasUpdateStatus}"
             Text="{Binding UpdateStatus}"
+            TextWrapping="Wrap" />
+
+        <!-- Why there is no install button, said where the button would have been. A portable copy, a build
+             output directory, or a release with no installer this machine can verify. -->
+        <SelectableTextBlock
+            x:Name="InstallObstacleText"
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            IsVisible="{Binding HasInstallObstacle}"
+            Text="{Binding InstallObstacle}"
             TextWrapping="Wrap" />
 
         <CheckBox

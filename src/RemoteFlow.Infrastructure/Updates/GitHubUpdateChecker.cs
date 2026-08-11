@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using RemoteFlow.Application.Abstractions;
@@ -22,30 +23,32 @@ namespace RemoteFlow.Infrastructure.Updates;
 public sealed class GitHubUpdateChecker : IUpdateChecker, IDisposable
 {
     /// <summary>Where the fallback link goes when the response names no page of its own.</summary>
-    public const string ReleasesPageUrl = "https://github.com/michaelou/RemoteFlow/releases";
+    public const string ReleasesPageUrl = GitHubReleaseUris.ReleasesPageUrl;
 
     private const string _latestReleaseEndpoint =
         "https://api.github.com/repos/michaelou/RemoteFlow/releases/latest";
-
-    private const string _releaseHost = "github.com";
 
     private static readonly TimeSpan _timeout = TimeSpan.FromSeconds(15);
 
     private readonly IAppVersionInfo _version;
     private readonly ILogger<GitHubUpdateChecker> _logger;
     private readonly HttpClient _http;
+    private readonly string? _runtimeIdentifier;
 
-    /// <summary>Builds a checker. <c>handler</c> is supplied by tests; when it is null the checker owns a
-    /// handler of its own, which is the case in the running application.</summary>
+    /// <summary>Builds a checker. <c>handler</c> and <c>runtimeIdentifier</c> are supplied by tests; when
+    /// they are null the checker owns a handler of its own and reads the architecture of the running
+    /// process, which is the case in the running application.</summary>
     public GitHubUpdateChecker(
         IAppVersionInfo version,
         ILogger<GitHubUpdateChecker> logger,
-        HttpMessageHandler? handler = null)
+        HttpMessageHandler? handler = null,
+        string? runtimeIdentifier = null)
     {
         ArgumentNullException.ThrowIfNull(version);
         ArgumentNullException.ThrowIfNull(logger);
         _version = version;
         _logger = logger;
+        _runtimeIdentifier = runtimeIdentifier ?? CurrentRuntimeIdentifier();
         _http = handler is null
             ? new HttpClient()
             : new HttpClient(handler, disposeHandler: false);
@@ -54,7 +57,7 @@ public sealed class GitHubUpdateChecker : IUpdateChecker, IDisposable
         // GitHub rejects a request without one. "RemoteFlow/0.1.0" names the software and nothing else.
         _http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue(
             "RemoteFlow",
-            SanitizeUserAgentVersion(version.Version)));
+            GitHubReleaseUris.SanitizeUserAgentVersion(version.Version)));
         _http.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28");
     }
 
@@ -140,26 +143,141 @@ public sealed class GitHubUpdateChecker : IUpdateChecker, IDisposable
 
         var page = ReleasePageUrl(release);
         return latest > current
-            ? UpdateCheckResult.UpdateAvailable(latest.ToString(), page)
+            ? UpdateCheckResult.UpdateAvailable(latest.ToString(), page, SelectPackage(release, latest))
             : UpdateCheckResult.UpToDate(latest.ToString(), page);
     }
 
-    /// <summary>The link the user is offered. It comes out of a network response, so it is checked to be
-    /// an https URL on github.com before it can become something the desktop shell is asked to open; a
-    /// response naming anywhere else falls back to the releases page this build was compiled with.</summary>
+    /// <summary>The installer this build could install over itself, or null.
+    ///
+    /// Null is not a failure and never becomes one: a release with no usable asset still reports that a
+    /// newer version exists and still links to its page. All this decides is whether the button appears,
+    /// and it is better for it not to appear than to appear and fail after being pressed.</summary>
+    private UpdatePackage? SelectPackage(JsonElement release, SemanticVersion latest)
+    {
+        if (_runtimeIdentifier is null ||
+            !release.TryGetProperty("assets", out var assets) ||
+            assets.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        // Without a published hash there is nothing to check the download against, and RemoteFlow does not
+        // run an installer it cannot verify. So no checksums.txt means no package at all, checked first
+        // because it is the cheapest way to rule the whole release out.
+        var checksums = MatchAsset(assets, name => string.Equals(name, "checksums.txt", StringComparison.Ordinal));
+        if (checksums is null)
+        {
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "Release {Version} publishes no checksums.txt, so it cannot be installed from here.",
+                    latest);
+            }
+
+            return null;
+        }
+
+        // The name the release workflow produces. Matching it exactly cross-checks the tag against the
+        // asset names for free; the suffix is the fallback, and only when it is unambiguous, because two
+        // candidates mean the release is not shaped the way this code believes.
+        var exactName = $"RemoteFlow-{latest}-{_runtimeIdentifier}-setup.exe";
+        var suffix = $"-{_runtimeIdentifier}-setup.exe";
+        var installer =
+            MatchAsset(assets, name => string.Equals(name, exactName, StringComparison.OrdinalIgnoreCase)) ??
+            MatchAsset(assets, name => name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase), unique: true);
+
+        if (installer is null)
+        {
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "Release {Version} publishes no {Identifier} installer that can be identified.",
+                    latest,
+                    _runtimeIdentifier);
+            }
+
+            return null;
+        }
+
+        return new UpdatePackage(installer.Name, installer.Url, installer.Size, checksums.Url);
+    }
+
+    /// <summary>The one asset matching a predicate whose download URL is on this repository's release
+    /// download path. <paramref name="unique"/> refuses a second match rather than taking the first.</summary>
+    private static ReleaseAsset? MatchAsset(
+        JsonElement assets,
+        Func<string, bool> matches,
+        bool unique = false)
+    {
+        ReleaseAsset? found = null;
+        foreach (var asset in assets.EnumerateArray())
+        {
+            var name = ReadString(asset, "name");
+            if (name.Length == 0 || !matches(name))
+            {
+                continue;
+            }
+
+            // The URL is about to be downloaded from and, for the installer, run. It came out of a network
+            // response, so it is held to the release download path rather than merely to a host.
+            if (!Uri.TryCreate(ReadString(asset, "browser_download_url"), UriKind.Absolute, out var url) ||
+                !GitHubReleaseUris.IsReleaseAsset(url))
+            {
+                continue;
+            }
+
+            if (!unique)
+            {
+                return new ReleaseAsset(name, url, ReadSize(asset));
+            }
+
+            if (found is not null)
+            {
+                return null;
+            }
+
+            found = new ReleaseAsset(name, url, ReadSize(asset));
+        }
+
+        return found;
+    }
+
+    /// <summary>Only used to show a size and to size the progress bar, so a release that omits it costs
+    /// nothing: the downloader falls back to the response's own Content-Length.</summary>
+    private static long ReadSize(JsonElement asset)
+    {
+        return asset.TryGetProperty("size", out var value) &&
+            value.ValueKind == JsonValueKind.Number &&
+            value.TryGetInt64(out var size) &&
+            size > 0
+            ? size
+            : 0;
+    }
+
+    /// <summary>The runtime identifier whose artefacts this process should install, or null on a platform
+    /// RemoteFlow publishes none for.
+    ///
+    /// This is the identifier the running build was published for, not the machine's — an x64 build running
+    /// under emulation on an Arm device stays on the x64 track. Moving somebody between architectures is a
+    /// decision, and an update they did not read is not the place to make it for them.</summary>
+    private static string? CurrentRuntimeIdentifier()
+    {
+        var identifier = RuntimeInformation.RuntimeIdentifier;
+        return identifier is "win-x64" or "win-arm64" ? identifier : null;
+    }
+
+    private sealed record ReleaseAsset(string Name, Uri Url, long Size);
+
+    /// <summary>The link the user is offered. It comes out of a network response, so it is checked before
+    /// it can become something the desktop shell is asked to open; a response naming anywhere else falls
+    /// back to the releases page this build was compiled with.</summary>
     private static Uri ReleasePageUrl(JsonElement release)
     {
         var fallback = new Uri(ReleasesPageUrl);
         var candidate = ReadString(release, "html_url");
-        if (!Uri.TryCreate(candidate, UriKind.Absolute, out var url))
-        {
-            return fallback;
-        }
-
-        var isGitHub = url.Scheme == Uri.UriSchemeHttps &&
-            (string.Equals(url.Host, _releaseHost, StringComparison.OrdinalIgnoreCase) ||
-                url.Host.EndsWith($".{_releaseHost}", StringComparison.OrdinalIgnoreCase));
-        return isGitHub ? url : fallback;
+        return Uri.TryCreate(candidate, UriKind.Absolute, out var url) && GitHubReleaseUris.IsReleasePage(url)
+            ? url
+            : fallback;
     }
 
     private static string DescribeFailure(HttpStatusCode status)
@@ -181,14 +299,5 @@ public sealed class GitHubUpdateChecker : IUpdateChecker, IDisposable
         return element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? string.Empty
             : string.Empty;
-    }
-
-    /// <summary>A User-Agent product version cannot contain the characters a MinVer build metadata suffix
-    /// can, and a malformed header would fail the request rather than the parse.</summary>
-    private static string SanitizeUserAgentVersion(string version)
-    {
-        var cleaned = new string([.. version.Where(character =>
-            char.IsAsciiLetterOrDigit(character) || character is '.' or '-')]);
-        return cleaned.Length == 0 ? "0.0.0" : cleaned;
     }
 }

@@ -32,6 +32,28 @@ With the **portable zip**, Windows also marks the downloaded file itself. Right-
 Properties → tick **Unblock** → OK, *before* extracting. Otherwise every extracted file inherits the mark
 and you get the warning again per file.
 
+An update installed from inside RemoteFlow does not show this dialog, because the mark is something a
+browser writes onto a download and RemoteFlow's own download never acquires one. The SHA-256 check
+RemoteFlow performs before running the installer is what stands in its place — it is the same comparison
+as the `certutil` command above, made mandatory. See [ADR-0018](adr/0018-self-update.md) for what that does
+and does not prove.
+
+## I updated from inside RemoteFlow and it did not reopen
+
+**Symptom.** RemoteFlow closed to install an update and did not come back, or came back on the old version.
+
+**Why.** The installer ran without RemoteFlow watching — it could not, since it had exited so its files
+could be replaced. Inno Setup rolls back a failed install by removing what it installed rather than by
+restoring what it replaced, so in the worst case the application directory is left incomplete.
+
+**Fix.** Start RemoteFlow from the Start-menu shortcut, which is not removed. It will tell you the update
+did not finish and name the installer's log, which is `update-<version>.log` in the log folder — the About
+tab's **Open the log folder** button, or `%LOCALAPPDATA%\RemoteFlow\Logs`. The downloaded installer is kept
+deliberately, under `%LOCALAPPDATA%\RemoteFlow\Cache\Updates`, so you can run it yourself.
+
+If the Start-menu shortcut does nothing either, run that installer directly: it is the same file the
+release page publishes, and its checksum was verified before it was ever started.
+
 ## "Remote Desktop Connection (mstsc.exe) was not found on this machine"
 
 **Symptom.** Launching an RDP connection on Windows fails immediately with that message.

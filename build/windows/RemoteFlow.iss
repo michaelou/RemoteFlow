@@ -60,6 +60,14 @@ WizardStyle=modern
 ; The app must not be running while its own files are replaced.
 CloseApplications=yes
 RestartApplications=no
+; RemoteFlow holds a mutex of this name for as long as it is running, so Setup and the uninstaller can tell
+; and stop to ask rather than replacing or deleting files underneath it. This fires before a single file is
+; touched, which CloseApplications cannot, and it covers the uninstaller, which had no such check at all.
+; Must stay byte-for-byte identical to RunningInstanceMutex.Name: Windows compares mutex names
+; case-sensitively, and a mismatch fails in the unhelpful direction, with Setup concluding nothing is
+; running. Session-local rather than Global\, because the install is per-user and the global namespace
+; needs a privilege a standard user may not hold.
+AppMutex=RemoteFlow-6A084A9C-3CFB-4C8F-A7A8-AA5B34D9C91F
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -77,9 +85,46 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; WorkingDir matters on both entries: without it the launched RemoteFlow inherits Setup's own current
+; directory, which is inside the temp folder SetupLdr extracted itself to. SetupLdr then cannot delete it,
+; and every install leaks a directory.
+Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+; The in-app updater's relaunch. RemoteFlow closes itself, runs this installer silently with /UPDATE, and
+; expects to be started again afterwards — the entry above is skipped in silent mode, which is both what
+; makes that possible and what makes this one necessary. skipifnotsilent keeps it out of an interactive
+; install, where the checkbox above already offers it; the Check keeps it out of every other silent
+; install, because a CI smoke test and an administrator deploying RemoteFlow unattended must not have a
+; window appear on their screen.
+Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Flags: nowait skipifnotsilent; Check: RelaunchAfterUpdateRequested
 
 [Code]
+{ Neither /UPDATE nor /PURGEDATA is an Inno Setup switch. Setup and the uninstaller ignore parameters they
+  do not recognise and pass them through to [Code], where ParamStr sees them. }
+
+function CommandLineFlagPresent(const Flag: String): Boolean;
+var
+  Index: Integer;
+begin
+  Result := False;
+  for Index := 1 to ParamCount do
+  begin
+    if CompareText(ParamStr(Index), Flag) = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
+end;
+
+{ Named in the Check: parameter of the second [Run] entry above. Setup calls it once, when it decides
+  whether to process that entry. Deliberately does not consult WizardSilent: skipifnotsilent already covers
+  that, and WizardSilent is unavailable to the uninstaller, so keeping it out leaves the shared helper above
+  safe for both. }
+function RelaunchAfterUpdateRequested(): Boolean;
+begin
+  Result := CommandLineFlagPresent('/UPDATE');
+end;
+
 { Uninstall removes the program and nothing else. Connections, settings, host keys, and credential
   references live in %APPDATA%\RemoteFlow, and losing them because someone reinstalled would be the
   worst kind of data loss: silent, and caused by a routine action. The user has to ask for it, either
@@ -91,18 +136,8 @@ begin
 end;
 
 function PurgeRequestedOnCommandLine(): Boolean;
-var
-  Index: Integer;
 begin
-  Result := False;
-  for Index := 1 to ParamCount do
-  begin
-    if CompareText(ParamStr(Index), '/PURGEDATA') = 0 then
-    begin
-      Result := True;
-      Exit;
-    end;
-  end;
+  Result := CommandLineFlagPresent('/PURGEDATA');
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

@@ -54,6 +54,11 @@ public static class DependencyInjection
         // Singleton because it owns an HttpClient, which is meant to be long-lived. It opens no
         // connection until something asks it to check.
         services.TryAddSingleton<IUpdateChecker, GitHubUpdateChecker>();
+        services.TryAddSingleton<IAppInstallInfo, AppInstallInfo>();
+        // Also an HttpClient owner, and separate from the checker's on purpose: this one has no overall
+        // timeout, because a ninety-megabyte download over a slow link is not a failure.
+        services.TryAddSingleton<ReleaseAssetDownloader>();
+        services.TryAddSingleton<IUpdateInstaller, UpdateInstaller>();
         services.TryAddSingleton<IWatchedFileMonitor, WatchedFileMonitor>();
         services.TryAddSingleton<TmdsSshTransport>();
         services.TryAddSingleton<SshNetTransport>();

@@ -54,6 +54,48 @@ public sealed class AboutViewTests
         Assert.False(view.FindControl<SelectableTextBlock>("UpdateStatusText")!.IsVisible);
         Assert.False(view.FindControl<Button>("OpenReleasePageButton")!.IsVisible);
         Assert.False(view.FindControl<CheckBox>("AutomaticUpdateCheckToggle")!.IsChecked);
+        // Nothing offers to download anything until a check has found something to download.
+        Assert.False(view.FindControl<Button>("InstallUpdateButton")!.IsVisible);
+        Assert.False(view.FindControl<Button>("CancelUpdateDownloadButton")!.IsVisible);
+        Assert.False(view.FindControl<ProgressBar>("UpdateDownloadProgress")!.IsVisible);
+    }
+
+    /// <summary>The install button is bound to there being an installer this machine can verify, not merely
+    /// to an update existing — so it appears here and stays hidden in the next test.</summary>
+    [AvaloniaFact]
+    public void AnUpdateWithAVerifiableInstallerShowsTheInstallButton()
+    {
+        var (view, _, _, _) = CreateView(
+            updateResult: UpdateCheckResult.UpdateAvailable(
+                "0.2.0",
+                new Uri("https://github.com/michaelou/RemoteFlow/releases/tag/v0.2.0"),
+                new UpdatePackage(
+                    "RemoteFlow-0.2.0-win-x64-setup.exe",
+                    new Uri("https://github.com/michaelou/RemoteFlow/releases/download/v0.2.0/RemoteFlow-0.2.0-win-x64-setup.exe"),
+                    90_000_000,
+                    new Uri("https://github.com/michaelou/RemoteFlow/releases/download/v0.2.0/checksums.txt"))),
+            installer: new StubUpdateInstaller());
+
+        Click(view, "CheckForUpdatesButton");
+
+        Assert.True(view.FindControl<Button>("InstallUpdateButton")!.IsVisible);
+        Assert.False(view.FindControl<SelectableTextBlock>("InstallObstacleText")!.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void AnUpdateWithNoInstallerForThisMachineExplainsItselfInsteadOfShowingAButton()
+    {
+        var (view, _, _, _) = CreateView(
+            updateResult: UpdateCheckResult.UpdateAvailable(
+                "0.2.0",
+                new Uri("https://github.com/michaelou/RemoteFlow/releases/tag/v0.2.0")),
+            installer: new StubUpdateInstaller());
+
+        Click(view, "CheckForUpdatesButton");
+
+        Assert.False(view.FindControl<Button>("InstallUpdateButton")!.IsVisible);
+        Assert.True(view.FindControl<SelectableTextBlock>("InstallObstacleText")!.IsVisible);
+        Assert.True(view.FindControl<Button>("OpenReleasePageButton")!.IsVisible);
     }
 
     [AvaloniaFact]
@@ -147,7 +189,8 @@ public sealed class AboutViewTests
         CreateView(
             ShellOpenResult? result = null,
             UpdateCheckResult? updateResult = null,
-            ISettingsStore? settings = null)
+            ISettingsStore? settings = null,
+            IUpdateInstaller? installer = null)
     {
         var shell = new RecordingShell { Result = result ?? ShellOpenResult.Success };
         var store = new FakeLastErrorStore();
@@ -161,7 +204,11 @@ public sealed class AboutViewTests
             shell,
             store,
             updateChecker: checker,
-            settings: settings ?? new InMemorySettingsStore());
+            settings: settings ?? new InMemorySettingsStore(),
+            installer: installer,
+            // The install button is only offered where the confirmation can be shown, so a view test that
+            // expects to see it has to supply one.
+            confirmation: installer is null ? null : new StubConfirmation());
 
         // A window, because visibility and bindings only settle once the control is in a visual tree.
         var view = new AboutView { DataContext = about };
@@ -186,6 +233,56 @@ public sealed class AboutViewTests
         var block = view.FindControl<SelectableTextBlock>(name);
         Assert.NotNull(block);
         return block.Text ?? string.Empty;
+    }
+
+    /// <summary>Never asked by these tests, which stop at what the view shows. It exists because the
+    /// install button is not offered without somewhere to ask the question.</summary>
+    private sealed class StubConfirmation : RemoteFlow.UI.Services.IConfirmationDialogService
+    {
+        public Task<bool> ConfirmAsync(
+            string title,
+            string message,
+            string confirmLabel,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(false);
+        }
+    }
+
+    /// <summary>Says yes to installing and does nothing, so these tests are about what the view shows
+    /// rather than about what an install would do.</summary>
+    private sealed class StubUpdateInstaller : IUpdateInstaller
+    {
+        public bool CanInstall => true;
+
+        public string? Unavailable => null;
+
+        public Task<UpdateDownloadResult> DownloadAsync(
+            UpdatePackage package,
+            string version,
+            IProgress<double>? progress,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(UpdateDownloadResult.Failed("not exercised by a view test"));
+        }
+
+        public void ScheduleInstall(VerifiedUpdate update)
+        {
+        }
+
+        public void RunPendingInstall()
+        {
+        }
+
+        public Task<string?> TakeFailedUpdateReportAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
+        public Task SweepStaleFilesAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class RecordingUpdateChecker : IUpdateChecker

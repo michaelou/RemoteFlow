@@ -262,6 +262,13 @@ foreach ($rid in $Runtime) {
             }
 
             $installerPath = Join-Path $OutputDirectory "$outputBaseName.exe"
+            if (-not (Test-Path -LiteralPath $installerPath)) {
+                # RemoteFlow's updater downloads a release asset by this exact name, so a rename in the .iss
+                # that went unnoticed here would ship a release nothing can self-update to. sign-windows.ps1
+                # returns early when no certificate is configured, so its own existence check never runs.
+                throw "Inno Setup reported success but produced no $installerPath. Check OutputBaseFilename in build/windows/RemoteFlow.iss."
+            }
+
             & $signScript -Path @($installerPath) -CertificateThumbprint $CertificateThumbprint -TimestampUrl $TimestampUrl
             Write-Host "Installer: $installerPath"
         }

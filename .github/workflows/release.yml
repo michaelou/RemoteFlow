@@ -1,8 +1,10 @@
 # Turn a tag into a reviewable draft release. Nothing here publishes anything: the last step of a release
 # is a human reading the draft and pressing the button.
 #
-# There is deliberately no auto-update mechanism and no update ping. RemoteFlow has no telemetry and no
-# cloud dependency, and a binary that phones home to ask about versions would contradict both.
+# RemoteFlow has no telemetry and no cloud dependency, and nothing here phones home. It does have an
+# opt-in update check and, behind a second press and a confirmation, an in-app install of what that check
+# found -- which is why the smoke test now covers an upgrade and why the checksums.txt shape is asserted
+# rather than assumed. Both are contracts the application parses; see docs/adr/0018-self-update.md.
 #
 # The two architectures build on runners of their own architecture rather than cross-publishing from one
 # machine. That costs a second runner and buys the thing this workflow exists for: every artefact is
@@ -90,12 +92,28 @@ jobs:
       # The gate. Extracts the zip and installs the installer, then runs --version on each and checks it
       # reports the version in the tag. A binary that does not start, or a build whose version does not
       # match its tag, fails the workflow here and never reaches a release page.
+      #
+      # -IncludeUpgrade additionally runs the installer over itself, which is what an in-app update does:
+      # it proves a silent run with no /DIR reuses the recorded install location and that the relaunch
+      # only fires for /UPDATE. Both are things RemoteFlow's updater depends on and nothing else tests.
       - name: Smoke-test the artefacts
         run: >
           ./scripts/smoke-test-artifacts.ps1
           -ExpectedVersion ${{ steps.version.outputs.version }}
           -Runtime ${{ matrix.rid }}
           -IncludeInstaller
+          -IncludeUpgrade
+
+      # Only on failure: the Inno Setup logs are the only record of what the installer actually did, and an
+      # upgrade that fails on a runner cannot be diagnosed by reading the script.
+      - name: Upload the installer logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installer-logs-${{ matrix.rid }}
+          path: artifacts/*.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload the artefacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -175,11 +193,31 @@ jobs:
 
       # Recomputing what was just computed sounds circular, but it is checking the file GitHub will serve
       # rather than the variable that produced it: a truncated write or a stray file shows up here.
+      #
+      # The shape check is not circular at all. RemoteFlow's updater parses this file to find the digest of
+      # the installer it just downloaded, and refuses to run anything it cannot find a digest for — so the
+      # format is an interface now, not just something a human reads, and a release that broke it would
+      # silently disable self-update for everyone already running.
       - name: Verify checksums.txt
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           cd dist
           sha256sum --check --strict checksums.txt
+          total=$(grep -c . checksums.txt)
+          parseable=$(grep -cE '^[0-9a-f]{64}  [^/\\]+$' checksums.txt || true)
+          if [ "$total" -ne "$parseable" ]; then
+            echo "::error::checksums.txt has lines RemoteFlow's updater cannot parse."
+            cat checksums.txt
+            exit 1
+          fi
+          for rid in win-x64 win-arm64; do
+            if ! grep -qE "^[0-9a-f]{64}  RemoteFlow-$VERSION-$rid-setup\.exe$" checksums.txt; then
+              echo "::error::checksums.txt has no parseable line for RemoteFlow-$VERSION-$rid-setup.exe."
+              exit 1
+            fi
+          done
 
       - name: Generate the release notes
         shell: pwsh

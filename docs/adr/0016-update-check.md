@@ -1,6 +1,6 @@
 # ADR-0016: An opt-in update check, and no auto-updater
 
-- Status: Accepted
+- Status: Accepted; the "no updater" half is superseded by [ADR-0018](0018-self-update.md)
 - Date: 2026-08-09
 
 ## Context
@@ -56,3 +56,8 @@ project's own URL changes, and the fallback text names the releases page either 
 Self-updating stays out. Reopening it is a decision about code signing first and code second: with a
 certificate and a few releases of reputation the download path becomes worth building, and until then
 every install is a deliberate act that leaves the user able to check `checksums.txt`.
+
+That last paragraph did not survive contact with the details, and [ADR-0018](0018-self-update.md) reopens
+it. The short version: the SmartScreen argument above describes a browser download, not an installer a
+program launches, and `checksums.txt` turned out to be a control RemoteFlow could enforce rather than one
+it could only recommend. Everything above about the check itself still holds.
