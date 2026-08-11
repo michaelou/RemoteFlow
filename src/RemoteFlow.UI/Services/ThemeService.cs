@@ -19,6 +19,13 @@ public sealed class ThemeService(global::Avalonia.Application application, ISett
     {
         var theme = await _settingsStore.Get(SettingKeys.Theme, cancellationToken).ConfigureAwait(true);
         Apply(theme);
+        // Before anything can render a terminal: the renderer reads its ANSI colours out of application
+        // resources, and without them it falls back to a palette whose blue is unreadable on a dark surface.
+        var schemeId = await _settingsStore.Get(SettingKeys.TerminalColorScheme, cancellationToken)
+            .ConfigureAwait(true);
+        TerminalPaletteResources.Apply(
+            _application.Resources,
+            ViewModels.Settings.TerminalColorSchemes.Resolve(schemeId));
     }
 
     public async Task SetThemeAsync(AppTheme theme, CancellationToken cancellationToken = default)

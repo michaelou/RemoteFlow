@@ -301,6 +301,18 @@ public sealed partial class TerminalWorkspace : UserControl
             return;
         }
 
+        if (IsModifierOnly(e.Key) && viewModel.SelectedTerminalSession?.Model.HasSelection == true)
+        {
+            // A chord reaches the application as two events: the modifier going down, then the key. The
+            // terminal clears its selection for any key it is given, so letting the bare modifier through
+            // wiped the selection that Ctrl+Insert, Ctrl+Shift+C or copy-on-select was about to read — every
+            // keyboard copy silently did nothing after selecting with the mouse. A modifier on its own sends
+            // no bytes to the PTY, so nothing is lost by keeping it out of the terminal; an ordinary key
+            // still reaches it and still clears the selection, which is what a user expects from typing.
+            e.Handled = true;
+            return;
+        }
+
         // Everything the keymap does not claim as an application command belongs to the terminal:
         // TerminalControl encodes it and raises UserInput itself. Marking the event handled must
         // happen synchronously, before the tunnelled event reaches the control.
@@ -312,6 +324,12 @@ public sealed partial class TerminalWorkspace : UserControl
 
         e.Handled = true;
         _ = RunCommandAsync(command, viewModel);
+    }
+
+    private static bool IsModifierOnly(Key key)
+    {
+        return key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or
+            Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin;
     }
 
     private async Task RunCommandAsync(KeymapCommand command, TerminalsPageViewModel viewModel)

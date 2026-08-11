@@ -1,8 +1,13 @@
 using System.Buffers;
 using System.IO.Pipelines;
 using System.Text;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Services;
 using RemoteFlow.TestSupport;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels.Terminal;
@@ -139,6 +144,112 @@ public sealed class TerminalClipboardControllerTests
         Assert.Empty(channel.Written.WrittenSpan.ToArray());
     }
 
+    /// <summary>
+    /// A chord reaches the application as two events: the modifier going down, then the key. The terminal
+    /// clears its selection for any key it is handed, so the bare modifier used to wipe the selection before
+    /// the copy could read it — and every keyboard copy did nothing at all after selecting with the mouse.
+    /// Ctrl+Insert is the shortcut this was reported against; Ctrl+Shift+C was equally broken.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(Key.Insert, KeyModifiers.Control, "Ctrl+Insert")]
+    [InlineData(Key.C, KeyModifiers.Control | KeyModifiers.Shift, "Ctrl+Shift+C")]
+    public async Task ACopyShortcutStillHasASelectionToCopyAfterItsModifierGoesDown(
+        Key key,
+        KeyModifiers modifiers,
+        string gesture)
+    {
+        var token = TestContext.Current.CancellationToken;
+        var clipboard = new FakeClipboardService();
+        var session = await ShowWorkspaceWithSelectionAsync(clipboard, token);
+        var terminal = session.View.GetVisualDescendants()
+            .OfType<SvcSystems.UI.Terminal.TerminalControl>()
+            .Single();
+
+        // Exactly what the keyboard sends: Ctrl down, then Shift when the gesture has it, then the key.
+        Press(terminal, Key.LeftCtrl, KeyModifiers.Control);
+        if (modifiers.HasFlag(KeyModifiers.Shift))
+        {
+            Press(terminal, Key.LeftShift, KeyModifiers.Control | KeyModifiers.Shift);
+        }
+
+        Assert.True(
+            session.Session.Model.HasSelection,
+            $"{gesture}: the selection was gone before the key of the chord arrived.");
+        Press(terminal, key, modifiers);
+        await clipboard.WriteObserved.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+
+        // Select-all takes the empty rows below the text with it; what matters is that the text arrived.
+        Assert.Equal("selected output", clipboard.WrittenText.TrimEnd('\n'));
+        session.Window.Close();
+    }
+
+    /// <summary>Typing over a selection still replaces it, which is what the suppression above must not undo:
+    /// only a modifier on its own is kept from the terminal, and it sends the shell nothing anyway.</summary>
+    [AvaloniaFact]
+    public async Task AnOrdinaryKeyStillClearsTheSelection()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var session = await ShowWorkspaceWithSelectionAsync(new FakeClipboardService(), token);
+        var terminal = session.View.GetVisualDescendants()
+            .OfType<SvcSystems.UI.Terminal.TerminalControl>()
+            .Single();
+
+        Press(terminal, Key.A, KeyModifiers.None);
+
+        Assert.False(session.Session.Model.HasSelection);
+        session.Window.Close();
+    }
+
+    private static void Press(Control target, Key key, KeyModifiers modifiers)
+    {
+        target.RaiseEvent(new KeyEventArgs
+        {
+            Key = key,
+            KeyModifiers = modifiers,
+            RoutedEvent = InputElement.KeyDownEvent,
+            Source = target,
+        });
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static async Task<(Window Window, RemoteFlow.UI.Views.Terminal.TerminalWorkspace View,
+        TerminalSessionViewModel Session)> ShowWorkspaceWithSelectionAsync(
+        FakeClipboardService clipboard,
+        CancellationToken cancellationToken)
+    {
+        var controller = new TerminalClipboardController(
+            clipboard,
+            new InMemorySettingsStore(),
+            new FakePasteWarningService(new PasteWarningResult(true, false)));
+        var workspace = new TerminalsPageViewModel(
+            new UnusedPtyService(),
+            new UiDispatcher(),
+            new InMemorySettingsStore(),
+            new AlwaysConfirmService(),
+            new KeymapService(),
+            controller);
+        var channel = new FakeTerminalChannel();
+        var session = new TerminalSessionViewModel(channel, new UiDispatcher());
+        workspace.AddWorkspaceSession(session);
+        var view = new RemoteFlow.UI.Views.Terminal.TerminalWorkspace { DataContext = workspace };
+        var window = new Window { Width = 900, Height = 600, Content = view };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        await channel.PublishAsync("selected output", cancellationToken);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (session.OutputFramesApplied == 0 && DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(10, cancellationToken);
+        }
+
+        session.Model.SelectAll();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(session.Model.HasSelection, "The test could not create a selection to copy.");
+        return (window, view, session);
+    }
+
     private sealed class FakeClipboardService : IClipboardService
     {
         public ClipboardReadResult ReadResult { get; set; } = ClipboardReadResult.Success(null);
@@ -182,12 +293,40 @@ public sealed class TerminalClipboardControllerTests
         }
     }
 
+    private sealed class UnusedPtyService : IPtyService
+    {
+        public Task<IPtySession> SpawnAsync(
+            PtySpawnOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException("This test adds its session directly.");
+        }
+    }
+
+    private sealed class AlwaysConfirmService : IConfirmationDialogService
+    {
+        public Task<bool> ConfirmAsync(
+            string title,
+            string message,
+            string confirmLabel,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(true);
+        }
+    }
+
     private sealed class FakeTerminalChannel : ITerminalChannel
     {
         private readonly Pipe _pipe = new();
         private readonly TaskCompletionSource<int?> _exited = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public ArrayBufferWriter<byte> Written { get; } = new();
+
+        public async Task PublishAsync(string text, CancellationToken cancellationToken)
+        {
+            _ = await _pipe.Writer.WriteAsync(Encoding.UTF8.GetBytes(text), cancellationToken);
+        }
 
         public PipeReader Output => _pipe.Reader;
 

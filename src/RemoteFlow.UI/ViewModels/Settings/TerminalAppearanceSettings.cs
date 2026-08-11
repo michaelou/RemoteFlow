@@ -62,10 +62,12 @@ public static class TerminalColorSchemes
         "#0B0F14", "#FF7B72", "#5DE28C", "#FFCA58", "#6CB6FF", "#D2A8FF", "#76E3EA", "#D7E0EA",
         "#7E8998", "#FFA198", "#7EE2A8", "#FFD978", "#9CCAFF", "#E2C5FF", "#A5F3F6", "#FFFFFF");
 
+    // Bright blue is darker than blue here, not lighter: on white, a lighter blue measured 3.39:1 and a
+    // directory listing — which asks for bold blue — was the thing that read worst.
     public static TerminalColorScheme Light { get; } = new(
         "light", "Paper Light", "#FFFFFF", "#17202B",
         "#17202B", "#B42318", "#137333", "#8A5A00", "#0969DA", "#8250DF", "#0E7490", "#EAEFF5",
-        "#475569", "#D92D20", "#16833A", "#A66D00", "#218BFF", "#A475F9", "#0891B2", "#FFFFFF");
+        "#475569", "#D92D20", "#16833A", "#A66D00", "#0B4FC0", "#A475F9", "#0891B2", "#FFFFFF");
 
     public static TerminalColorScheme HighContrast { get; } = new(
         "high-contrast", "High Contrast", "#000000", "#FFFFFF",

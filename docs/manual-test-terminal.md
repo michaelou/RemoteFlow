@@ -85,6 +85,16 @@ Click **UTF-8 split probe**. It sends the first byte of `漢` separately from th
 4. Verify Alt+letter arrives as an ESC-prefixed sequence (the status hex starts with `1B`) and test F1-F12 in an application that displays their bindings.
 5. Enable vim paste handling normally, enter insert mode, and use the harness Paste button with multiple indented lines. Verify bracketed paste preserves the indentation instead of triggering auto-indent on every line.
 
+6. In the application (not the harness), select output **with the mouse**, then press `Ctrl+Insert`, and
+   again with `Ctrl+Shift+C`. Both must put the selected text on the clipboard. This is a real-keyboard
+   check on purpose: a chord arrives as the modifier first and then the key, and it was the bare modifier
+   reaching the terminal that used to clear the selection before the copy could read it. Then type a
+   character over a selection and confirm it still clears.
+7. With a remote shell, run `ls` in a directory that has subdirectories, and check that directory names are
+   legible against the background in each colour scheme in **Settings -> Terminal**. `ls` asks for bold
+   blue, which is the colour the renderer used to take from its own fallback palette rather than the
+   scheme's.
+
 The control converts framework key events into terminal byte sequences before raising `UserInput`; the PTY adapter must forward those bytes unchanged.
 
 ## Resize

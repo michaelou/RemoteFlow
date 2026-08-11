@@ -7,6 +7,21 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Fixed
+
+- **A keyboard copy takes the selection with it.** `Ctrl+Insert` and `Ctrl+Shift+C` did nothing after
+  selecting with the mouse. A chord reaches the application as two events — the modifier going down, then
+  the key — and the terminal clears its selection for any key it is handed, so the bare `Ctrl` wiped the
+  selection a moment before the copy read it. A modifier on its own is now kept from the terminal while a
+  selection exists; it sends the shell nothing either way. Typing an ordinary character over a selection
+  still replaces it. Copy-on-select was broken by the same thing.
+- **Terminal colours come from the chosen scheme.** Every ANSI colour was painted from the renderer's own
+  fallback palette rather than RemoteFlow's, so a directory in `ls` output arrived as VGA navy `#000080` on
+  the near-black background — about 1.3:1, and unreadable — while the scheme specified `#6CB6FF`. The
+  scheme's sixteen colours are now published where the renderer looks for them, and switching schemes in
+  Settings repaints them. Paper Light's bright blue was also below the contrast floor on white; it is now
+  darker than its plain blue, which is what a light theme wants from a bold colour.
+
 ## [0.2.3] - 2026-08-11
 
 The terminal workspace can be a grid instead of a stack of tabs, so several sessions are on screen at once.

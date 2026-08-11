@@ -306,6 +306,9 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
     private void ApplyPreview()
     {
         var current = Current;
+        // The renderer paints ANSI colours from application resources, not from the engine's theme, so a
+        // scheme change has to be published there as well or only the background follows the choice.
+        RemoteFlow.UI.Services.TerminalPaletteResources.ApplyToApplication(current.ColorScheme);
         var terminal = PreviewModel.Terminal;
         terminal.Options.Scrollback = current.Scrollback;
         var engine = terminal.Engine;
