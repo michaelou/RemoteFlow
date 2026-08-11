@@ -7,6 +7,11 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-08-11
+
+Two things in the terminal that were plainly wrong: copying with the keyboard, and the colour of a
+directory in `ls` output.
+
 ### Fixed
 
 - **A keyboard copy takes the selection with it.** `Ctrl+Insert` and `Ctrl+Shift+C` did nothing after
@@ -268,7 +273,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/michaelou/RemoteFlow/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/michaelou/RemoteFlow/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/michaelou/RemoteFlow/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/michaelou/RemoteFlow/compare/v0.2.0...v0.2.1
