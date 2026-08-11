@@ -7,6 +7,10 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-11
+
+The terminal workspace can be a grid instead of a stack of tabs, so several sessions are on screen at once.
+
 ### Added
 
 - **The terminal workspace can show every session at once.** A **Grid** button next to the tab strip lays
@@ -249,7 +253,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/michaelou/RemoteFlow/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/michaelou/RemoteFlow/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/michaelou/RemoteFlow/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/michaelou/RemoteFlow/compare/v0.1.1...v0.2.0
