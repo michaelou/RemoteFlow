@@ -1,5 +1,12 @@
 # ADR 0012: Atomic bounded SFTP transfers
 
+## Scope
+
+This ADR governs SFTP transfers specifically. Its `.part` sidecar, its `SftpPublisher` rename-aside
+publish and its one-retry policy are answers to SFTP's own constraints and are not a general transfer
+policy for RemoteFlow. Chunked transfers against object storage are a separate engine with separate
+decisions — see [ADR-0020](0020-chunked-object-storage-transfers.md), which amends nothing here.
+
 ## Decision
 
 RemoteFlow transfers at most three files concurrently by default. Uploads and downloads write to a

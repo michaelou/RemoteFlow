@@ -26,6 +26,20 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
   obscurely; the account, its settings and its stored key are saved and ready. See
   [docs/adr/0019-object-storage-provider-abstraction.md](docs/adr/0019-object-storage-provider-abstraction.md)
   for what the foundation covers and what is deliberately deferred.
+- **Objects in the gigabytes transfer in parallel chunks.** Uploads split into parts and downloads into
+  ranges, sized automatically from the object — an 8 MiB part for a 4 GiB object, 64 MiB for a 500 GB one —
+  with four in flight at a time. Memory stays flat regardless of object size, the progress bar never goes
+  backwards, and the speed and time-remaining figures for these transfers follow a five-second window
+  rather than the average since the transfer started, so a link that slows down is reported honestly.
+
+  A failed part is retried on its own rather than restarting the transfer, and cancelling aborts the
+  incomplete upload so its parts are not left behind and billed. RemoteFlow cannot promise that after a
+  crash or a power cut, so set a lifecycle rule on the bucket — S3's `AbortIncompleteMultipartUpload` at
+  seven days — as the durable backstop. Azure needs nothing: uncommitted blocks expire on their own.
+
+  As with browsing, there is no Storage page to drive this from yet. See
+  [docs/adr/0020-chunked-object-storage-transfers.md](docs/adr/0020-chunked-object-storage-transfers.md)
+  for the decisions and the known limitations.
 
 ### Changed
 

@@ -64,6 +64,16 @@ public enum RemoteEditConflictDefault
     Discard = 4,
 }
 
+/// <summary>What a chunked object transfer does when the destination already exists. Defaults to
+/// <see cref="Overwrite"/>: an object store has no atomic publish to fall back on, and re-uploading is the
+/// only way to make the destination match the source.</summary>
+public enum StorageConflictDefault
+{
+    Prompt = 1,
+    Overwrite = 2,
+    Skip = 3,
+}
+
 public enum SshTransport
 {
     Tmds = 1,
@@ -122,6 +132,10 @@ public static class SettingKeys
     public static SettingKey<int> SchemaVersion { get; } = new("SchemaVersion", 1);
     public static SettingKey<bool> ForceFileVault { get; } = new("ForceFileVault", false);
     public static SettingKey<bool> CheckForUpdates { get; } = new("CheckForUpdates", false);
+    public static SettingKey<string?> StorageDownloadDir { get; } = new("StorageDownloadDir", null);
+    public static SettingKey<int> StorageMaxPartsInFlight { get; } = new("StorageMaxPartsInFlight", 4);
+    public static SettingKey<StorageConflictDefault> StorageConflictDefault { get; } =
+        new("StorageConflictDefault", global::RemoteFlow.Application.Abstractions.StorageConflictDefault.Overwrite);
 
     public static IReadOnlyList<ISettingKey> All { get; } =
     [
@@ -157,5 +171,8 @@ public static class SettingKeys
         SchemaVersion,
         ForceFileVault,
         CheckForUpdates,
+        StorageDownloadDir,
+        StorageMaxPartsInFlight,
+        StorageConflictDefault,
     ];
 }
