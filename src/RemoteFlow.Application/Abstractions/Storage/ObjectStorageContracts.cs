@@ -42,6 +42,12 @@ public sealed record ObjectStoragePaging
     public int PageSize { get; init; } = DefaultPageSize;
 
     public string? ContinuationToken { get; init; }
+
+    /// <summary>Narrows the listing to names starting with this, at the server. Both providers list by
+    /// prefix and neither searches by substring, so a client-side filter over one loaded page would be a
+    /// search that lies: it would hide matches the provider never sent. Appended to the prefix the path
+    /// already implies, and the delimiter still groups what is below it into folder rows.</summary>
+    public string? NamePrefix { get; init; }
 }
 
 /// <summary>One page of a listing. <see cref="ContinuationToken"/> is null on the last page.</summary>

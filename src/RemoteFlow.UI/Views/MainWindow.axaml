@@ -13,6 +13,8 @@
     xmlns:securityViews="using:RemoteFlow.UI.Views.Security"
     xmlns:sftpViews="using:RemoteFlow.UI.Views.Sftp"
     xmlns:sftpViewModels="using:RemoteFlow.UI.ViewModels.Sftp"
+    xmlns:storageViews="using:RemoteFlow.UI.Views.Storage"
+    xmlns:storageViewModels="using:RemoteFlow.UI.ViewModels.Storage"
     xmlns:terminalViews="using:RemoteFlow.UI.Views.Terminal"
     xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal"
     xmlns:transferViews="using:RemoteFlow.UI.Views.Transfers"
@@ -44,6 +46,9 @@
     </DataTemplate>
     <DataTemplate DataType="{x:Type sftpViewModels:SftpWorkspaceViewModel}" x:DataType="sftpViewModels:SftpWorkspaceViewModel">
       <sftpViews:SftpWorkspace />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type storageViewModels:StoragePageViewModel}" x:DataType="storageViewModels:StoragePageViewModel">
+      <storageViews:StorageWorkspace />
     </DataTemplate>
     <DataTemplate DataType="{x:Type transferViewModels:TransfersPageViewModel}" x:DataType="transferViewModels:TransfersPageViewModel">
       <transferViews:TransfersView />

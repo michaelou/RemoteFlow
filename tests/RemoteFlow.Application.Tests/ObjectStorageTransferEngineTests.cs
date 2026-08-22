@@ -503,6 +503,33 @@ public sealed class ObjectStorageTransferEngineTests
         }
     }
 
+    [Fact]
+    public async Task WithNoResolverAnExistingDestinationIsAConflictRatherThanAnOverwrite()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var root = CreateTempDirectory();
+        try
+        {
+            var source = Path.Combine(root, "small.bin");
+            await File.WriteAllBytesAsync(source, Payload(500), token);
+            await using var store = ChunkedStore();
+            store.Seed("/archive/small.bin", Payload(10));
+            var engine = new ObjectStorageTransferEngine(store, options: ChunkedOptions());
+
+            var result = await engine.UploadAsync(source, "/archive/small.bin", cancellationToken: token);
+
+            // Fail closed, exactly as TransferEngine does. An engine that defaulted to overwrite when
+            // nobody asked would silently replace an object in an unversioned bucket.
+            var item = Assert.Single(result.Items);
+            Assert.Equal(TransferItemStatus.Conflict, item.Status);
+            Assert.Equal(10, (await ReadObjectAsync(store, "/archive/small.bin", token)).Length);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static ObjectPartLimits Limits()
     {
         return new ObjectPartLimits(1024, _partSize, 10_000);

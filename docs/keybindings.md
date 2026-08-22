@@ -52,6 +52,32 @@ This file is generated from `KeymapService.Bindings`. Changes must be made in th
 
 All other control-key combinations are sent to the PTY. `Alt` plus text is encoded as an ESC prefix. Ctrl+C sends byte `03` unless the optional, default-off CopyWhenSelected policy is enabled and a selection exists.
 
+## Storage page
+
+These are RemoteFlow's own bindings on the dual-pane Storage page. They are **not** part of the terminal
+keymap: nothing here is sent to a PTY, and none of it appears in `KeymapService.Bindings`.
+
+| Binding | Result |
+| --- | --- |
+| `Tab` / `Shift+Tab` | Move between controls, and between the two panes. Deliberately not rebound — see below. |
+| `Ctrl+Shift+Left` / `Ctrl+Shift+Right` | Jump straight to the local or the remote pane. |
+| `Ctrl+L` | Focus the path box of the pane the keyboard is in. |
+| `Enter` | Descend into the selected folder, or transfer the selected files to the other pane. |
+| `Backspace` / `Alt+Left` | Up one level. |
+| `Alt+Right` | Forward, through the pane's own history. |
+| `F5` | Refresh the focused pane. |
+| `F7` | New folder in the focused pane. |
+| `F2` | Rename. Local pane only: object storage has no rename. |
+| `Delete` | Delete the selection, after a confirmation that counts what would go. |
+| Typing | Type-ahead: jumps to the next row whose name starts with what you typed. |
+
+`Tab` is not rebound, and `F6` is not reused. `Tab` belongs to "move between controls" — hijacking it
+would create exactly the keyboard trap `F6` exists to escape — and the two panes are peer controls in
+declaration order, so `Tab` already walks from the local list to the remote one. `Ctrl+Tab` and
+`Alt+1`–`Alt+9` are the terminal's, and are left alone.
+
+Both grid splitters are reachable by `Tab` and move with the arrow keys once focused.
+
 ## Embedded RDP on Windows
 
 The embedded Microsoft RDP control owns keyboard input while its surface has focus. RemoteFlow uses

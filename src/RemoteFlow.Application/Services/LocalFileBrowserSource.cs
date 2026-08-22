@@ -1,0 +1,391 @@
+using System.Globalization;
+using System.Runtime.CompilerServices;
+using RemoteFlow.Application.Abstractions.Sftp;
+using RemoteFlow.Application.Abstractions.Storage;
+
+namespace RemoteFlow.Application.Services;
+
+/// <summary>The local filesystem behind the browser port.
+///
+/// It lives in Application rather than as <c>System.IO</c> calls in the pane for two reasons. The
+/// behaviour is not trivial — a mid-enumeration <see cref="UnauthorizedAccessException"/> on something
+/// like <c>C:\System Volume Information</c> has to yield a partial page rather than blanking the pane —
+/// and here it gets plain <c>[Fact]</c> coverage instead of an Avalonia harness. <c>System.IO</c> is the
+/// base class library, so the dependency-direction tests stay green.</summary>
+public sealed class LocalFileBrowserSource : IFileBrowserSource
+{
+    public string DisplayName => "This computer";
+
+    public string RootPath { get; } = DefaultRoot();
+
+    public bool SupportsRename => true;
+
+    public bool SupportsHiddenEntries => true;
+
+    /// <summary>The drives or the single Unix root, in the order a pane should offer them.</summary>
+    public static IReadOnlyList<string> Roots()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return [Path.DirectorySeparatorChar.ToString()];
+        }
+
+        try
+        {
+            return [.. DriveInfo.GetDrives()
+                .Where(drive => drive.IsReady)
+                .Select(drive => drive.RootDirectory.FullName)
+                .Order(StringComparer.OrdinalIgnoreCase)];
+        }
+        catch (IOException)
+        {
+            return [Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\"];
+        }
+    }
+
+    public string Combine(string parent, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(parent);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return Path.Combine(parent, name);
+    }
+
+    /// <summary>Null at a drive root or at <c>/</c>. <see cref="Directory.GetParent(string)"/> already
+    /// answers that correctly on both platforms, which is the whole reason path handling belongs to the
+    /// source.</summary>
+    public string? GetParent(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        try
+        {
+            return Directory.GetParent(Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)))?.FullName;
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    public string GetName(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = Path.GetFullPath(path);
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(full));
+
+        // A drive root has no file name, and "" in the path bar would read as a bug.
+        return name.Length == 0 ? full : name;
+    }
+
+    public bool IsValidPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            return Path.IsPathFullyQualified(path);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    public IReadOnlyList<FileBrowserCrumb> GetBreadcrumbs(string path)
+    {
+        if (!IsValidPath(path))
+        {
+            return [];
+        }
+
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var crumbs = new List<FileBrowserCrumb>();
+        var current = full;
+        while (current is not null)
+        {
+            var parent = GetParent(current);
+            crumbs.Insert(0, new FileBrowserCrumb(parent is null ? current : GetName(current), current));
+            current = parent;
+        }
+
+        return crumbs;
+    }
+
+    public Task<SftpResult<FileBrowserPage>> ListAsync(
+        string path,
+        FileBrowserListOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsValidPath(path))
+        {
+            return Task.FromResult(SftpResult<FileBrowserPage>.Fail(
+                SftpError.InvalidPath,
+                "Enter a full path, such as C:\\Users or /home."));
+        }
+
+        var settings = options ?? new FileBrowserListOptions();
+        if (!Directory.Exists(path))
+        {
+            return Task.FromResult(SftpResult<FileBrowserPage>.Fail(
+                SftpError.NotFound,
+                $"'{path}' was not found."));
+        }
+
+        var entries = new List<FileBrowserEntry>();
+        string? warning = null;
+        try
+        {
+            // The enumerator is walked by hand rather than through a foreach over EnumerateFileSystemInfos,
+            // because the exception arrives from MoveNext part-way along: catching it around the loop would
+            // throw away every entry already read and blank the pane.
+            using var enumerator = new DirectoryInfo(path)
+                .EnumerateFileSystemInfos("*", SearchOption.TopDirectoryOnly)
+                .GetEnumerator();
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    if (!enumerator.MoveNext())
+                    {
+                        break;
+                    }
+                }
+                catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
+                {
+                    warning = $"Some entries in '{path}' could not be read: {exception.Message}";
+                    break;
+                }
+
+                if (Describe(enumerator.Current, settings) is { } entry)
+                {
+                    entries.Add(entry);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return Task.FromResult(SftpResult<FileBrowserPage>.Fail(
+                SftpError.Cancelled,
+                "The folder load was cancelled."));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Task.FromResult(SftpResult<FileBrowserPage>.Fail(
+                SftpError.PermissionDenied,
+                $"'{path}' cannot be read: {exception.Message}"));
+        }
+        catch (Exception exception) when (exception is IOException or NotSupportedException)
+        {
+            return Task.FromResult(SftpResult<FileBrowserPage>.Fail(
+                SftpError.Unknown,
+                $"'{path}' could not be listed: {exception.Message}"));
+        }
+
+        entries.Sort(static (left, right) => string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(SftpResult<FileBrowserPage>.Success(Page(entries, settings, warning)));
+    }
+
+    public Task<SftpResult> CreateFolderAsync(string path, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!IsValidPath(path))
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.InvalidPath, "Enter a full path."));
+        }
+
+        if (Directory.Exists(path) || File.Exists(path))
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.AlreadyExists, $"'{path}' already exists."));
+        }
+
+        try
+        {
+            _ = Directory.CreateDirectory(path);
+            return Task.FromResult(SftpResult.Success());
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.PermissionDenied, exception.Message));
+        }
+        catch (Exception exception) when (exception is IOException or NotSupportedException)
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.Unknown, exception.Message));
+        }
+    }
+
+    public Task<SftpResult> DeleteAsync(FileBrowserEntry entry, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            if (entry.IsDirectory)
+            {
+                Directory.Delete(entry.Path, recursive: true);
+            }
+            else
+            {
+                File.Delete(entry.Path);
+            }
+
+            return Task.FromResult(SftpResult.Success());
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.NotFound, $"'{entry.Path}' was not found."));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.PermissionDenied, exception.Message));
+        }
+        catch (IOException exception)
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.Unknown, exception.Message));
+        }
+    }
+
+    public Task<SftpResult> RenameAsync(
+        string path,
+        string newName,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var parent = GetParent(path);
+        if (parent is null)
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.InvalidPath, "A drive root cannot be renamed."));
+        }
+
+        var target = Combine(parent, newName);
+        if (Directory.Exists(target) || File.Exists(target))
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.AlreadyExists, $"'{newName}' already exists."));
+        }
+
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Move(path, target);
+            }
+            else
+            {
+                File.Move(path, target);
+            }
+
+            return Task.FromResult(SftpResult.Success());
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.PermissionDenied, exception.Message));
+        }
+        catch (Exception exception) when (exception is IOException or NotSupportedException)
+        {
+            return Task.FromResult(SftpResult.Fail(SftpError.Unknown, exception.Message));
+        }
+    }
+
+    public async IAsyncEnumerable<FileBrowserEntry> EnumerateRecursiveAsync(
+        FileBrowserEntry root,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        yield return root;
+        if (!root.IsDirectory)
+        {
+            yield break;
+        }
+
+        var options = new FileBrowserListOptions { ShowHidden = true };
+        string? token = null;
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var page = await ListAsync(
+                root.Path,
+                options with { ContinuationToken = token },
+                cancellationToken).ConfigureAwait(false);
+            if (page.IsFailure)
+            {
+                yield break;
+            }
+
+            foreach (var child in page.Value.Entries)
+            {
+                await foreach (var descendant in EnumerateRecursiveAsync(child, cancellationToken)
+                    .ConfigureAwait(false))
+                {
+                    yield return descendant;
+                }
+            }
+
+            token = page.Value.ContinuationToken;
+        }
+        while (token is not null);
+    }
+
+    /// <summary>Paged with a synthetic index token, so a <c>node_modules</c> holding 200,000 files reaches
+    /// the pane exactly the way a 200,000-key prefix does and the pane keeps zero source-specific
+    /// branches.</summary>
+    private static FileBrowserPage Page(
+        List<FileBrowserEntry> entries,
+        FileBrowserListOptions options,
+        string? warning)
+    {
+        var start = 0;
+        if (options.ContinuationToken is { Length: > 0 } token &&
+            int.TryParse(token, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+        {
+            start = Math.Clamp(parsed, 0, entries.Count);
+        }
+
+        var size = Math.Max(1, options.PageSize);
+        var window = entries.Skip(start).Take(size).ToArray();
+        var next = start + window.Length;
+        return new FileBrowserPage(
+            window,
+            next < entries.Count ? next.ToString(CultureInfo.InvariantCulture) : null,
+            warning);
+    }
+
+    private static FileBrowserEntry? Describe(FileSystemInfo info, FileBrowserListOptions options)
+    {
+        try
+        {
+            // The correct local test is the hidden attribute, not a leading dot: "." names nothing on
+            // Windows, and a dotfile is not hidden to the operating system on either platform.
+            if (!options.ShowHidden && info.Attributes.HasFlag(FileAttributes.Hidden))
+            {
+                return null;
+            }
+
+            if (options.NamePrefix is { Length: > 0 } prefix &&
+                !info.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var isDirectory = info is DirectoryInfo;
+            return new FileBrowserEntry(
+                info.Name,
+                info.FullName,
+                isDirectory,
+                isDirectory ? 0 : ((FileInfo)info).Length,
+                info.LastWriteTimeUtc);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A row that vanished between enumeration and stat is not an error; it is simply gone.
+            return null;
+        }
+    }
+
+    private static string DefaultRoot()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return string.IsNullOrWhiteSpace(home) || !Directory.Exists(home) ? Roots()[0] : home;
+    }
+}

@@ -93,7 +93,7 @@ public sealed class S3ObjectStorageService(IAmazonS3 client, ObjectStorageEndpoi
                 new ListObjectsV2Request
                 {
                     BucketName = container,
-                    Prefix = prefix,
+                    Prefix = prefix + paging?.NamePrefix,
                     Delimiter = ObjectStoragePath.Separator.ToString(),
                     MaxKeys = pageSize,
                     ContinuationToken = paging?.ContinuationToken,

@@ -107,6 +107,33 @@ public sealed class DarkPaletteContrastTests
         }
     }
 
+    /// <summary>
+    /// The inline error banner's fill. It is a token rather than the hard-coded translucent red the SFTP
+    /// workspace still carries precisely so that it can be measured: an opaque colour has a contrast
+    /// ratio, and a translucent one only has whatever it happens to composite onto that day.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public void TheErrorBannerReadsAgainstItsOwnFill(string variantName)
+    {
+        var app = global::Avalonia.Application.Current!;
+        var variant = variantName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        var fill = GetColor(app, "Color.Danger.Surface", variant);
+
+        foreach (var key in new[] { "Color.Text.Primary", "Color.Danger" })
+        {
+            var ratio = Contrast(GetColor(app, key, variant), fill);
+            Assert.True(
+                ratio >= _textMinimum,
+                $"{key} on the error banner is {ratio:F2}:1, below the {_textMinimum}:1 floor for text.");
+        }
+
+        // The banner's own outline has to be findable against the fill it surrounds.
+        var border = Contrast(GetColor(app, "Color.Danger", variant), fill);
+        Assert.True(border >= _componentMinimum, $"The banner outline is {border:F2}:1.");
+    }
+
     /// <summary>Flattens a translucent foreground onto an opaque background, the way the compositor does.</summary>
     private static Color Composite(Color foreground, Color background)
     {

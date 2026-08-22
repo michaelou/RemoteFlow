@@ -13,6 +13,7 @@ using RemoteFlow.UI.ViewModels.Transfers;
 using RemoteFlow.UI.ViewModels.Settings;
 using RemoteFlow.UI.ViewModels.Security;
 using RemoteFlow.UI.ViewModels.Sftp;
+using RemoteFlow.UI.ViewModels.Storage;
 using RemoteFlow.UI.ViewModels.Backup;
 using RemoteFlow.UI.Views;
 
@@ -34,6 +35,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IUiDispatcher, UiDispatcher>();
         services.TryAddSingleton<TransfersPageViewModel>();
         services.TryAddSingleton<SftpWorkspaceViewModel>();
+        services.TryAddSingleton<StoragePageViewModel>();
         services.TryAddSingleton<TerminalSettingsViewModel>();
         services.TryAddSingleton<RdpSettingsViewModel>();
         services.TryAddSingleton<IEmbeddedRdpWorkspaceSessionFactory>(NoEmbeddedRdpWorkspaceSessionFactory.Instance);
@@ -64,6 +66,11 @@ public static class DependencyInjection
             "Icon.Sftp",
             provider.GetRequiredService<SftpWorkspaceViewModel>));
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
+            "storage",
+            "Storage",
+            "Icon.Storage",
+            provider.GetRequiredService<StoragePageViewModel>));
+        _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "backup",
             "Backup",
             "Icon.Backup",
@@ -90,6 +97,9 @@ public static class DependencyInjection
         services.TryAddSingleton<IRemoteEditConflictResolver, RemoteEditConflictResolver>();
         services.TryAddSingleton<IFilePickerService, AvaloniaFilePickerService>();
         services.TryAddSingleton<ISftpWorkspaceSessionFactory, SftpWorkspaceSessionFactory>();
+        services.TryAddSingleton<IStorageWorkspaceSessionFactory, StorageWorkspaceSessionFactory>();
+        services.TryAddSingleton<ITransferConflictDialogService, TransferConflictDialogService>();
+        services.TryAddSingleton<ITransferConflictResolverFactory, TransferConflictResolverFactory>();
         _ = services.Replace(ServiceDescriptor.Singleton<IHostKeyPrompt, HostKeyPromptService>());
         services.TryAddSingleton<IKeyboardInteractivePrompt, KeyboardInteractivePromptService>();
         services.TryAddSingleton<ISshCredentialPrompt, SshCredentialPromptService>();

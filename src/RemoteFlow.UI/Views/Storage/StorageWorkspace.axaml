@@ -1,0 +1,118 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Storage.StorageWorkspace"
+    x:DataType="viewModels:StoragePageViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Storage"
+    xmlns:views="using:RemoteFlow.UI.Views.Storage"
+    Loaded="Workspace_OnLoaded"
+    KeyDown="Workspace_OnKeyDown">
+  <!-- The transfer row is a fixed pixel height rather than Auto: a GridSplitter needs a pixel or star
+       neighbour, and against an Auto row it is simply inert. -->
+  <Grid Margin="8" RowDefinitions="Auto,*,6,180,Auto">
+    <Border Classes="panel" Margin="0,0,0,8" Padding="12,10">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+        <TextBlock
+            Margin="0,0,8,0"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="Account" />
+        <ComboBox
+            x:Name="ConnectionPicker"
+            Grid.Column="1"
+            AutomationProperties.Name="Storage account"
+            HorizontalAlignment="Stretch"
+            ItemsSource="{Binding AvailableConnections}"
+            PlaceholderText="Select an account…"
+            SelectedItem="{Binding SelectedConnection}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="viewModels:StorageConnectionChoice">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding Name}" />
+                <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Endpoint}" />
+              </StackPanel>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button
+            Grid.Column="2"
+            Margin="8,0,0,0"
+            Classes="accent"
+            Command="{Binding ConnectSelectedCommand}"
+            Content="Connect" />
+        <Button
+            Grid.Column="3"
+            AutomationProperties.Name="Reload the storage account list"
+            Classes="icon"
+            Margin="6,0,0,0"
+            Command="{Binding LoadConnectionsCommand}"
+            ToolTip.Tip="Reload the storage account list">
+          <PathIcon Data="{DynamicResource Icon.Refresh}" />
+        </Button>
+        <TextBlock
+            Grid.Column="4"
+            Margin="12,0,0,0"
+            VerticalAlignment="Center"
+            FontWeight="SemiBold"
+            IsVisible="{Binding IsConnected}"
+            Text="{Binding ConnectionTitle}" />
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,6,*">
+      <views:FileBrowserPane x:Name="LocalPane" DataContext="{Binding Local}" />
+      <!-- Named, and with help text, because a keyboard user can move a splitter with the arrow keys
+           once it has focus — and would otherwise hear nothing but "splitter". -->
+      <GridSplitter
+          Grid.Column="1"
+          AutomationProperties.Name="Width of the local and remote panes"
+          AutomationProperties.HelpText="Use the left and right arrow keys to move the divider."
+          Background="Transparent"
+          ResizeDirection="Columns" />
+      <views:FileBrowserPane x:Name="RemotePane" Grid.Column="2" DataContext="{Binding Remote}" />
+    </Grid>
+
+    <GridSplitter
+        Grid.Row="2"
+        AutomationProperties.Name="Height of the transfer queue"
+        AutomationProperties.HelpText="Use the up and down arrow keys to move the divider."
+        Background="Transparent"
+        ResizeDirection="Rows" />
+
+    <views:TransferQueuePane Grid.Row="3" DataContext="{Binding Transfers}" />
+
+    <Border
+        Grid.Row="4"
+        Height="32"
+        Margin="0,8,0,0"
+        Padding="12,0"
+        Background="{DynamicResource Brush.Surface.1}"
+        BorderBrush="{DynamicResource Brush.Border}"
+        BorderThickness="0,1,0,0"
+        CornerRadius="{DynamicResource Radius.Control}">
+      <Grid ColumnDefinitions="150,*,Auto">
+        <StackPanel
+            Orientation="Horizontal"
+            Spacing="8"
+            VerticalAlignment="Center"
+            IsVisible="{Binding Local.IsBusyIndicatorVisible}">
+          <ProgressBar Width="60" Height="4" MinWidth="60" MinHeight="4" IsIndeterminate="True" VerticalAlignment="Center" />
+          <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="Loading…" />
+        </StackPanel>
+        <TextBlock
+            Grid.Column="1"
+            Margin="0,0,12,0"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="{Binding ErrorMessage}"
+            TextTrimming="CharacterEllipsis" />
+        <TextBlock
+            Grid.Column="2"
+            VerticalAlignment="Center"
+            FontWeight="SemiBold"
+            IsVisible="{Binding Remote.DropTargetMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+            Text="{Binding Remote.DropTargetMessage}" />
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

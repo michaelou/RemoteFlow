@@ -191,6 +191,7 @@ Security issues go through [SECURITY.md](SECURITY.md), privately, not through a 
 | [docs/keybindings.md](docs/keybindings.md) | Terminal bindings and the embedded-RDP focus/shortcut limitations. |
 | [docs/manual-test-rdp-embedded.md](docs/manual-test-rdp-embedded.md) | The release-blocking Windows embedded-RDP playbook, including native ARM64. |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Concrete symptoms and concrete fixes. |
+| [docs/object-storage.md](docs/object-storage.md) | S3 and Azure Blob: credentials, the Storage page, the 10,000-row cap, and the bucket lifecycle rule to set. |
 | [docs/accessibility.md](docs/accessibility.md) | Working without a mouse, what a screen reader hears, and the contrast floors. |
 | [docs/building.md](docs/building.md) | Building and running from source on Windows, macOS, and Linux. |
 | [docs/backup-format.md](docs/backup-format.md) | The v1 backup archive format. |

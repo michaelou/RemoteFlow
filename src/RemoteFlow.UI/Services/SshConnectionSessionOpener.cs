@@ -35,13 +35,13 @@ public sealed class SshConnectionSessionOpener(
                 // where an explanation belongs.
                 if (defaultConnection?.Protocol.IsObjectStorage() == true)
                 {
-                    return OpenStorage();
+                    return await OpenStorageAsync(connectionId, cancellationToken).ConfigureAwait(true);
                 }
             }
 
             if (mode == ConnectionOpenMode.Storage)
             {
-                return OpenStorage();
+                return await OpenStorageAsync(connectionId, cancellationToken).ConfigureAwait(true);
             }
 
             if (mode is ConnectionOpenMode.Rdp or ConnectionOpenMode.RdpExternal)
@@ -151,13 +151,19 @@ public sealed class SshConnectionSessionOpener(
             : ConnectionOpenResult.Failure(result.Message);
     }
 
-    /// <summary>The seam the Storage page will land behind. It stays here rather than in the caller so
-    /// that every entry point — double-click, the explorer's context menu, the command palette — gets the
-    /// same answer from one place.</summary>
-    private static ConnectionOpenResult OpenStorage()
+    /// <summary>Opens the dual-pane Storage page. It stays here rather than in the caller so that every
+    /// entry point — double-click, the explorer's context menu, the command palette — behaves the same
+    /// way from one place.</summary>
+    private async Task<ConnectionOpenResult> OpenStorageAsync(
+        Guid connectionId,
+        CancellationToken cancellationToken)
     {
-        return ConnectionOpenResult.Failure(
-            "Browsing object storage is not available in this build yet. The connection and its stored key are saved.");
+        var workspace = _services.GetRequiredService<ViewModels.Storage.StoragePageViewModel>();
+        _services.GetRequiredService<INavigationService>().Navigate("storage");
+        await workspace.AttachAsync(connectionId, cancellationToken).ConfigureAwait(true);
+        return workspace.IsConnected && workspace.ErrorMessage is null
+            ? ConnectionOpenResult.Success()
+            : ConnectionOpenResult.Failure(workspace.ErrorMessage);
     }
 
     private static ConnectionOpenResult EmbeddedFailure(string message)

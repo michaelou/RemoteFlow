@@ -17,3 +17,13 @@ Folder ordering is always stable and directory-first. Navigation failures remain
 ## Consequences
 
 The workspace stays focused and works naturally with the user's existing file manager. A dual-pane local/remote mode is deferred to a future version and can be added without changing the SFTP or transfer contracts.
+
+## Amendment: the dual-pane mode arrived, and this ADR still governs SFTP
+
+The prediction above held. [ADR-0021](0021-dual-pane-storage-workspace.md) added a dual-pane workspace for
+object storage without changing the SFTP or transfer contracts: `TransferEngine`, `TransferContracts.cs`,
+`TransfersPageViewModel.cs` and `SftpWorkspaceViewModel.cs` are all untouched by it.
+
+This ADR is amended rather than superseded. The **SFTP** workspace stays single-pane and remote-first, with
+the staging-directory drag-out described above, and is still governed by everything here. Nothing in
+ADR-0021 applies to it.

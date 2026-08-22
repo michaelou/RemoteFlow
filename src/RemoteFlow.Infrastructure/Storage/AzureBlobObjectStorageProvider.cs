@@ -97,7 +97,7 @@ public sealed class AzureBlobObjectStorageService(BlobServiceClient client, Obje
                     new GetBlobsByHierarchyOptions
                     {
                         Delimiter = ObjectStoragePath.Separator.ToString(),
-                        Prefix = prefix,
+                        Prefix = prefix + paging?.NamePrefix,
                     },
                     cancellationToken)
                 .AsPages(paging?.ContinuationToken, pageSize);

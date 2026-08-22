@@ -9,7 +9,9 @@ using RemoteFlow.Domain.Enums;
 using RemoteFlow.TestSupport;
 using RemoteFlow.UI.Navigation;
 using RemoteFlow.UI.Services;
+using RemoteFlow.UI.ViewModels;
 using RemoteFlow.UI.ViewModels.Connections;
+using RemoteFlow.UI.ViewModels.Storage;
 using RemoteFlow.UI.ViewModels.Settings;
 using RemoteFlow.UI.ViewModels.Terminal;
 using Xunit;
@@ -142,17 +144,16 @@ public sealed class RdpConnectionSessionOpenerTests
         Assert.Equal([ConnectionOpenMode.Rdp, ConnectionOpenMode.RdpExternal], modes);
     }
 
-    /// <summary>Named after the bug it exists to catch: the default branch only special-cases RDP, so a
+    /// <summary>Named after the bug it exists to catch: the default branch only special-cased RDP, so a
     /// double-clicked storage connection fell through to <c>SessionManager.OpenAsync</c> and came back as
     /// "Only SSH and SFTP connections can open an SSH terminal session" — a stack trace where an
-    /// explanation belongs. The Storage page arrives with the browsing UI; until then the same seam
-    /// answers plainly.</summary>
+    /// explanation belongs. It now opens the dual-pane Storage page, from every entry point.</summary>
     [Theory]
     [InlineData(ProtocolType.S3, ConnectionOpenMode.Default)]
     [InlineData(ProtocolType.AzureBlob, ConnectionOpenMode.Default)]
     [InlineData(ProtocolType.S3, ConnectionOpenMode.Storage)]
     [InlineData(ProtocolType.AzureBlob, ConnectionOpenMode.Storage)]
-    public async Task OpeningAStorageConnectionSaysItIsNotAvailableYetInsteadOfThrowing(
+    public async Task OpeningAStorageConnectionOpensTheStoragePage(
         ProtocolType protocol,
         ConnectionOpenMode mode)
     {
@@ -164,14 +165,13 @@ public sealed class RdpConnectionSessionOpenerTests
 
         var result = await fixture.Opener.OpenAsync(fixture.Connection.Id, mode, token);
 
-        Assert.False(result.Opened);
-        Assert.NotNull(result.Message);
-        Assert.Contains("not available in this build yet", result.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain("SSH terminal session", result.Message, StringComparison.Ordinal);
+        Assert.True(result.Opened);
+        Assert.Null(result.Message);
+        Assert.Equal("storage", fixture.Navigation.CurrentPageKey);
+        Assert.True(fixture.Storage.IsConnected);
+        Assert.True(fixture.Storage.Remote.IsReady);
         Assert.Empty(fixture.Workspace.Sessions);
         Assert.Equal(0, fixture.ExternalLauncher.LaunchCount);
-        // No navigation either: there is no Storage page to navigate to yet.
-        Assert.NotEqual("terminals", fixture.Navigation.CurrentPageKey);
     }
 
     private static OpenerFixture CreateFixture(
@@ -188,7 +188,14 @@ public sealed class RdpConnectionSessionOpenerTests
         };
         var launcher = new RecordingRdpLauncher();
         var workspace = new TerminalsPageViewModel();
-        var navigation = NavigationService.CreateDefault();
+        var storageFixture = StorageTestDoubles.CreateFixture();
+        var navigation = new NavigationService(
+        [
+            new("connections", "Connections", "Icon.Connections", () => new PageViewModel("Connections")),
+            new("terminals", "Terminals", "Icon.Terminals", () => new PageViewModel("Terminals")),
+            new("storage", "Storage", "Icon.Storage", () => storageFixture.Page),
+        ],
+        "connections");
         var services = new ServiceCollection()
             .AddSingleton<IConnectionRepository>(new SingleConnectionRepository(connection))
             .AddSingleton<ISettingsStore>(settings)
@@ -196,6 +203,7 @@ public sealed class RdpConnectionSessionOpenerTests
             .AddSingleton<IRdpLauncher>(launcher)
             .AddSingleton<INavigationService>(navigation)
             .AddSingleton(workspace)
+            .AddSingleton(storageFixture.Page)
             .BuildServiceProvider();
         return new(
             connection,
@@ -203,6 +211,7 @@ public sealed class RdpConnectionSessionOpenerTests
             embeddedFactory,
             launcher,
             workspace,
+            storageFixture,
             navigation,
             services,
             new SshConnectionSessionOpener(new UnusedSessionManager(), services));
@@ -224,13 +233,17 @@ public sealed class RdpConnectionSessionOpenerTests
         RecordingEmbeddedFactory EmbeddedFactory,
         RecordingRdpLauncher ExternalLauncher,
         TerminalsPageViewModel Workspace,
+        StorageTestDoubles.StorageFixture StorageFixture,
         NavigationService Navigation,
         ServiceProvider Services,
         SshConnectionSessionOpener Opener) : IAsyncDisposable
     {
+        public StoragePageViewModel Storage => StorageFixture.Page;
+
         public async ValueTask DisposeAsync()
         {
             await Workspace.DisposeAsync();
+            await StorageFixture.DisposeAsync();
             await Services.DisposeAsync();
         }
     }

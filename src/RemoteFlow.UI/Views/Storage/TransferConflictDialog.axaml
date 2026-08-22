@@ -1,0 +1,43 @@
+<Window
+    x:Class="RemoteFlow.UI.Views.Storage.TransferConflictDialog"
+    x:DataType="viewModels:TransferConflictDialogViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Storage"
+    Title="The destination already exists"
+    Width="640"
+    SizeToContent="Height"
+    CanResize="False"
+    WindowStartupLocation="CenterOwner">
+  <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="18">
+    <StackPanel Spacing="6">
+      <TextBlock FontSize="20" FontWeight="SemiBold" Text="The destination already exists" />
+      <TextBlock
+          Foreground="{DynamicResource Brush.Text.Secondary}"
+          Text="Choose what to do with this item."
+          TextWrapping="Wrap" />
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="130,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="8">
+      <TextBlock Text="{Binding DirectionText}" FontWeight="SemiBold" />
+      <TextBlock Grid.Column="1" Text="{Binding SourcePath}" FontFamily="Cascadia Mono,Consolas" TextWrapping="Wrap" />
+      <TextBlock Grid.Row="1" Text="Destination" FontWeight="SemiBold" />
+      <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DestinationPath}" FontFamily="Cascadia Mono,Consolas" TextWrapping="Wrap" />
+      <TextBlock Grid.Row="2" Text="Already there" FontWeight="SemiBold" />
+      <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ExistingSizeText}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+    </Grid>
+
+    <CheckBox
+        Grid.Row="2"
+        AutomationProperties.Name="Apply this answer to every remaining item"
+        Content="Apply to all remaining items"
+        IsChecked="{Binding ApplyToAll}"
+        IsVisible="{Binding OfferApplyToAll}" />
+
+    <StackPanel Grid.Row="3" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+      <Button Content="Cancel" IsDefault="True" Click="Cancel_OnClick" />
+      <Button Content="Skip" Click="Skip_OnClick" />
+      <Button Classes="accent" Content="Overwrite" Click="Overwrite_OnClick" />
+    </StackPanel>
+  </Grid>
+</Window>

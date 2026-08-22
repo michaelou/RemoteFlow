@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../../src/RemoteFlow.UI/RemoteFlow.UI.csproj" />
+    <!-- The composition test builds the container the desktop host builds, which needs the two
+         implementation projects. DependencyDirectionTests only guards the src assemblies, so a test
+         project referencing them proves nothing wrong about the layering. -->
+    <ProjectReference Include="../../src/RemoteFlow.Infrastructure/RemoteFlow.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/RemoteFlow.Persistence/RemoteFlow.Persistence.csproj" />
     <ProjectReference Include="../RemoteFlow.TestSupport/RemoteFlow.TestSupport.csproj" />
   </ItemGroup>
 

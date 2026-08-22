@@ -1,0 +1,69 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Storage.TransferQueuePane"
+    x:DataType="viewModels:TransfersPageViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Transfers">
+  <Border Classes="panel" ClipToBounds="True">
+    <Grid RowDefinitions="Auto,*">
+      <!-- "All transfers", said out loud: this is the application-wide queue, not a per-session view, so
+           a transfer started on the SFTP page shows up here too. -->
+      <Grid Margin="12,8" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+        <TextBlock FontWeight="SemiBold" Text="All transfers" VerticalAlignment="Center" />
+        <TextBlock
+            Grid.Column="1"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="{Binding AggregateStatus}" />
+        <Button
+            Grid.Column="2"
+            AutomationProperties.Name="Clear completed transfers"
+            Content="Clear completed"
+            Command="{Binding ClearCompletedCommand}"
+            IsEnabled="{Binding HasCompleted}" />
+      </Grid>
+
+      <TextBlock
+          Grid.Row="1"
+          Margin="12,0,12,10"
+          Foreground="{DynamicResource Brush.Text.Secondary}"
+          IsVisible="{Binding IsEmpty}"
+          Text="Nothing queued. Select rows in a pane and choose Upload or Download." />
+
+      <ListBox
+          Grid.Row="1"
+          AutomationProperties.Name="Transfer queue"
+          Background="Transparent"
+          IsVisible="{Binding !IsEmpty}"
+          ItemsSource="{Binding Items}"
+          SelectionMode="Single">
+        <ListBox.Styles>
+          <Style Selector="ListBoxItem">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="8,2" />
+          </Style>
+        </ListBox.Styles>
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="viewModels:TransferItemViewModel">
+            <Grid ColumnDefinitions="2*,90,3*,140,110,90,Auto" ColumnSpacing="10" MinHeight="30">
+              <TextBlock VerticalAlignment="Center" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Grid.Column="1" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding DirectionText}" />
+              <ProgressBar Grid.Column="2" Height="6" VerticalAlignment="Center" Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" />
+              <TextBlock Grid.Column="3" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding ProgressText}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding RateText}" />
+              <TextBlock Grid.Column="5" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding EtaText}" />
+              <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="6">
+                <Button AutomationProperties.Name="Cancel this transfer" Content="Cancel" Command="{Binding CancelCommand}" IsVisible="{Binding CanCancel}" />
+                <Button AutomationProperties.Name="Retry this transfer" Content="Retry" Command="{Binding RetryCommand}" IsVisible="{Binding CanRetry}" />
+                <Button AutomationProperties.Name="Show this download in the file manager" Content="Reveal" Command="{Binding RevealCommand}" IsVisible="{Binding CanReveal}" />
+              </StackPanel>
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Grid>
+  </Border>
+</UserControl>

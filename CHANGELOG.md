@@ -22,8 +22,7 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
   cannot list them. Leave it blank to browse the whole account. An optional prefix starts browsing further
   in.
 
-  Browsing itself is not in this release. Opening a storage connection says so rather than failing
-  obscurely; the account, its settings and its stored key are saved and ready. See
+  See
   [docs/adr/0019-object-storage-provider-abstraction.md](docs/adr/0019-object-storage-provider-abstraction.md)
   for what the foundation covers and what is deliberately deferred.
 - **Objects in the gigabytes transfer in parallel chunks.** Uploads split into parts and downloads into
@@ -37,9 +36,31 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
   crash or a power cut, so set a lifecycle rule on the bucket — S3's `AbortIncompleteMultipartUpload` at
   seven days — as the durable backstop. Azure needs nothing: uncommitted blocks expire on their own.
 
-  As with browsing, there is no Storage page to drive this from yet. See
-  [docs/adr/0020-chunked-object-storage-transfers.md](docs/adr/0020-chunked-object-storage-transfers.md)
+  See [docs/adr/0020-chunked-object-storage-transfers.md](docs/adr/0020-chunked-object-storage-transfers.md)
   for the decisions and the known limitations.
+- **A Storage page, with your own files beside the bucket.** Local filesystem on the left, bucket or
+  container on the right, transfer queue along the bottom. Select rows and press **Upload** or
+  **Download**, drag between the panes, or press `Enter`. Double-clicking an S3 or Azure Blob connection
+  opens it here. A folder is counted and confirmed before a byte moves.
+
+  The queue at the foot of the page is the same one the **Transfers** page shows, not a second one, so a
+  transfer started anywhere appears everywhere — and clearing completed items from either surface clears
+  both.
+
+  Two things it will not pretend to do. **"Starts with" is not a search:** both providers narrow a listing
+  by prefix and neither searches by substring, so the box re-asks the provider rather than sifting rows
+  already on screen. And **a listing stops at 10,000 rows** with a line saying "of many shown" — never a
+  made-up total, because S3 cannot cheaply count a prefix. Sorting a truncated listing sorts what is
+  loaded, and the column tooltip says so.
+
+  Object storage has no rename, so `F2` works on the local pane only. Keys are in
+  [docs/keybindings.md](docs/keybindings.md); the whole feature, including the bucket lifecycle rule worth
+  setting, is in [docs/object-storage.md](docs/object-storage.md).
+- **A conflict prompt for transfers, with "apply to all".** When the destination already exists RemoteFlow
+  overwrites by default — a put is atomic and idempotent in both providers. Set **Storage conflict
+  default** to *Prompt* to be asked instead, which is worth doing on an unversioned bucket. Answering once
+  with **Apply to all remaining items** covers the rest of that one drag and nothing else. SFTP transfers
+  are unchanged.
 
 ### Changed
 

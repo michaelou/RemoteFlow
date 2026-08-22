@@ -186,7 +186,9 @@ public sealed class InMemoryObjectStorage(bool abortIsNoOp = false) : IObjectSto
         }
 
         var (container, key) = ObjectStoragePath.Split(path);
-        var all = container is null ? ListContainers() : ListPrefix(container, key);
+        var all = container is null
+            ? ListContainers()
+            : ListPrefix(container, key, paging?.NamePrefix);
         return Task.FromResult(SftpResult<ObjectStoragePage>.Success(Page(all, paging)));
     }
 
@@ -480,13 +482,14 @@ public sealed class InMemoryObjectStorage(bool abortIsNoOp = false) : IObjectSto
             .Select(name => new ObjectEntry(name, $"/{name}", ObjectEntryKind.Container, 0, null, null))];
     }
 
-    private ObjectEntry[] ListPrefix(string container, string key)
+    private ObjectEntry[] ListPrefix(string container, string key, string? namePrefix)
     {
         var prefix = ObjectStoragePath.AsPrefix(key);
+        var search = prefix + namePrefix;
         var entries = new List<ObjectEntry>();
         var seenPrefixes = new HashSet<string>(StringComparer.Ordinal);
         foreach (var stored in _objects.Keys.Where(candidate =>
-                     candidate.StartsWith($"{container}/{prefix}", StringComparison.Ordinal))
+                     candidate.StartsWith($"{container}/{search}", StringComparison.Ordinal))
                  .Order(StringComparer.Ordinal))
         {
             var relative = stored[(container.Length + 1 + prefix.Length)..];

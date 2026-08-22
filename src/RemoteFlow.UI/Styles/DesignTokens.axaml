@@ -23,6 +23,10 @@
       <Color x:Key="Color.Success">#5DE28C</Color>
       <Color x:Key="Color.Warning">#FFCA58</Color>
       <Color x:Key="Color.Danger">#FF7B72</Color>
+      <!-- The inline error banner's fill. A token rather than the hard-coded translucent red the SFTP
+           workspace still carries: opaque, so its contrast can actually be measured, and dark enough for
+           primary text to clear 4.5:1 on it. -->
+      <Color x:Key="Color.Danger.Surface">#391F26</Color>
       <Color x:Key="Color.Environment.Dev">#5DE28C</Color>
       <Color x:Key="Color.Environment.Staging">#FFCA58</Color>
       <Color x:Key="Color.Environment.Production">#FF7B72</Color>
@@ -41,6 +45,7 @@
       <SolidColorBrush x:Key="Brush.Success" Color="{DynamicResource Color.Success}" />
       <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />
       <SolidColorBrush x:Key="Brush.Danger" Color="{DynamicResource Color.Danger}" />
+      <SolidColorBrush x:Key="Brush.Danger.Surface" Color="{DynamicResource Color.Danger.Surface}" />
       <SolidColorBrush x:Key="Brush.Environment.Dev" Color="{DynamicResource Color.Environment.Dev}" />
       <SolidColorBrush x:Key="Brush.Environment.Staging" Color="{DynamicResource Color.Environment.Staging}" />
       <SolidColorBrush x:Key="Brush.Environment.Production" Color="{DynamicResource Color.Environment.Production}" />
@@ -61,6 +66,7 @@
       <Color x:Key="Color.Success">#137333</Color>
       <Color x:Key="Color.Warning">#8A5A00</Color>
       <Color x:Key="Color.Danger">#B42318</Color>
+      <Color x:Key="Color.Danger.Surface">#FDECEA</Color>
       <Color x:Key="Color.Environment.Dev">#137333</Color>
       <Color x:Key="Color.Environment.Staging">#8A5A00</Color>
       <Color x:Key="Color.Environment.Production">#B42318</Color>
@@ -79,6 +85,7 @@
       <SolidColorBrush x:Key="Brush.Success" Color="{DynamicResource Color.Success}" />
       <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />
       <SolidColorBrush x:Key="Brush.Danger" Color="{DynamicResource Color.Danger}" />
+      <SolidColorBrush x:Key="Brush.Danger.Surface" Color="{DynamicResource Color.Danger.Surface}" />
       <SolidColorBrush x:Key="Brush.Environment.Dev" Color="{DynamicResource Color.Environment.Dev}" />
       <SolidColorBrush x:Key="Brush.Environment.Staging" Color="{DynamicResource Color.Environment.Staging}" />
       <SolidColorBrush x:Key="Brush.Environment.Production" Color="{DynamicResource Color.Environment.Production}" />

@@ -40,6 +40,11 @@ screen.
 In **SFTP**: the path box accepts a typed path, the file list supports type-to-select, and every toolbar
 button is a tab stop with a name rather than an arrow glyph alone.
 
+On the **Storage** page: the first tab stop is the account picker, `Tab` walks from the local pane to the
+remote one without being rebound, and `Ctrl+Shift+Left` / `Ctrl+Shift+Right` jump between them explicitly.
+`F5`, `F7`, `F2` and `Delete` act on whichever pane holds the keyboard. Both grid splitters are tab stops
+and move with the arrow keys. The full list is in [keybindings.md](keybindings.md#storage-page).
+
 ## What a screen reader hears
 
 Every actionable control has an accessible name. Icon-only buttons — the arrows, the chevron, the close
@@ -51,6 +56,9 @@ crosses — carry an explicit one, because a tooltip is not a name and is never 
   announce the protocol and live connection status: *"DC01, RDP, production, Connected"*.
 - Committing a navigation moves focus into the page region, which is named for the page, so the change
   of page is announced.
+- The Storage page's two file panes are the same control used twice, so every one of their controls
+  announces which pane it belongs to: *"Refresh the local folder"* and *"Refresh the remote prefix"*, not
+  *"Refresh"* twice. The grid splitters are named and carry help text saying which arrow keys move them.
 - The transfer status line is a polite live region: a transfer finishing is announced without taking
   focus away from whatever is being done.
 
@@ -80,6 +88,8 @@ On the dark theme — the default, and the one most people will only ever see:
 | `DarkPaletteContrastTests` | Measures every palette pair, including the composited control outline from the theme, so a palette tweak or a theme upgrade cannot quietly drop below the floor. |
 | `KeyboardAndScreenReaderTests` | Enter presses a focused button; navigation hands focus to the page; terminal tabs are focusable and named; the terminal surface has a role; every environment carries text. |
 | `ConnectionEditorTests` | Opening the editor puts the keyboard in the first field. |
+| `StorageKeyboardTests` | The Storage page opens on the account picker, `Tab` reaches the remote pane, the explicit pane jump works, and `F5`/`F7`/`Delete` reach the focused pane. |
+| `StorageWorkspaceTests` | The two panes do not announce themselves with the same name — the one duplicate-name failure the audit cannot see. |
 
 ## What still has to be done by hand
 
@@ -93,7 +103,10 @@ Automation cannot hear a screen reader. Before a release, on the dark theme:
 3. **The whole job, keyboard only.** Unplug the mouse and do it end to end: create a connection,
    configure it, connect, open SFTP, and transfer a file. Any point where the keyboard cannot continue is
    a bug, not a technique to learn.
-4. **Zoom to 200%** and confirm nothing is clipped or unreachable.
+4. **The Storage page, keyboard only and with a screen reader.** Pick an account, connect, walk both
+   panes, move a splitter with the arrow keys, and transfer a file in each direction. Every control should
+   say which pane it belongs to; two controls announcing the same name is the failure to look for.
+5. **Zoom to 200%** and confirm nothing is clipped or unreachable.
 
 Record what you found in the pull request, the way
 [manual-test-terminal.md](manual-test-terminal.md) does for the terminal.
