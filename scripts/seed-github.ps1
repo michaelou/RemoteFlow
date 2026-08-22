@@ -87,6 +87,7 @@ $labels = @(
     @{ Name = 'area:rdp';          Color = '0366D6'; Description = 'RDP launchers and options' }
     @{ Name = 'area:platform';     Color = '0366D6'; Description = 'Per-OS integration: paths, launchers, P/Invoke' }
     @{ Name = 'area:backup';       Color = '0366D6'; Description = 'Export, import, merge, archive format' }
+    @{ Name = 'area:storage';      Color = '0366D6'; Description = 'Object storage: S3, Azure Blob, buckets and containers' }
     @{ Name = 'area:build';        Color = '0366D6'; Description = 'Solution layout, packaging, CI, docs tooling' }
     @{ Name = 'area:security';     Color = '000000'; Description = 'Credentials, crypto, host key trust - read the diff carefully' }
 
@@ -134,6 +135,7 @@ $milestones = @(
     @{ Title = '6 - Remote Desktop';         Description = 'Platform-native RDP launchers and options UI. No embedded RDP in v1.' }
     @{ Title = '7 - Backup and Restore';     Description = 'Versioned archive format, export/import, merge/replace, encrypted credential export.' }
     @{ Title = '8 - Packaging and Release';  Description = 'The first CI in the repo. Versioning, Windows packaging, release workflow, accessibility and docs.' }
+    @{ Title = '9 - Cloud Object Storage';   Description = 'AWS S3 and Azure Blob Storage as connections, a dual-pane local/remote browser, and a chunked transfer engine for multi-gigabyte objects. Cuts 0.3.0 for Windows and Linux.' }
 )
 
 if (-not $SkipMilestones) {
@@ -159,7 +161,7 @@ if (-not $SkipMilestones) {
 if (-not $SkipIssues) {
     Write-Step "Issues"
 
-    $dataFiles = @('m1.ps1', 'm2.ps1', 'm3.ps1', 'm4.ps1', 'm5.ps1', 'm6-m8.ps1')
+    $dataFiles = @('m1.ps1', 'm2.ps1', 'm3.ps1', 'm4.ps1', 'm5.ps1', 'm6-m8.ps1', 'm9.ps1')
     $issues = @()
     foreach ($f in $dataFiles) {
         $path = Join-Path $scriptRoot "issues/$f"
