@@ -66,10 +66,23 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
   with **Apply to all remaining items** covers the rest of that one drag and nothing else. SFTP transfers
   are unchanged.
 
+### Fixed
+
+- **Editing an S3 or Azure Blob connection now keeps the change.** Every object-storage setting — region,
+  endpoint, path-style addressing, bucket, prefix — was written correctly when the connection was first
+  created and then silently discarded on every save afterwards, with no error: the update path copies each
+  block of options by hand and this one was never added to that list. Correcting a mistyped region appeared
+  to work, saved nothing, and failed to connect against the old value. Existing connections need only be
+  re-saved with the right values.
+
 ### Changed
 
 - Protocol names are now written out in full wherever they are shown — the filter chips, the details pane
   and the protocol picker say **Azure Blob**, not `AZUREBLOB`.
+- The S3 **Region** box suggests AWS's regions as you type, and warns when what you entered is not one of
+  them — `eu-west` offers `eu-west-1`, `eu-west-2`, `eu-west-3`. It stays a warning rather than a rule,
+  because the same field serves S3-compatible services where the region is whatever that deployment calls
+  it; setting a custom endpoint silences it.
 - The database schema version moves to 2. A database that has been opened by this release, or that contains
   an S3 or Azure Blob connection, is refused by RemoteFlow 0.2.6 and earlier with a message telling you to
   upgrade, rather than failing part-way through opening the connections page. Existing databases are

@@ -5,7 +5,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
     xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
-    xmlns:converters="using:RemoteFlow.UI.Converters">
+    xmlns:converters="using:RemoteFlow.UI.Converters"
+    xmlns:storage="using:RemoteFlow.Application.Abstractions.Storage">
   <UserControl.Styles>
     <!-- A label sits tight against its own control; the gap between fields comes from the
          section spacing, so related controls read as one unit. -->
@@ -181,7 +182,30 @@
             <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
               <StackPanel IsVisible="{Binding IsStorageRegionVisible}">
                 <TextBlock Classes="label" Text="Region" />
-                <TextBox AutomationProperties.Name="Region" TabIndex="9" Text="{Binding StorageRegion, Mode=TwoWay}" />
+                <!-- Suggestions, not a closed set: the same field serves S3-compatible services, where the
+                     region is whatever that deployment calls it. Typing is still allowed; the list is
+                     there because "eu-west" is otherwise only refuted by a DNS failure at connect time. -->
+                <AutoCompleteBox
+                    AutomationProperties.Name="Region"
+                    FilterMode="Contains"
+                    ItemsSource="{Binding StorageRegionChoices}"
+                    MinimumPrefixLength="0"
+                    TabIndex="9"
+                    Text="{Binding StorageRegion, Mode=TwoWay}"
+                    ValueMemberBinding="{Binding Code}"
+                    Watermark="eu-west-1">
+                  <AutoCompleteBox.ItemTemplate>
+                    <DataTemplate x:DataType="storage:S3Region">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </AutoCompleteBox.ItemTemplate>
+                </AutoCompleteBox>
+                <TextBlock
+                    Classes="hint"
+                    Foreground="{DynamicResource Brush.Warning}"
+                    IsVisible="{Binding StorageRegionWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    Text="{Binding StorageRegionWarning}"
+                    TextWrapping="Wrap" />
                 <TextBlock
                     Classes="error"
                     IsVisible="{Binding StorageRegionError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"

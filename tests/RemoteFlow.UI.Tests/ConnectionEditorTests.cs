@@ -531,6 +531,96 @@ public sealed class ConnectionEditorTests
         Assert.Equal("minio.example.test:9000", editor.Host);
     }
 
+    [Fact]
+    public async Task AnUnknownS3RegionIsWarnedAboutWithoutBlockingTheSave()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        editor.Name = "Objects";
+        editor.Protocol = ProtocolType.S3;
+        editor.Username = "AKIAEXAMPLE";
+
+        Assert.NotEmpty(editor.StorageRegionChoices);
+        Assert.Null(editor.StorageRegionWarning);
+
+        editor.StorageRegion = "eu-west";
+
+        // Named, with the fix: the alternative is finding out from a DNS failure at connect time.
+        Assert.Contains("not an AWS region", editor.StorageRegionWarning, StringComparison.Ordinal);
+        Assert.Contains("eu-west-1", editor.StorageRegionWarning, StringComparison.Ordinal);
+
+        editor.StorageRegion = "eu-west-1";
+
+        Assert.Null(editor.StorageRegionWarning);
+
+        // A warning, not a validation error: the same field serves S3-compatible services, where the
+        // region is whatever that deployment calls it, so an unknown value must never block a save.
+        editor.StorageRegion = "auto";
+        Assert.NotNull(editor.StorageRegionWarning);
+        Assert.Null(editor.StorageRegionError);
+        Assert.True(await editor.SaveAsync("a-secret-key".ToCharArray().AsMemory(), token));
+
+        var stored = await fixture.Connections.GetByIdAsync(editor.ConnectionId!.Value, token);
+        Assert.Equal("auto", stored!.ObjectStorage.Region);
+    }
+
+    [Fact]
+    public async Task ACustomEndpointOrAzureSilencesTheRegionWarningEntirely()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        editor.Protocol = ProtocolType.S3;
+        editor.StorageRegion = "not-a-region";
+        Assert.NotNull(editor.StorageRegionWarning);
+
+        // MinIO and friends: the region is only ever sent to the endpoint the user named, so AWS's list
+        // has nothing to say about it.
+        editor.StorageServiceUrl = "http://minio.example.test:9000";
+        Assert.Null(editor.StorageRegionWarning);
+
+        editor.StorageServiceUrl = null;
+        Assert.NotNull(editor.StorageRegionWarning);
+
+        editor.Protocol = ProtocolType.AzureBlob;
+        Assert.Null(editor.StorageRegionWarning);
+        Assert.False(editor.IsStorageRegionVisible);
+    }
+
+    /// <summary>The reported sequence, verbatim: save a region, reopen, correct it, save again, and see
+    /// whether the correction survives a round trip through the database.</summary>
+    [Fact]
+    public async Task CorrectingASavedRegionSurvivesAReopen()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        editor.Name = "Objects";
+        editor.Protocol = ProtocolType.S3;
+        editor.Username = "AKIAEXAMPLE";
+        editor.StorageRegion = "eu-west";
+        editor.StorageContainer = "archive";
+        Assert.True(await editor.SaveAsync("a-secret-key".ToCharArray().AsMemory(), token));
+        var id = editor.ConnectionId!.Value;
+
+        var reopened = await fixture.CreateEditorAsync(id, token);
+        Assert.Equal("eu-west", reopened.StorageRegion);
+        Assert.Equal("s3.eu-west.amazonaws.com", reopened.Host);
+
+        reopened.StorageRegion = "eu-west-1";
+        Assert.Equal("s3.eu-west-1.amazonaws.com", reopened.Host);
+        Assert.True(await reopened.SaveAsync(ReadOnlyMemory<char>.Empty, token));
+
+        var stored = await fixture.Connections.GetByIdAsync(id, token);
+        Assert.Equal(
+            ("s3.eu-west-1.amazonaws.com", "eu-west-1", "archive"),
+            (stored!.Host, stored.ObjectStorage.Region, stored.ObjectStorage.Container));
+
+        var again = await fixture.CreateEditorAsync(id, token);
+        Assert.Equal("eu-west-1", again.StorageRegion);
+    }
+
     /// <summary>Named after the bug it exists to catch: the editor clears the stored credential whenever
     /// <see cref="AuthMethod.None"/> is saved with no new secret typed, and object storage connections sit
     /// on <see cref="AuthMethod.None"/> by design. Without the guard, re-saving one deletes the secret key

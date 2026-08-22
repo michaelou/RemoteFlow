@@ -368,6 +368,16 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial string? StorageRegionError { get; private set; }
 
+    /// <summary>Said as a warning rather than as a validation error: the field is also used by
+    /// S3-compatible services, where the region is whatever that deployment calls it, so an unknown value
+    /// must not block a save. It exists because the alternative is finding out at connect time, from a DNS
+    /// failure, that <c>eu-west</c> is not a region.</summary>
+    [ObservableProperty]
+    public partial string? StorageRegionWarning { get; private set; }
+
+    /// <summary>Suggestions, not a closed set — see <see cref="S3Regions"/>.</summary>
+    public IReadOnlyList<S3Region> StorageRegionChoices { get; } = S3Regions.All;
+
     [ObservableProperty]
     public partial string? StorageServiceUrlError { get; private set; }
 
@@ -869,6 +879,10 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         IsPrivateKeyPassphraseVisible = AuthMethod == AuthMethod.PrivateKey;
         IsPrivateKeySectionVisible = IsSshSectionVisible && AuthMethod == AuthMethod.PrivateKey;
 
+        // Here rather than at each call site: this runs from the constructor, from LoadConnection, and on
+        // every protocol change, which is exactly when the warning can start or stop applying.
+        UpdateStorageRegionWarning();
+
         // A client can be installed or removed while the editor is open, so the indicator is answered
         // afresh every time the section comes into view rather than once per editor.
         if (IsRdpSectionVisible && !rdpWasVisible && !_loading)
@@ -923,6 +937,27 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         }
 
         _derivedHost = derived;
+    }
+
+    /// <summary>Warns when an S3 connection carries a region AWS does not have and there is no custom
+    /// endpoint to explain it, naming the near misses so the fix is one click rather than a search.
+    /// </summary>
+    private void UpdateStorageRegionWarning()
+    {
+        if (Protocol != ProtocolType.S3 ||
+            !string.IsNullOrWhiteSpace(StorageServiceUrl) ||
+            string.IsNullOrWhiteSpace(StorageRegion) ||
+            S3Regions.IsKnown(StorageRegion))
+        {
+            StorageRegionWarning = null;
+            return;
+        }
+
+        var near = S3Regions.Suggest(StorageRegion);
+        StorageRegionWarning = near.Count == 0
+            ? $"'{StorageRegion.Trim()}' is not an AWS region. Connecting will fail to resolve " +
+                $"{Host}. Leave it only if this is an S3-compatible service with its own endpoint."
+            : $"'{StorageRegion.Trim()}' is not an AWS region. Did you mean {string.Join(", ", near)}?";
     }
 
     private void UpdateEnvironmentPreview()
@@ -980,12 +1015,14 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     partial void OnStorageRegionChanged(string? value)
     {
         DeriveStorageHost();
+        UpdateStorageRegionWarning();
         MarkDirty();
     }
 
     partial void OnStorageServiceUrlChanged(string? value)
     {
         DeriveStorageHost();
+        UpdateStorageRegionWarning();
         MarkDirty();
     }
     partial void OnHostKeyPolicyChanged(HostKeyPolicy value) { MarkDirty(); }

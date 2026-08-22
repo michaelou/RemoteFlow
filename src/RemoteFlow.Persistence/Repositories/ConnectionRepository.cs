@@ -64,11 +64,16 @@ public sealed class ConnectionRepository : RepositoryBase, IConnectionRepository
                     .SingleOrDefaultAsync(candidate => candidate.Id == connection.Id, cancellationToken)
                     .ConfigureAwait(false)
                 ?? throw new KeyNotFoundException($"Connection '{connection.Id}' was not found.");
+            // Every owned block is copied explicitly, and this list has to stay in step with the model:
+            // an owned type that is configured but not copied here is silently discarded on every update,
+            // while still saving correctly on create. RepositoryRoundTripTests counts the model's owned
+            // navigations against this list so the next one cannot be forgotten the way ObjectStorage was.
             context.Entry(existing).CurrentValues.SetValues(connection);
             context.Entry(existing.Credential).CurrentValues.SetValues(connection.Credential);
             context.Entry(existing.Ssh).CurrentValues.SetValues(connection.Ssh);
             context.Entry(existing.Sftp).CurrentValues.SetValues(connection.Sftp);
             context.Entry(existing.Rdp).CurrentValues.SetValues(connection.Rdp);
+            context.Entry(existing.ObjectStorage).CurrentValues.SetValues(connection.ObjectStorage);
 
             foreach (var removedTag in existing.Tags
                          .Where(item => connection.Tags.All(candidate => candidate.TagId != item.TagId))

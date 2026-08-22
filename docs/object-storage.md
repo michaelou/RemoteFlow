@@ -18,14 +18,17 @@ The host and port fill themselves in and stop doing so the moment you type over 
 sovereign-cloud account such as `*.blob.core.chinacloudapi.cn` is reached.
 
 **The S3 region is the full AWS region code, with its number** — `eu-west-1` (Ireland), `eu-west-2`
-(London), `us-east-1` (N. Virginia), `ap-southeast-2` (Sydney). `eu-west` is not a region, and it produces
-a **Host** of `s3.eu-west.amazonaws.com`, which does not resolve: the failure arrives as *"no such host"*
-rather than as a validation error, because the name is only looked up when you connect. The full list is in
-[AWS's regions and endpoints documentation](https://docs.aws.amazon.com/general/latest/gr/s3.html).
+(London), `us-east-1` (N. Virginia), `ap-southeast-2` (Sydney). The Region box suggests them as you type,
+and warns when what you have entered is not one of AWS's, naming the near misses: `eu-west` is not a
+region, and left alone it produces a **Host** of `s3.eu-west.amazonaws.com`, which fails at connect time
+with *"no such host"*.
 
-If you have already typed over the **Host** box — or saved the connection with a region that was wrong —
-the editor stops maintaining it, on purpose. Check the Host box reads `s3.{region}.amazonaws.com` for the
-region you meant, and correct it by hand if it does not.
+It is a warning and not a rule, because the same field serves S3-compatible services, where the region is
+whatever that deployment calls it — MinIO commonly wants `us-east-1`, Cloudflare R2 wants `auto`. Setting a
+custom **Endpoint** silences it entirely.
+
+If you have typed over the **Host** box yourself, the editor stops maintaining it, on purpose — that is how
+a sovereign-cloud host is reached. Check it reads `s3.{region}.amazonaws.com` for the region you meant.
 
 The secret goes in the platform keychain like every other RemoteFlow credential — Windows Credential
 Manager, macOS Keychain, or libsecret, falling back to the encrypted file vault. It never goes in the

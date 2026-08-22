@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using RemoteFlow.Domain.Entities;
+using RemoteFlow.Domain.Enums;
+using RemoteFlow.Domain.ValueObjects;
 using RemoteFlow.Domain.Abstractions;
 using RemoteFlow.Persistence.Repositories;
 using RemoteFlow.TestSupport;
@@ -33,6 +36,65 @@ public sealed class RepositoryRoundTripTests
         persisted = Assert.IsType<Domain.Entities.Connection>(
             await connections.GetByIdAsync(connection.Id, cancellationToken));
         Assert.Empty(persisted.Tags);
+    }
+
+    /// <summary>Named after the bug it exists to catch: <c>UpdateAsync</c> copies each owned block by
+    /// hand, and <c>ObjectStorage</c> was configured on the model but never added to that list. An owned
+    /// type in that state saves correctly on create and is silently discarded on every edit afterwards —
+    /// a user correcting a mistyped region watched the correction vanish on reopen, with no error.</summary>
+    [Fact]
+    public async Task EveryOwnedOptionsBlockSurvivesAnUpdate()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTempDbFixture.CreateAsync(cancellationToken);
+        var connections = new ConnectionRepository(database.Factory);
+        var guids = SystemGuidProvider.Instance;
+        var connection = new ConnectionBuilder().Build();
+        await connections.AddAsync(connection, cancellationToken);
+
+        var edited = Assert.IsType<Connection>(await connections.GetByIdAsync(connection.Id, cancellationToken));
+        var ssh = SshOptions.Default().Configure(privateKeyPath: "/keys/id_ed25519", hostKeyPolicy: HostKeyPolicy.Strict);
+        var sftp = SftpOptions.Default().Configure(remoteRootPath: "/srv/data");
+        var rdp = RdpOptions.Default().Configure(domain: "CORP", fullScreen: true);
+        var storage = ObjectStorageOptions.Default().Configure(
+            region: "eu-west-1",
+            container: "archive",
+            rootPrefix: "2026",
+            usePathStyleAddressing: true);
+        _ = edited.SetOptions(ssh.Value, sftp, rdp.Value, storage.Value, guids);
+        await connections.UpdateAsync(edited, cancellationToken);
+
+        var reloaded = Assert.IsType<Connection>(await connections.GetByIdAsync(connection.Id, cancellationToken));
+        Assert.Equal(HostKeyPolicy.Strict, reloaded.Ssh.HostKeyPolicy);
+        Assert.Equal("/keys/id_ed25519", reloaded.Ssh.PrivateKeyPath);
+        Assert.Equal("/srv/data", reloaded.Sftp.RemoteRootPath);
+        Assert.Equal("CORP", reloaded.Rdp.Domain);
+        Assert.Equal(
+            ("eu-west-1", "archive", "2026", true),
+            (reloaded.ObjectStorage.Region,
+                reloaded.ObjectStorage.Container,
+                reloaded.ObjectStorage.RootPrefix,
+                reloaded.ObjectStorage.UsePathStyleAddressing));
+    }
+
+    /// <summary>The list in <c>UpdateAsync</c> is hand-maintained, so this counts it against the model. A
+    /// sixth owned block fails here rather than in a bug report three releases later.</summary>
+    [Fact]
+    public async Task TheModelHasNoOwnedBlockUpdateAsyncDoesNotCopy()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = await SqliteTempDbFixture.CreateAsync(cancellationToken);
+        await using var context = await database.Factory.CreateDbContextAsync(cancellationToken);
+
+        var owned = context.Model
+            .FindEntityType(typeof(Connection))!
+            .GetNavigations()
+            .Where(navigation => navigation.TargetEntityType.IsOwned())
+            .Select(navigation => navigation.Name)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["Credential", "ObjectStorage", "Rdp", "Sftp", "Ssh"], owned);
     }
 
     [Fact]
