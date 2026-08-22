@@ -77,6 +77,16 @@ See [docs/packaging-windows.md](docs/packaging-windows.md) for the artefact layo
 configuration, what uninstall does and does not remove, and the SmartScreen behaviour to expect from an
 unsigned build.
 
+On Linux the equivalent is a shell script, since `pwsh` is not a prerequisite there:
+
+```shell
+./scripts/publish-linux.sh
+```
+
+It produces a portable tarball and a `.deb` per architecture. See
+[docs/packaging-linux.md](docs/packaging-linux.md) for the package layout, the hand-maintained dependency
+list and why it cannot be generated, and what an uninstall leaves behind.
+
 ## Dependencies and licences
 
 Adding or bumping a package means regenerating the third-party notices in the same pull request:
@@ -98,11 +108,24 @@ Database migrations may be squashed until the `v0.1.0` tag. After `v0.1.0`, migr
 ## Automation
 
 `.github/workflows/ci.yml` runs the checks above on `windows-latest` for every push to `main` and every
-pull request: restore, `Release` build with warnings as errors, and the unit tests. Linux and macOS are not
-covered, so a cross-platform change still has to be exercised locally. The SSH integration suite needs a
-Linux Docker engine and does not run in CI at all; every run writes that into its summary so a green run is
-not read as more than it is. There is no coverage gate — the reviewable rule is that changes to Domain or
-Application come with tests.
+pull request: restore, `Release` build with warnings as errors, and the unit tests. A second job builds and
+tests the `CrossPlatform` configuration on `ubuntu-latest`, which is what keeps the Windows-only RDP
+projects from leaking into the shared ones. macOS is not covered, so a macOS-specific change still has to
+be exercised locally. The SSH integration suite needs a Linux Docker engine and does not run in CI at all;
+every run writes that into its summary so a green run is not read as more than it is. There is no coverage
+gate — the reviewable rule is that changes to Domain or Application come with tests.
+
+The Linux job is the one you can reproduce locally, with [act](https://github.com/nektos/act) and a Docker
+engine:
+
+```shell
+act -j build-cross-platform -P ubuntu-latest=catthehacker/ubuntu:act-latest
+```
+
+The Windows jobs cannot be run that way. GitHub's Windows runners are virtual machines rather than
+containers, so there is no image for act to pull on a Linux or macOS host; jobs whose `runs-on` has no
+mapping are skipped with a warning. Anything that depends on a real Windows build — the installer, the
+artefact smoke tests, the embedded RDP control — is only ever verified by pushing.
 
 `.github/workflows/release.yml` runs on `v*` tags only. It builds each architecture on a runner of that
 architecture, launches every artefact to check it starts and reports the version in the tag, and creates a

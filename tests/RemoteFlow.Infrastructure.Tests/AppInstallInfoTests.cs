@@ -15,9 +15,21 @@ public sealed class AppInstallInfoTests
 {
     private const string _installed = @"C:\Users\someone\AppData\Local\Programs\RemoteFlow";
 
+    /// <summary>These cases stub the platform as Windows, but the production path still runs through the
+    /// host's <see cref="Path"/> APIs: off Windows a <c>C:\…</c> literal is not rooted, so
+    /// <see cref="Path.GetFullPath(string)"/> prepends the working directory, and
+    /// <see cref="Path.DirectorySeparatorChar"/> is <c>/</c>, so <c>\bin\Release</c> is not recognised.
+    ///
+    /// The prepending is the one that bites twice: run from a test binary under <c>bin/Release</c> and the
+    /// borrowed working directory makes every relative path look like build output, so even the cases that
+    /// expect Portable would report Development. Only the host that owns the separator can answer these.</summary>
+    private const string _windowsPathSemantics = "Asserts Windows path semantics through the host's path APIs.";
+
     [Fact]
     public void AnInstallRunningWhereItsUninstallEntrySaysItIsCanUpdateItself()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), _windowsPathSemantics);
+
         var info = Create(_installed, _installed);
 
         Assert.Equal(InstallShape.Installer, info.Shape);
@@ -30,6 +42,8 @@ public sealed class AppInstallInfoTests
     [Fact]
     public void ATrailingSeparatorAndADifferentCaseStillMatch()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), _windowsPathSemantics);
+
         var info = Create($@"{_installed}\", @"c:\users\someone\appdata\local\programs\REMOTEFLOW");
 
         Assert.Equal(InstallShape.Installer, info.Shape);
@@ -38,6 +52,8 @@ public sealed class AppInstallInfoTests
     [Fact]
     public void ACopyWithNoUninstallEntryIsPortableAndSaysWhatToDoInstead()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), _windowsPathSemantics);
+
         var info = Create(@"D:\Tools\RemoteFlow", installedPath: null);
 
         Assert.Equal(InstallShape.Portable, info.Shape);
@@ -49,6 +65,8 @@ public sealed class AppInstallInfoTests
     [Fact]
     public void ACopyRunningSomewhereOtherThanTheInstallNamesBothDirectories()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), _windowsPathSemantics);
+
         var info = Create(@"D:\Tools\RemoteFlow", _installed);
 
         Assert.Equal(InstallShape.Portable, info.Shape);
@@ -62,6 +80,8 @@ public sealed class AppInstallInfoTests
     [InlineData(@"C:\Projects\RemoteFlow\src\RemoteFlow.Desktop\bin\Release\net10.0")]
     public void ABuildOutputDirectoryIsNeverUpgradedOverEvenWhenAnInstallExists(string directory)
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), _windowsPathSemantics);
+
         // The registry says RemoteFlow is installed, because on a developer's machine it usually is. That
         // must not turn `dotnet run` into something an installer will overwrite.
         var info = Create(directory, _installed);

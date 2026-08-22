@@ -1,0 +1,21 @@
+Package: remoteflow
+Version: @VERSION@
+Architecture: @ARCH@
+Maintainer: @MAINTAINER@
+Installed-Size: @INSTALLED_SIZE@
+Section: net
+Priority: optional
+Homepage: https://github.com/michaelou/RemoteFlow
+Depends: libc6, libgcc-s1, libstdc++6, libfontconfig1, libx11-6, libice6, libsm6, libsecret-1-0, fonts-dejavu-core, libicu78 | libicu76 | libicu74 | libicu72 | libicu70, libssl3t64 | libssl3
+Recommends: gnome-keyring, xdg-utils
+Description: Desktop workspace for the machines you administer
+ RemoteFlow keeps SSH sessions, SFTP browsing and transfers, and remote file
+ editing in one place. Connections live in folders with tags and favourites,
+ and terminals open as tabs beside them.
+ .
+ Everything stays on your own computer: there is no account to create and no
+ server behind it. The only request RemoteFlow makes that you did not
+ configure is an optional update check.
+ .
+ Remote Desktop is Windows-only and is not available in this package; an RDP
+ connection points you at FreeRDP or Remmina instead.

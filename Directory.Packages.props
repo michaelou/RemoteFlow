@@ -15,7 +15,8 @@
     <PackageVersion Include="XTerm.NET" Version="1.0.15" />
     <PackageVersion Include="Porta.Pty" Version="1.0.7" />
     <PackageVersion Include="Tmds.Ssh" Version="0.23.0" />
-    <PackageVersion Include="SSH.NET" Version="2025.1.0" />
+    <!-- 2025.1.0 and earlier are vulnerable (GHSA-q939-rpr3-3284, ScpClient recursive download). -->
+    <PackageVersion Include="SSH.NET" Version="2026.0.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
     <!-- EF Core 10.0.10 resolves 2.1.11, which is vulnerable (GHSA-2m69-gcr7-jv3q). -->

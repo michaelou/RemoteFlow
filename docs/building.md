@@ -10,6 +10,22 @@ and build from source. This page is the whole path from a clean machine to a run
   Install from <https://dotnet.microsoft.com/download/dotnet/10.0>, or with your platform's package
   manager (`winget install Microsoft.DotNet.SDK.10`, `brew install --cask dotnet-sdk`,
   `sudo dnf install dotnet-sdk-10.0`).
+
+  **On Debian and Ubuntu, do not use `apt`.** The distro's `dotnet-sdk-10.0` package tracks the 10.0.1xx
+  feature band, which `global.json` rejects outright — `dotnet` fails with "A compatible .NET SDK was not
+  found" rather than building. Install side by side into your home directory instead, which leaves any
+  apt-provided .NET untouched:
+
+  ```shell
+  curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0 --install-dir "$HOME/.dotnet"
+  ```
+
+  Then put it ahead of `/usr/bin/dotnet` on `PATH`, in `~/.bashrc` or your shell's equivalent:
+
+  ```shell
+  export DOTNET_ROOT="$HOME/.dotnet"
+  export PATH="$DOTNET_ROOT:$PATH"
+  ```
 - **Git**, to clone the repository.
 - **A desktop session.** RemoteFlow is a GUI application: X11 or Wayland on Linux, a normal login on macOS
   and Windows.
@@ -95,20 +111,36 @@ On a normal GNOME or KDE install, everything above is already present. On a mini
 notice: without them RemoteFlow has nowhere to put a saved password. See
 [the libsecret entry in troubleshooting](troubleshooting.md#linux-says-os-keyring-unavailable---using-passphrase-vault).
 
-RemoteFlow does not install a desktop entry for you. To get it into your application launcher, put a file
-at `~/.local/share/applications/remoteflow.desktop`:
+On Debian and Ubuntu you can skip all of that and build a package instead, which installs into
+`/opt/remoteflow`, puts `remoteflow` on your `PATH`, and registers the launcher entry and icons for you:
+
+```shell
+./scripts/publish-linux.sh --runtime linux-x64
+```
+
+```shell
+sudo apt install ./artifacts/remoteflow_<version>_amd64.deb
+```
+
+Use `apt` rather than `dpkg -i` so the dependencies above are resolved rather than merely checked. See
+[docs/packaging-linux.md](packaging-linux.md) for what the package contains and what it leaves behind.
+
+On other distributions, or from the portable tarball, RemoteFlow does not install a desktop entry for you.
+To get it into your application launcher, put a file at `~/.local/share/applications/remoteflow.desktop`:
 
 ```ini
 [Desktop Entry]
 Type=Application
 Name=RemoteFlow
 Exec=/opt/remoteflow/RemoteFlow
-Icon=/opt/remoteflow/remoteflow.png
+Icon=/opt/remoteflow/remoteflow-256.png
 Categories=Network;RemoteAccess;
 Terminal=false
 ```
 
-Point `Exec` at wherever you put the published folder.
+Point `Exec` at wherever you put the published folder. The publish output contains no icon of its own —
+copy one out of [`build/linux/icons/`](../build/linux/icons) next to the executable, or point `Icon` at it
+where it sits in the source tree.
 
 ## macOS
 

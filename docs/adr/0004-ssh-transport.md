@@ -21,7 +21,7 @@ Transport-specific types remain outside use cases and compatibility can improve 
 
 The `SshTransport` setting is read when a connection is opened, so changing it affects new sessions only. The settings UI describes SSH.NET as a fallback and asks users to report the compatibility reason that required it. Both adapters send presented keys through the same `IHostKeyVerifier`; the fallback never bypasses or duplicates host-key policy.
 
-The shared integration theories cover connection/authentication results, host-key rejection, exec output, interactive PTY I/O, and live resize. SSH.NET 2025.1.0 uses `ShellStream.ChangeWindowSize`, including `stty size` verification against the test server.
+The shared integration theories cover connection/authentication results, host-key rejection, exec output, interactive PTY I/O, and live resize. SSH.NET 2026.0.0 uses `ShellStream.ChangeWindowSize`, including `stty size` verification against the test server.
 
 Known adapter deltas are explicit:
 
@@ -32,4 +32,6 @@ Known adapter deltas are explicit:
 
 ## Security advisory history
 
-CVE-2022-29245 described weak random generation in X25519 key exchange in SSH.NET 2020.0.0 and 2020.0.1 (CVSS 5.9, MEDIUM). It was fixed long before the pinned 2025.1.0 version and is not a reason to avoid the fallback. SSH.NET remains subject to normal dependency monitoring and upgrade gates.
+CVE-2022-29245 described weak random generation in X25519 key exchange in SSH.NET 2020.0.0 and 2020.0.1 (CVSS 5.9, MEDIUM). It was fixed long before the pinned 2026.0.0 version and is not a reason to avoid the fallback. SSH.NET remains subject to normal dependency monitoring and upgrade gates.
+
+GHSA-q939-rpr3-3284 (HIGH) described an arbitrary file write in `ScpClient`'s recursive download, where server-controlled filenames could escape the destination directory. It affects 2025.1.0 and earlier and is fixed in 2026.0.0, which is why the pin moved. RemoteFlow never referenced `ScpClient` — SFTP is the only file transfer path — so the vulnerability was unreachable here; the pin moved because `NuGetAudit` plus `TreatWarningsAsErrors` correctly refuses to build against a known-vulnerable package, and because being unreachable today is not a reason to stay on it.

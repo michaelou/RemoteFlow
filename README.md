@@ -195,6 +195,7 @@ Security issues go through [SECURITY.md](SECURITY.md), privately, not through a 
 | [docs/building.md](docs/building.md) | Building and running from source on Windows, macOS, and Linux. |
 | [docs/backup-format.md](docs/backup-format.md) | The v1 backup archive format. |
 | [docs/packaging-windows.md](docs/packaging-windows.md) | How the Windows artefacts are produced and signed. |
+| [docs/packaging-linux.md](docs/packaging-linux.md) | Building the Linux tarball and `.deb`, and what the package installs. |
 | [docs/releasing.md](docs/releasing.md) | Tagging, the release workflow, and what a human still has to check. |
 | [docs/adr](docs/adr) | Architecture decisions, and why. |
 | [CHANGELOG.md](CHANGELOG.md) | What changed, per release. |

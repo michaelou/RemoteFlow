@@ -7,6 +7,50 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-08-22
+
+### Added
+
+- **A Debian package for Linux.** `./scripts/publish-linux.sh` builds a portable tarball and a `.deb` per
+  architecture, the counterpart to `publish-windows.ps1`. The package installs to `/opt/remoteflow`, puts
+  `remoteflow` on `PATH`, and registers a launcher entry and icons, so RemoteFlow appears in the
+  application menu instead of requiring a hand-written desktop file. Uninstalling keeps your connections,
+  settings and host keys: everything RemoteFlow writes follows the XDG base directory spec and lives under
+  `$HOME`, which `dpkg` never touches. See [docs/packaging-linux.md](docs/packaging-linux.md). This is the
+  first release to attach Linux artefacts; they are built and verified on a maintainer's machine rather
+  than by CI, which has no Linux release job.
+- Application icons for Linux, extracted from the existing Windows `.ico` and committed as PNGs at
+  `build/linux/icons/`. The publish output has never contained an icon, so the desktop entry documented in
+  [docs/building.md](docs/building.md) pointed at a file that did not exist.
+
+### Changed
+
+- SSH.NET moves from 2025.1.0 to 2026.0.0, which fixes GHSA-q939-rpr3-3284 (HIGH): `ScpClient`'s recursive
+  download let server-controlled filenames escape the destination directory. RemoteFlow has never
+  referenced `ScpClient` — SFTP is the only file transfer path — so the vulnerability was unreachable, but
+  the advisory failed the build, and being unreachable today is not a reason to stay on it. No adapter
+  changes were needed; the release declares no known breaking changes.
+
+### Fixed
+
+- **The build no longer fails on a Debian or Ubuntu machine.** Those distributions ship .NET SDK 10.0.1xx,
+  which `global.json` rejects, so `dotnet` reported "A compatible .NET SDK was not found" rather than
+  building. The prerequisites in [docs/building.md](docs/building.md) now say so and give the
+  `dotnet-install.sh` invocation that works.
+- **The Windows build is green again.** 63 of 270 UI tests had been failing since 0.2.5, all of them
+  reported as `TypeInitializationException` on an Avalonia control, which reads like 63 unrelated breakages
+  and was one: `RoutedEvent.Register` writes into a plain `Dictionary`, so two threads running an Avalonia
+  type initialiser at once corrupt it and every later control construction throws. The UI and Infrastructure
+  test assemblies both mix `[AvaloniaFact]`, which runs on the headless dispatcher thread, with plain
+  `[Fact]` on pool threads, and xunit parallelises by collection. Both now disable collection
+  parallelisation. The race never reproduced on Linux at any thread count, which is why it survived: it
+  needs the timing of a particular machine, not a particular platform.
+- Six tests in `AppInstallInfoTests` failed on Linux and macOS. They assert Windows path semantics —
+  drive-letter roots and `\` separators — while running through the host's path APIs, which off Windows
+  reinterpret them: an unrooted `C:\…` literal picks up the working directory, and a working directory
+  under `bin/Release` then makes every case look like a build output. They are now skipped off Windows,
+  matching how the repository already handles macOS keychain and Windows job-object tests.
+
 ## [0.2.5] - 2026-08-11
 
 RemoteFlow can now install the update it tells you about, which it has never done before.
@@ -296,7 +340,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/michaelou/RemoteFlow/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/michaelou/RemoteFlow/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/michaelou/RemoteFlow/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/michaelou/RemoteFlow/compare/v0.2.2...v0.2.3

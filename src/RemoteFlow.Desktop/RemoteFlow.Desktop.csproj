@@ -31,7 +31,7 @@
        installed. Trimming and AOT stay off — EF Core and Avalonia's XAML loader both use reflection that
        a trimmer cannot see (ADR 0003, and the properties set repository-wide). -->
   <PropertyGroup>
-    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64</RuntimeIdentifiers>
     <SelfContained Condition="'$(RuntimeIdentifier)' != ''">true</SelfContained>
     <PublishSingleFile>false</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>

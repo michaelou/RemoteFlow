@@ -28,7 +28,7 @@ pwsh ./scripts/generate-notices.ps1
 | [Avalonia.Themes.Fluent](https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link) | 12.1.1 | MIT | Copyright 2013-2026 © The AvaloniaUI Project |
 | [Avalonia.Win32](https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link) | 12.1.1 | MIT | Copyright 2013-2026 © The AvaloniaUI Project |
 | [Avalonia.X11](https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link) | 12.1.1 | MIT | Copyright 2013-2026 © The AvaloniaUI Project |
-| [BouncyCastle.Cryptography](https://www.bouncycastle.org/stable/nuget/csharp/website) | 2.6.2 | MIT | Copyright © Legion of the Bouncy Castle Inc. 2000-2025 |
+| [BouncyCastle.Cryptography](https://www.bouncycastle.org/stable/nuget/csharp/website) | 2.7.0 | MIT | Copyright © Legion of the Bouncy Castle Inc. 2000-2026 |
 | [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) | 8.4.2 | MIT | (c) .NET Foundation and Contributors. All rights reserved. |
 | [HarfBuzzSharp](https://go.microsoft.com/fwlink/?linkid=868515) | 8.3.1.3 | MIT | © Microsoft Corporation. All rights reserved. |
 | [HarfBuzzSharp.NativeAssets.Linux](https://go.microsoft.com/fwlink/?linkid=868515) | 8.3.1.3 | MIT | © Microsoft Corporation. All rights reserved. |
@@ -87,7 +87,7 @@ pwsh ./scripts/generate-notices.ps1
 | [SQLitePCLRaw.core](https://github.com/ericsink/SQLitePCL.raw) | 2.1.11 | Apache-2.0 | Copyright 2014-2024 SourceGear, LLC |
 | [SQLitePCLRaw.lib.e_sqlite3](https://github.com/ericsink/SQLitePCL.raw) | 2.1.12 | Apache-2.0 | Copyright 2014-2024 SourceGear, LLC |
 | [SQLitePCLRaw.provider.e_sqlite3](https://github.com/ericsink/SQLitePCL.raw) | 2.1.11 | Apache-2.0 | Copyright 2014-2024 SourceGear, LLC |
-| [SSH.NET](https://github.com/sshnet/SSH.NET) | 2025.1.0 | MIT | Copyright © Renci 2010-2025 |
+| [SSH.NET](https://github.com/sshnet/SSH.NET) | 2026.0.0 | MIT | Copyright © Renci 2010-2026 |
 | [SvcSystems.UI.Terminal](https://github.com/IvanJosipovic/SvcSystems.UI.Terminal) | 1.0.3 | MIT | Ivan Josipovic |
 | [System.Diagnostics.EventLog](https://dot.net/) | 10.0.10 | MIT | © Microsoft Corporation. All rights reserved. |
 | [Tmds.DBus.Protocol](https://github.com/tmds/Tmds.DBus.git) | 0.94.1 | MIT | Tom Deseyn |

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=RemoteFlow
+GenericName=Remote Connection Manager
+Comment=SSH sessions, SFTP browsing, and remote file editing in one workspace
+Exec=/opt/remoteflow/RemoteFlow
+TryExec=/opt/remoteflow/RemoteFlow
+# An icon-theme name, not a path: the package installs PNGs into /usr/share/icons/hicolor.
+Icon=remoteflow
+Terminal=false
+Categories=Network;RemoteAccess;
+Keywords=SSH;SFTP;Terminal;Remote;RDP;
+StartupWMClass=RemoteFlow
