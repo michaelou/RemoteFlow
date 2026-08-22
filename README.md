@@ -7,8 +7,8 @@ account to create and no server behind it. Nothing about you is ever sent anywhe
 RemoteFlow makes that you did not configure is an optional update check, which reads a version number and
 is described in [Security posture](#no-telemetry-no-cloud-no-accounts).
 
-It is built with .NET 10 and Avalonia, and runs on Windows, macOS, and Linux. Windows builds are on the
-[Releases](../../releases) page; macOS and Linux build from source. See [Install](#install).
+It is built with .NET 10 and Avalonia, and runs on Windows, macOS, and Linux. Windows and Linux builds are
+on the [Releases](../../releases) page; macOS builds from source. See [Install](#install).
 
 ![The Connections page: a folder tree of saved connections on the left, and the details of the selected connection on the right](docs/images/connections.png)
 
@@ -23,6 +23,12 @@ It is built with .NET 10 and Avalonia, and runs on Windows, macOS, and Linux. Wi
   XTerm.NET over a real PTY.
 - **SFTP.** Browse, upload, download, rename, delete, create folders, and change permissions where the
   server allows it. Transfers run in a queue you can watch on the Transfers page.
+- **Cloud object storage.** Amazon S3 and Azure Blob Storage are connection types like any other, and
+  S3-compatible services — MinIO, Ceph, Backblaze B2, Cloudflare R2, Wasabi — work through a custom
+  endpoint. The **Storage** page puts your own files beside the bucket, two panes and a transfer queue,
+  and objects in the gigabytes move in parallel chunks that retry a failed part rather than the whole
+  transfer. Your keys live in the OS credential store, never in RemoteFlow's database. See
+  [docs/object-storage.md](docs/object-storage.md).
 - **Remote editing.** Open a remote file in your usual editor, keep working, and RemoteFlow uploads it
   when you save — and warns you if the remote copy changed underneath you.
 - **Remote Desktop.** **Embedded RDP tabs are Windows-only.** On Windows, choose a live desktop inside
@@ -59,10 +65,33 @@ Releases are unsigned for now, so Windows will show **"Windows protected your PC
 for what that means and how to get past it — and verify the download against the `checksums.txt` published
 with the release.
 
-### macOS and Linux
+### Linux
 
-v1 ships no prebuilt macOS or Linux artefacts. Both platforms are supported and build from source in a
-couple of commands: see [docs/building.md](docs/building.md).
+Prebuilt Linux artefacts are on the [Releases](../../releases) page, built by CI for x64 and ARM64 like
+the Windows ones.
+
+- **Debian package** — `remoteflow_<version>_amd64.deb`. Install it with `apt` rather than `dpkg -i`, so
+  dependencies are resolved rather than merely reported:
+
+  ```shell
+  sudo apt install ./remoteflow_<version>_amd64.deb
+  ```
+
+  It installs to `/opt/remoteflow`, puts `remoteflow` on your `PATH`, and adds a launcher entry and
+  icons. Uninstalling leaves your connections, settings and host keys alone: everything RemoteFlow writes
+  follows the XDG base directory spec and lives under `$HOME`.
+- **Portable tarball** — `RemoteFlow-<version>-linux-x64.tar.gz`. Self-contained, so no .NET runtime is
+  needed; unpack it and run `./RemoteFlow`. There is no icon or desktop entry in the tarball — those are
+  what the package adds.
+
+Nothing on Linux is signed and there is no apt repository behind these; verify a download against the
+`checksums.txt` published with the release. See
+[docs/packaging-linux.md](docs/packaging-linux.md) for what is inside them.
+
+### macOS
+
+No prebuilt macOS artefacts. The platform is supported and builds from source in a couple of commands:
+see [docs/building.md](docs/building.md).
 
 ## Your first connection
 
@@ -96,6 +125,13 @@ There is no analytics, no crash reporting, no licence check, and no sign-in. Rem
 connections to the hosts *you* configure, and makes exactly one other request — the update check, and only
 when you ask for it. Diagnostics stay on your machine: the About tab in Settings shows the log folder and
 opens it for you.
+
+**Your cloud storage is not RemoteFlow having a cloud.** An S3 or Azure Blob connection is a host you
+configured, exactly like an SSH connection to your server: RemoteFlow talks to the endpoint you named,
+with the keys you supplied, when you open that connection and not otherwise. Those keys go into your
+operating system's credential store like every other RemoteFlow secret and reach nothing but the provider
+you pointed them at. There is no RemoteFlow account, no broker in the middle, and no storage of ours
+anywhere in the path — the traffic goes from your machine to your bucket.
 
 #### The update check
 

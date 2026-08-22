@@ -7,6 +7,8 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-22
+
 ### Added
 
 - **S3 and Azure Blob accounts can be saved as connections.** Choose **S3** or **Azure Blob** as the
@@ -66,15 +68,6 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
   with **Apply to all remaining items** covers the rest of that one drag and nothing else. SFTP transfers
   are unchanged.
 
-### Fixed
-
-- **Editing an S3 or Azure Blob connection now keeps the change.** Every object-storage setting — region,
-  endpoint, path-style addressing, bucket, prefix — was written correctly when the connection was first
-  created and then silently discarded on every save afterwards, with no error: the update path copies each
-  block of options by hand and this one was never added to that list. Correcting a mistyped region appeared
-  to work, saved nothing, and failed to connect against the old value. Existing connections need only be
-  re-saved with the right values.
-
 ### Changed
 
 - Protocol names are now written out in full wherever they are shown — the filter chips, the details pane
@@ -87,12 +80,34 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
   an S3 or Azure Blob connection, is refused by RemoteFlow 0.2.6 and earlier with a message telling you to
   upgrade, rather than failing part-way through opening the connections page. Existing databases are
   stamped to 2 on first launch and need no action.
+- **Linux artefacts are built by CI now, not by hand.** 0.2.6 was the first release to carry a `.deb` and
+  a tarball, and both were built on a maintainer's machine and attached to the draft afterwards, which
+  meant `checksums.txt` was regenerated over all eight files and re-uploaded by hand. A tag now runs four
+  build legs — `win-x64`, `win-arm64`, `linux-x64` and `linux-arm64`, each on a runner of its own
+  architecture — and the draft arrives complete, with one `checksums.txt` covering all eight assets. What
+  you download is unchanged in name and content; what changed is that nothing about it was assembled by
+  hand. Automation still only ever writes a draft: publishing is a person pressing the button.
 - A backup written by this release that contains an S3 or Azure Blob connection cannot be imported by
   RemoteFlow 0.2.6 or earlier: protocol names are stored as strings, and an older build refuses an archive
   naming one it does not know rather than importing a connection it could not open. Backups containing only
   SSH, SFTP and RDP connections are unaffected in both directions.
-- RemoteFlow now ships the AWS SDK for S3 and the Azure Storage Blobs SDK, and the packages they pull in.
-  All of them are attributed in `THIRD-PARTY-NOTICES.md`.
+- RemoteFlow now ships the AWS SDK for S3 and the Azure Storage Blobs SDK, and the packages they pull in:
+  thirteen new entries in `THIRD-PARTY-NOTICES.md`, taking it from 84 packages to 97. Eleven of the
+  thirteen come from the Azure side, and four of those — `Microsoft.Identity.Client`,
+  `Microsoft.Identity.Client.Extensions.Msal`, `Microsoft.IdentityModel.Abstractions` and
+  `System.Security.Cryptography.ProtectedData` — are an MSAL stack RemoteFlow never calls. Azure Blob
+  connections authenticate with a shared account key, not with Entra ID, but `Azure.Core` depends on MSAL
+  unconditionally, so it is restored, published inside the artefacts, and attributed like everything else.
+  All thirteen are MIT or Apache-2.0.
+
+### Fixed
+
+- **Editing an S3 or Azure Blob connection now keeps the change.** Every object-storage setting — region,
+  endpoint, path-style addressing, bucket, prefix — was written correctly when the connection was first
+  created and then silently discarded on every save afterwards, with no error: the update path copies each
+  block of options by hand and this one was never added to that list. Correcting a mistyped region appeared
+  to work, saved nothing, and failed to connect against the old value. Existing connections need only be
+  re-saved with the right values.
 
 ## [0.2.6] - 2026-08-22
 
@@ -427,7 +442,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/michaelou/RemoteFlow/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/michaelou/RemoteFlow/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/michaelou/RemoteFlow/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/michaelou/RemoteFlow/compare/v0.2.3...v0.2.4

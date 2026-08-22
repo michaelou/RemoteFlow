@@ -3,10 +3,9 @@
 This page describes what [`scripts/publish-linux.sh`](../scripts/publish-linux.sh) produces, and is the
 counterpart to [packaging-windows.md](packaging-windows.md).
 
-Unlike the Windows artefacts, these are not built by CI. `release.yml` has no Linux job, so a release's
-Linux assets are built on a maintainer's machine and attached to the draft by hand. That means they carry
-none of the guarantees the Windows jobs provide — in particular nothing launches the ARM64 build and asks
-it for its version. Treat the architecture you built on as tested and the other as compiled.
+A release's Linux assets are built by CI, on a runner of each architecture, and attached to the draft with
+everything else — see [releasing.md](releasing.md). This page is about running the script yourself, which
+is what a local build or a fork does; nothing here is a step in cutting a release.
 
 ## Building the artefacts
 
@@ -32,7 +31,9 @@ Versions come from MinVer, and like the Windows script this one reads the versio
 just built rather than being told what it is — on Linux that means running `RemoteFlow --version` and
 parsing the result, since ELF has no equivalent of the PE `ProductVersion` field. A cross-architecture
 build cannot run its own output, so it falls back to asking MSBuild and reports the smoke test as
-`skipped (cross-architecture)`.
+`skipped (cross-architecture)`. Building both architectures on one machine therefore leaves one of them
+merely compiled — which is why the release workflow gives each its own runner and then asserts that the
+names the script chose are the ones the tag implies.
 
 A MinVer prerelease version such as `0.2.6-alpha.0.5` becomes `0.2.6~alpha.0.5` in the package. Debian
 sorts `~` before everything, including the empty string, so without that substitution `dpkg` would rank a
@@ -141,7 +142,11 @@ step and is not done yet.
 - **AppImage, flatpak, and snap.** The `.deb` covers Debian and Ubuntu; other distributions use the
   portable tarball and the manual desktop entry described in
   [building.md](building.md#linux).
-- **`arm64` verification.** The script builds it, but nothing cross-architecture is smoke-tested; the
-  version check is skipped exactly as the Windows script skips it.
+- **`arm64` verification when you build both locally.** One `publish-linux.sh` run can only launch the
+  architecture it is running on; the other's version check is skipped exactly as the Windows script skips
+  it. Release builds do not have this gap, because each architecture gets a runner of its own.
+- **Installing.** Nothing on Linux corresponds to `smoke-test-artifacts.ps1`, so no automation installs
+  the package or launches what it installed. That pass is on the manual list in
+  [releasing.md](releasing.md#cutting-a-release).
 - **Remote Desktop.** Windows-only. An RDP connection on Linux points at FreeRDP or Remmina; see
   [troubleshooting.md](troubleshooting.md).
