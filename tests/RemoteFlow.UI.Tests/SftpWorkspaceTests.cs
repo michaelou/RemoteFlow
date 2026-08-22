@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -572,8 +573,19 @@ public sealed class SftpWorkspaceTests
             Content = new SftpWorkspace { DataContext = fixture.ViewModel },
         };
         window.Show();
+
+        // Laid out twice because the workspace's Loaded handler is `async void` — its continuation runs
+        // after the first pump — and then rendered, because headless hit testing walks the composited
+        // scene rather than the layout tree. Without the forced tick this failed about one run in three
+        // with the row correctly arranged and InputHitTest still answering null.
+        for (var pass = 0; pass < 2; pass++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+        }
+
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         Dispatcher.UIThread.RunJobs();
-        window.UpdateLayout();
 
         var row = window.GetVisualDescendants()
             .OfType<Grid>()
@@ -584,9 +596,12 @@ public sealed class SftpWorkspaceTests
         var edge = row.TranslatePoint(new Point(row.Bounds.Width - 2, row.Bounds.Height / 2), window);
         Assert.True(edge.HasValue);
 
-        var hit = Assert.IsAssignableFrom<Control>(window.InputHitTest(edge!.Value));
+        var hit = window.InputHitTest(edge!.Value);
+        Assert.True(
+            hit is Control,
+            $"nothing was hit at {edge}; row {row.Bounds}, window {window.Bounds}.");
 
-        Assert.Same(fixture.ViewModel.Items[0], hit.DataContext);
+        Assert.Same(fixture.ViewModel.Items[0], ((Control)hit!).DataContext);
         window.Close();
     }
 

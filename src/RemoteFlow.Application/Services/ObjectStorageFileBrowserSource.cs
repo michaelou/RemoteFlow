@@ -30,6 +30,13 @@ public sealed class ObjectStorageFileBrowserSource(
 
     public bool SupportsHiddenEntries => false;
 
+    /// <summary>Empty: the connection pins where browsing starts, and there is no second place to offer.
+    /// </summary>
+    public IReadOnlyList<FileBrowserCrumb> GetRoots()
+    {
+        return [];
+    }
+
     public string Combine(string parent, string name)
     {
         return ObjectStoragePath.Combine(parent, name);

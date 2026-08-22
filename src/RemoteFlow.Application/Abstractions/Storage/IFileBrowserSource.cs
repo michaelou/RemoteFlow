@@ -53,6 +53,11 @@ public interface IFileBrowserSource
 
     string RootPath { get; }
 
+    /// <summary>The places this source can be rooted at, for a pane to offer as a picker: the ready drives
+    /// on Windows, <c>/</c> on Unix, and nothing at all for object storage, where the connection already
+    /// pins the root. Re-read rather than cached, because a drive can be plugged in.</summary>
+    IReadOnlyList<FileBrowserCrumb> GetRoots();
+
     /// <summary>False on object storage. S3 has no rename — it is a billed, size-capped server-side copy
     /// plus a delete — so the source does not fake one and the pane hides the affordance.</summary>
     bool SupportsRename { get; }

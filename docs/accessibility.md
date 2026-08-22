@@ -40,7 +40,8 @@ screen.
 In **SFTP**: the path box accepts a typed path, the file list supports type-to-select, and every toolbar
 button is a tab stop with a name rather than an arrow glyph alone.
 
-On the **Storage** page: the first tab stop is the account picker, `Tab` walks from the local pane to the
+On the **Storage** page: the first tab stop is the account picker, the local pane's drive picker is a tab
+stop of its own where a machine has more than one volume, `Tab` walks from the local pane to the
 remote one without being rebound, and `Ctrl+Shift+Left` / `Ctrl+Shift+Right` jump between them explicitly.
 `F5`, `F7`, `F2` and `Delete` act on whichever pane holds the keyboard. Both grid splitters are tab stops
 and move with the arrow keys. The full list is in [keybindings.md](keybindings.md#storage-page).

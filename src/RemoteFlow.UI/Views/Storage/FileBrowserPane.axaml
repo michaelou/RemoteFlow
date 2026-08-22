@@ -22,8 +22,23 @@
   <Border Classes="panel" ClipToBounds="True">
     <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
       <!-- Where you are and how to move, in reading order. -->
-      <Grid Margin="10,8,10,0" ColumnDefinitions="Auto,*,Auto">
-        <StackPanel Orientation="Horizontal" Spacing="4">
+      <Grid Margin="10,8,10,0" ColumnDefinitions="Auto,Auto,*,Auto">
+        <!-- Only shown when there is a choice to make: one drive, or a bucket, is not a picker. -->
+        <ComboBox
+            AutomationProperties.Name="{Binding RootsLabel}"
+            Margin="0,0,6,0"
+            MinWidth="120"
+            IsVisible="{Binding HasRoots}"
+            ItemsSource="{Binding Roots}"
+            SelectedItem="{Binding SelectedRoot}"
+            ToolTip.Tip="{Binding RootsLabel}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="storage:FileBrowserCrumb">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
           <Button
               AutomationProperties.Name="{Binding BackLabel}"
               Classes="icon"
@@ -57,13 +72,13 @@
         </StackPanel>
         <TextBox
             x:Name="PathEditor"
-            Grid.Column="1"
+            Grid.Column="2"
             AutomationProperties.Name="{Binding PathLabel}"
             Margin="8,0"
             KeyDown="PathEditor_OnKeyDown"
             Text="{Binding PathText}" />
         <CheckBox
-            Grid.Column="2"
+            Grid.Column="3"
             AutomationProperties.Name="{Binding HiddenLabel}"
             Content="Hidden"
             IsChecked="{Binding ShowHiddenEntries}"

@@ -53,6 +53,10 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
   made-up total, because S3 cannot cheaply count a prefix. Sorting a truncated listing sorts what is
   loaded, and the column tooltip says so.
 
+  On Windows the local pane has a **drive picker** when the machine has more than one ready volume,
+  labelled the way the operating system labels it — `D:\ (Backup)`. It follows wherever you navigate, and
+  it is re-read on **Refresh** so a drive you have just plugged in appears.
+
   Object storage has no rename, so `F2` works on the local pane only. Keys are in
   [docs/keybindings.md](docs/keybindings.md); the whole feature, including the bucket lifecycle rule worth
   setting, is in [docs/object-storage.md](docs/object-storage.md).

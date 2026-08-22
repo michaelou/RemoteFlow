@@ -79,6 +79,7 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
     private readonly List<string> _forwardHistory = [];
     private string? _continuationToken;
     private int _pagesLoaded;
+    private bool _syncingRoot;
     private CancellationTokenSource? _busyIndicatorDelay;
 
     public FileBrowserPaneViewModel(
@@ -133,11 +134,21 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
 
     public string SortModifiedLabel => $"Sort the {PaneName} by modified date";
 
+    public string RootsLabel => $"Drive shown in the {PaneName}";
+
     public ObservableCollection<FileBrowserItemViewModel> Items { get; } = [];
 
     public ObservableCollection<FileBrowserItemViewModel> SelectedItems { get; } = [];
 
     public ObservableCollection<FileBrowserCrumb> Breadcrumbs { get; } = [];
+
+    /// <summary>Where this pane can be rooted: the ready drives on Windows, and nothing at all on the
+    /// object-storage side, where the connection already pins the root.</summary>
+    public ObservableCollection<FileBrowserCrumb> Roots { get; } = [];
+
+    /// <summary>Shown only when there is a choice to make. One drive, or a bucket, is not a picker.
+    /// </summary>
+    public bool HasRoots => Roots.Count > 1;
 
     /// <summary>Set by the page when a connection attaches. Null means "nothing to browse yet", which is
     /// the remote pane's state before Connect and never the local pane's.</summary>
@@ -158,6 +169,12 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
     public bool SupportsHiddenEntries => Source?.SupportsHiddenEntries ?? false;
 
     public string SourceTitle => Source?.DisplayName ?? "Not connected";
+
+    /// <summary>The root the current path is under. Setting it navigates; navigation sets it back, which
+    /// is why the write is guarded — otherwise walking into <c>D:\work</c> would re-navigate to
+    /// <c>D:\</c>.</summary>
+    [ObservableProperty]
+    public partial FileBrowserCrumb? SelectedRoot { get; set; }
 
     [ObservableProperty]
     public partial string CurrentPath { get; private set; } = string.Empty;
@@ -273,6 +290,10 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
     [RelayCommand]
     public Task RefreshAsync(CancellationToken cancellationToken = default)
     {
+        // Re-read on the user's own refresh rather than on every internal navigate: asking an
+        // unresponsive optical or network drive whether it is ready is not free, and a drive appearing is
+        // exactly the thing someone presses refresh for.
+        ReloadRoots();
         return CurrentPath.Length == 0
             ? Task.CompletedTask
             : NavigateCoreAsync(CurrentPath, addHistory: false, cancellationToken);
@@ -617,6 +638,7 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
         Source = source;
         _backHistory.Clear();
         _forwardHistory.Clear();
+        ReloadRoots();
         NotifyHistoryChanged();
         return await NavigateCoreAsync(source.RootPath, addHistory: false, cancellationToken).ConfigureAwait(true);
     }
@@ -625,6 +647,8 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
     {
         Source = null;
         Items.Clear();
+        Roots.Clear();
+        OnPropertyChanged(nameof(HasRoots));
         SelectedItems.Clear();
         Breadcrumbs.Clear();
         _backHistory.Clear();
@@ -634,6 +658,19 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
         CurrentPath = string.Empty;
         PathText = string.Empty;
         NotifyHistoryChanged();
+    }
+
+    partial void OnSelectedRootChanged(FileBrowserCrumb? value)
+    {
+        if (_syncingRoot || value is null || Source is null)
+        {
+            return;
+        }
+
+        if (!string.Equals(value.Path, CurrentPath, StringComparison.OrdinalIgnoreCase))
+        {
+            _ = NavigateAsync(value.Path);
+        }
     }
 
     partial void OnFilterTextChanged(string value)
@@ -735,6 +772,7 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
             Append(page.Value);
             ApplySort();
             RebuildBreadcrumbs(source, path);
+            SyncSelectedRoot(path);
             NotifyHistoryChanged();
             return true;
         }
@@ -823,6 +861,53 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
         foreach (var crumb in source.GetBreadcrumbs(path))
         {
             Breadcrumbs.Add(crumb);
+        }
+    }
+
+    private void ReloadRoots()
+    {
+        if (Source is not { } source)
+        {
+            return;
+        }
+
+        var roots = source.GetRoots();
+        Roots.Clear();
+        foreach (var root in roots)
+        {
+            Roots.Add(root);
+        }
+
+        OnPropertyChanged(nameof(HasRoots));
+        SyncSelectedRoot(CurrentPath);
+    }
+
+    /// <summary>Points the picker at the root the current path is under, without that write turning round
+    /// and navigating back to the root itself.</summary>
+    private void SyncSelectedRoot(string path)
+    {
+        if (Roots.Count == 0 || path.Length == 0)
+        {
+            return;
+        }
+
+        var match = Roots
+            .Where(root => path.StartsWith(root.Path, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(root => root.Path.Length)
+            .FirstOrDefault();
+        if (match is null || ReferenceEquals(match, SelectedRoot))
+        {
+            return;
+        }
+
+        _syncingRoot = true;
+        try
+        {
+            SelectedRoot = match;
+        }
+        finally
+        {
+            _syncingRoot = false;
         }
     }
 

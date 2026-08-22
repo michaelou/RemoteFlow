@@ -138,6 +138,32 @@ public sealed class FileBrowserSourceTests
     }
 
     [Fact]
+    public void TheLocalRootsAreOfferedAsALabelledPickerAndTheObjectSideOffersNone()
+    {
+        var local = new LocalFileBrowserSource();
+
+        var roots = local.GetRoots();
+
+        Assert.NotEmpty(roots);
+        Assert.Equal(LocalFileBrowserSource.Roots().Count, roots.Count);
+        foreach (var root in roots)
+        {
+            // The label carries the volume name where there is one; the path is what the pane navigates to.
+            Assert.False(string.IsNullOrWhiteSpace(root.Label));
+            Assert.StartsWith(root.Path, root.Label, StringComparison.Ordinal);
+            Assert.True(local.IsValidPath(root.Path));
+            Assert.Null(local.GetParent(root.Path));
+        }
+
+        // The connection already pins where an object-storage pane starts, so there is no second place to
+        // offer and the picker stays hidden.
+        Assert.Empty(new ObjectStorageFileBrowserSource(
+            new InMemoryObjectStorage(),
+            "s3://media",
+            "/media").GetRoots());
+    }
+
+    [Fact]
     public async Task ALocalRenameAndDeleteRoundTrip()
     {
         var token = TestContext.Current.CancellationToken;

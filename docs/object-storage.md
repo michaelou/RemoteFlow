@@ -17,6 +17,16 @@ Create a connection on the **Connections** page and choose **S3** or **Azure Blo
 The host and port fill themselves in and stop doing so the moment you type over them, which is how a
 sovereign-cloud account such as `*.blob.core.chinacloudapi.cn` is reached.
 
+**The S3 region is the full AWS region code, with its number** — `eu-west-1` (Ireland), `eu-west-2`
+(London), `us-east-1` (N. Virginia), `ap-southeast-2` (Sydney). `eu-west` is not a region, and it produces
+a **Host** of `s3.eu-west.amazonaws.com`, which does not resolve: the failure arrives as *"no such host"*
+rather than as a validation error, because the name is only looked up when you connect. The full list is in
+[AWS's regions and endpoints documentation](https://docs.aws.amazon.com/general/latest/gr/s3.html).
+
+If you have already typed over the **Host** box — or saved the connection with a region that was wrong —
+the editor stops maintaining it, on purpose. Check the Host box reads `s3.{region}.amazonaws.com` for the
+region you meant, and correct it by hand if it does not.
+
 The secret goes in the platform keychain like every other RemoteFlow credential — Windows Credential
 Manager, macOS Keychain, or libsecret, falling back to the encrypted file vault. It never goes in the
 database, and a plaintext backup never contains it. Clients are always built with the key you entered:
@@ -42,6 +52,13 @@ account.
 The right-hand pane lists one level at a time. A common prefix appears as a folder; the zero-byte marker
 object that both vendors' consoles create for an empty folder is shown once, as that folder, and never
 also as an empty file.
+
+The left-hand pane opens in your home folder. On Windows a **drive picker** sits to the left of the
+navigation buttons when the machine has more than one ready volume — it shows the volume label where there
+is one, `D:\ (Backup)` — and it follows wherever you navigate, so it never claims the wrong drive. It is
+re-read when you press **Refresh** or `F5`, which is how a drive you have just plugged in appears. On a
+single-volume machine there is no choice to make and the picker is not shown; the path box and `Ctrl+L`
+still take a typed path anywhere.
 
 **"Starts with" is not a search.** Both providers can narrow a listing by prefix and neither can search by
 substring, so the filter box re-requests the listing with a longer prefix. Typing `2024` under

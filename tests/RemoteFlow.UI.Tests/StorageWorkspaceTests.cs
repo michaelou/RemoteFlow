@@ -1,4 +1,5 @@
 using System.Text;
+using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Application.Queries;
 using RemoteFlow.Application.Services;
 using RemoteFlow.Domain.Enums;
@@ -276,6 +277,66 @@ public sealed class StorageWorkspaceTests
         Assert.True(fixture.Page.IsConnected);
         Assert.Null(fixture.Page.ErrorMessage);
         Assert.True(fixture.Page.Remote.IsReady);
+    }
+
+    [Fact]
+    public async Task TheLocalPaneOffersItsDrivesAndTheRemotePaneOffersNone()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = StorageTestDoubles.CreateFixture();
+        fixture.Storage.Seed("/media/clip.mov", [1]);
+        await fixture.Page.InitializeLocalAsync(token);
+        await fixture.Page.AttachAsync(fixture.Connection.Id, token);
+
+        Assert.NotEmpty(fixture.Page.Local.Roots);
+        Assert.Empty(fixture.Page.Remote.Roots);
+        Assert.False(fixture.Page.Remote.HasRoots);
+        Assert.Equal(
+            LocalFileBrowserSource.Roots().Count > 1,
+            fixture.Page.Local.HasRoots);
+
+        // The picker follows wherever navigation lands, so it never claims the wrong drive.
+        var current = Assert.IsType<FileBrowserCrumb>(fixture.Page.Local.SelectedRoot);
+        Assert.StartsWith(current.Path, fixture.Page.Local.CurrentPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ChoosingADifferentDriveNavigatesThatPaneAndLeavesTheOtherAlone()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = StorageTestDoubles.CreateFixture();
+        fixture.Storage.Seed("/media/clip.mov", [1]);
+        await fixture.Page.InitializeLocalAsync(token);
+        await fixture.Page.AttachAsync(fixture.Connection.Id, token);
+        var pane = fixture.Page.Local;
+        var other = pane.Roots.FirstOrDefault(root => !ReferenceEquals(root, pane.SelectedRoot));
+        if (other is null)
+        {
+            // One drive is not a choice, so the picker is not offered at all. Nothing else to assert on a
+            // machine with a single volume, and pretending otherwise would be a test that only ever runs
+            // on the author's laptop.
+            Assert.False(pane.HasRoots);
+            return;
+        }
+
+        var remoteBefore = fixture.Page.Remote.CurrentPath;
+        pane.SelectedRoot = other;
+        await WaitUntilAsync(
+            () => string.Equals(pane.CurrentPath, other.Path, StringComparison.OrdinalIgnoreCase),
+            token);
+
+        Assert.Equal(other.Path, pane.CurrentPath);
+        Assert.Equal(remoteBefore, fixture.Page.Remote.CurrentPath);
+
+        // Walking into a folder must not bounce the pane back to the drive root: the picker is told where
+        // navigation landed, and that write does not turn round and navigate again.
+        var folder = pane.Items.FirstOrDefault(item => item.IsDirectory);
+        if (folder is not null)
+        {
+            _ = await pane.OpenAsync(folder, token);
+            Assert.Equal(folder.Path, pane.CurrentPath);
+            Assert.Equal(other.Path, pane.SelectedRoot!.Path);
+        }
     }
 
     [Fact]

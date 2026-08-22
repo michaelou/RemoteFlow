@@ -32,14 +32,72 @@ public sealed class LocalFileBrowserSource : IFileBrowserSource
 
         try
         {
-            return [.. DriveInfo.GetDrives()
-                .Where(drive => drive.IsReady)
+            return [.. ReadyDrives()
                 .Select(drive => drive.RootDirectory.FullName)
                 .Order(StringComparer.OrdinalIgnoreCase)];
         }
         catch (IOException)
         {
             return [Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\"];
+        }
+    }
+
+    /// <summary>The drives, labelled the way the operating system labels them — <c>C:\ (Windows)</c> —
+    /// so a pane can offer a picker. Enumerated on demand, because a drive can be plugged in while the
+    /// page is open.</summary>
+    public IReadOnlyList<FileBrowserCrumb> GetRoots()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            var unix = Path.DirectorySeparatorChar.ToString();
+            return [new FileBrowserCrumb(unix, unix)];
+        }
+
+        try
+        {
+            return [.. ReadyDrives()
+                .OrderBy(drive => drive.RootDirectory.FullName, StringComparer.OrdinalIgnoreCase)
+                .Select(drive => new FileBrowserCrumb(Label(drive), drive.RootDirectory.FullName))];
+        }
+        catch (IOException)
+        {
+            var fallback = Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\";
+            return [new FileBrowserCrumb(fallback, fallback)];
+        }
+    }
+
+    private static DriveInfo[] ReadyDrives()
+    {
+        // Materialised before IsReady is asked, so one unresponsive drive throws here rather than part-way
+        // through a lazy sequence the caller is already iterating.
+        return [.. DriveInfo.GetDrives().Where(IsUsable)];
+    }
+
+    private static bool IsUsable(DriveInfo drive)
+    {
+        try
+        {
+            return drive.IsReady;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // A mapped network drive whose server has gone away answers this way. It is not a root the
+            // user can browse, and it must not take the whole picker down with it.
+            return false;
+        }
+    }
+
+    private static string Label(DriveInfo drive)
+    {
+        var root = drive.RootDirectory.FullName;
+        try
+        {
+            var volume = drive.VolumeLabel;
+            return string.IsNullOrWhiteSpace(volume) ? root : $"{root} ({volume})";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return root;
         }
     }
 
