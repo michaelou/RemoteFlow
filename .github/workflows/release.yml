@@ -6,10 +6,15 @@
 # found -- which is why the smoke test now covers an upgrade and why the checksums.txt shape is asserted
 # rather than assumed. Both are contracts the application parses; see docs/adr/0018-self-update.md.
 #
-# The two architectures build on runners of their own architecture rather than cross-publishing from one
-# machine. That costs a second runner and buys the thing this workflow exists for: every artefact is
-# launched and asked for its version before it can reach a release page. A cross-published ARM64 binary
-# cannot be run on an x64 runner, and "we could not test it" is not a state a release should be in.
+# Four build legs -- win-x64, win-arm64, linux-x64, linux-arm64 -- and every one builds on a runner of its
+# own architecture rather than cross-publishing from one machine. That costs runners and buys the thing
+# this workflow exists for: every artefact is launched and asked for its version before it can reach a
+# release page. A cross-published ARM64 binary cannot be run on an x64 runner, and "we could not test it"
+# is not a state a release should be in.
+#
+# The eight assets are two shapes, not one. Windows uses RemoteFlow-<version>-<rid>; the Debian packages
+# use Debian's own remoteflow_<version>_<arch>.deb, because apt and dpkg expect it. Both shapes are built
+# from the tag in more than one place here, so they are spelled out rather than globbed for.
 #
 # Every action is pinned by commit SHA. The trailing comment records the tag the SHA came from; when
 # bumping, resolve the new tag to its SHA rather than trusting the tag to stay put.
@@ -125,9 +130,110 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # Linux is deliberately thinner than the Windows job: nothing signs these artefacts and there is no
+  # Linux equivalent of smoke-test-artifacts.ps1. What it does keep is the property the split runners
+  # exist for. publish-linux.sh reads the version back out of the binary it just built by running it, and
+  # can only do that on a runner of the same architecture — cross-published, it falls back to asking
+  # MSBuild and reports "skipped (cross-architecture)", which would leave the check below checking
+  # nothing.
+  build-linux:
+    name: build (${{ matrix.rid }})
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - rid: linux-x64
+            runner: ubuntu-latest
+            arch: amd64
+          - rid: linux-arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # MinVer reads tags and commit height; see the Windows job.
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # Through the environment rather than ${{ }} interpolation, for the reason the Windows job gives: a
+      # tag name is attacker-controllable text, and interpolating it into a shell body would run it.
+      - name: Read the version from the tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "::error::The tag $TAG does not look like a version. Tags are written v0.1.0 or v0.1.0-rc.1."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # Debian orders '~' before everything, including the empty string, so a prerelease has to be
+          # written 0.3.0~rc.1 or dpkg would rank it above the 0.3.0 it precedes. publish-linux.sh names
+          # the package that way, so every name built from the tag here has to agree with it.
+          echo "deb-version=${version/-/\~}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the artefacts
+        run: ./scripts/publish-linux.sh --runtime ${{ matrix.rid }}
+
+      # The gate. Both artefacts are named after the version the script read out of the binary, never
+      # after the tag, so a build whose version disagrees with its tag writes differently-named files and
+      # is caught here rather than reaching a release page mislabelled. The package's control record is
+      # checked as well, because that is the version dpkg will believe once it is installed.
+      - name: Check the artefacts carry the version in the tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DEB_VERSION: ${{ steps.version.outputs.deb-version }}
+          RID: ${{ matrix.rid }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          tarball="artifacts/RemoteFlow-$VERSION-$RID.tar.gz"
+          package="artifacts/remoteflow_${DEB_VERSION}_${ARCH}.deb"
+          missing=0
+          for file in "$tarball" "$package"; do
+            if [ ! -f "$file" ]; then
+              echo "::error::$file is missing. publish-linux.sh names its output after the version it read back out of the binary, so a missing file here means the build does not report the version in the tag."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            ls -l artifacts
+            exit 1
+          fi
+          declared="$(dpkg-deb --field "$package" Version)"
+          if [ "$declared" != "$DEB_VERSION" ]; then
+            echo "::error::$package declares Version $declared, but the tag says $DEB_VERSION."
+            exit 1
+          fi
+          ls -l artifacts
+
+      - name: Upload the artefacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ matrix.rid }}
+          path: |
+            artifacts/RemoteFlow-${{ steps.version.outputs.version }}-${{ matrix.rid }}.tar.gz
+            artifacts/remoteflow_${{ steps.version.outputs.deb-version }}_${{ matrix.arch }}.deb
+          if-no-files-found: error
+          retention-days: 7
+
   release:
     name: draft release
-    needs: build
+    needs: [build, build-linux]
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -164,22 +270,42 @@ jobs:
           pattern: release-*
           merge-multiple: true
 
+      # Eight assets, in the two naming shapes described at the top of this file. Named rather than
+      # counted-and-globbed, so a leg that uploaded the wrong architecture is a failure here and not a
+      # release with two copies of x64 in it. The count is then checked as well: a stray file would
+      # otherwise reach checksums.txt through the globs below and be published as part of the release.
       - name: Check the full set arrived
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           version="$VERSION"
-          missing=0
+          # Debian's '~' for a prerelease; see the Linux legs.
+          deb_version="${version/-/\~}"
+          expected=()
           for rid in win-x64 win-arm64; do
-            for file in "RemoteFlow-$version-$rid.zip" "RemoteFlow-$version-$rid-setup.exe"; do
-              if [ ! -f "dist/$file" ]; then
-                echo "::error::dist/$file is missing."
-                missing=1
-              fi
-            done
+            expected+=("RemoteFlow-$version-$rid.zip" "RemoteFlow-$version-$rid-setup.exe")
+          done
+          for rid in linux-x64 linux-arm64; do
+            expected+=("RemoteFlow-$version-$rid.tar.gz")
+          done
+          for arch in amd64 arm64; do
+            expected+=("remoteflow_${deb_version}_${arch}.deb")
+          done
+          missing=0
+          for file in "${expected[@]}"; do
+            if [ ! -f "dist/$file" ]; then
+              echo "::error::dist/$file is missing."
+              missing=1
+            fi
           done
           [ "$missing" -eq 0 ]
+          found=$(find dist -maxdepth 1 -type f | wc -l)
+          if [ "$found" -ne "${#expected[@]}" ]; then
+            echo "::error::Expected ${#expected[@]} assets in dist, found $found. A release publishes what is here, so an unexpected file is not something to shrug at."
+            ls -l dist
+            exit 1
+          fi
           ls -l dist
 
       # sha256sum's own format, so a user can verify the whole set with `sha256sum --check` rather than
@@ -188,7 +314,7 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          sha256sum *.zip *.exe | sort -k 2 > checksums.txt
+          sha256sum *.zip *.exe *.deb *.tar.gz | sort -k 2 > checksums.txt
           cat checksums.txt
 
       # Recomputing what was just computed sounds circular, but it is checking the file GitHub will serve
