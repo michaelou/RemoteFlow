@@ -20,9 +20,19 @@ public sealed class FileBrowserSourceTests
         try
         {
             await File.WriteAllTextAsync(Path.Combine(root, "visible.txt"), "x", token);
-            var hidden = Path.Combine(root, "hidden.txt");
+
+            // Hidden means what the operating system means by it: the attribute on Windows, a leading dot
+            // on Unix. .NET reports both through FileAttributes.Hidden, which is why the source can test
+            // one flag and be right on both. Writing this the Windows way everywhere passes only on
+            // Windows -- File.SetAttributes is a silent no-op off it, so the entry stays visible and the
+            // assertion below fails for a reason that has nothing to do with the code under test.
+            var hidden = Path.Combine(root, OperatingSystem.IsWindows() ? "hidden.txt" : ".hidden.txt");
             await File.WriteAllTextAsync(hidden, "x", token);
-            File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden);
+            if (OperatingSystem.IsWindows())
+            {
+                File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden);
+            }
+
             _ = Directory.CreateDirectory(Path.Combine(root, "nested"));
             var source = new LocalFileBrowserSource();
 
@@ -32,8 +42,8 @@ public sealed class FileBrowserSourceTests
                 new FileBrowserListOptions { ShowHidden = true },
                 token);
 
-            // The correct local test is the hidden attribute, not a leading dot: "." names nothing on
-            // Windows, and a dotfile is not hidden to the operating system on either platform.
+            // Whichever way the entry was hidden, the source reports the same two entries: it asks
+            // FileAttributes.Hidden and lets the platform decide what that means.
             Assert.Equal(
                 ["nested", "visible.txt"],
                 listed.Value.Entries.Select(entry => entry.Name).Order(StringComparer.Ordinal));
