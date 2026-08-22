@@ -195,7 +195,7 @@ public sealed class ConnectionService(
             _ = duplicate.SetFolder(source.FolderId, guidProvider, clock.UtcNow)
                 .SetFavorite(source.IsFavorite, guidProvider, clock.UtcNow)
                 .SetSortOrder(source.SortOrder, guidProvider, clock.UtcNow)
-                .SetOptions(source.Ssh, source.Sftp, source.Rdp, guidProvider, clock.UtcNow);
+                .SetOptions(source.Ssh, source.Sftp, source.Rdp, source.ObjectStorage, guidProvider, clock.UtcNow);
             foreach (var tag in source.Tags)
             {
                 _ = duplicate.AddTag(tag.TagId);
@@ -299,6 +299,21 @@ public sealed class ConnectionService(
             return Result<Connection>.Failure(rdp.Error);
         }
 
+        // SetOptions replaces every owned options object at once, so anything not rebuilt from the input
+        // here is reset to its default on every save. SFTP options have no editor fields yet and so are
+        // still handed the default; the storage options do, and are threaded through.
+        var storage = ObjectStorageOptions.Default().Configure(
+            region: input.StorageRegion,
+            serviceUrl: input.StorageServiceUrl,
+            usePathStyleAddressing: input.StorageUsePathStyleAddressing,
+            container: input.StorageContainer,
+            rootPrefix: input.StorageRootPrefix,
+            localDownloadPath: input.StorageLocalDownloadPath);
+        if (storage.IsFailure)
+        {
+            return Result<Connection>.Failure(storage.Error);
+        }
+
         var details = connection.SetDetails(
             input.Username,
             input.AuthMethod,
@@ -313,7 +328,7 @@ public sealed class ConnectionService(
         }
 
         _ = connection.SetFolder(input.FolderId, guidProvider, clock.UtcNow)
-            .SetOptions(ssh.Value, SftpOptions.Default(), rdp.Value, guidProvider, clock.UtcNow);
+            .SetOptions(ssh.Value, SftpOptions.Default(), rdp.Value, storage.Value, guidProvider, clock.UtcNow);
         return Result<Connection>.Success(connection);
     }
 

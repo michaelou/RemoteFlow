@@ -234,6 +234,7 @@ public sealed class ConnectionTests
             null!,
             SftpOptions.Default(),
             RdpOptions.Default(),
+            ObjectStorageOptions.Default(),
             GuidProvider()));
     }
 

@@ -159,6 +159,7 @@ public sealed class PersistenceBehaviorTests
             ssh,
             SftpOptions.Default(),
             RdpOptions.Default(),
+            ObjectStorageOptions.Default(),
             SystemGuidProvider.Instance);
         var hostKey = HostKey.Create(
             SystemGuidProvider.Instance,
@@ -204,6 +205,99 @@ public sealed class PersistenceBehaviorTests
             Assert.Equal(HostKeyPolicy.AcceptAny, persistedConnection.Ssh.HostKeyPolicy);
             Assert.Equal(HostKeyTrust.Revoked, persistedHostKey.TrustState);
             Assert.Equal(HostKeySource.Pinned, persistedHostKey.Source);
+        }
+    }
+
+    /// <summary>An owned type whose every column is NULL materialises as <c>null</c>, and the required
+    /// navigation configured for it then throws on query. The non-nullable
+    /// <c>Storage_UsePathStyleAddressing</c> column is what keeps that from happening, so a connection
+    /// with no storage settings at all has to survive a round trip.</summary>
+    [Fact]
+    public async Task TheStorageValueObjectRoundTripsWithEveryStringNull()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = SqliteTestDatabase.Create();
+        var connection = CreateConnection();
+
+        await using (var context = database.Factory.CreateDbContext())
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+            _ = context.Add(connection);
+            _ = await context.SaveChangesAsync(cancellationToken);
+
+            await context.Database.OpenConnectionAsync(cancellationToken);
+            await using var command = context.Database.GetDbConnection().CreateCommand();
+            command.CommandText =
+                "SELECT Storage_Region, Storage_ServiceUrl, Storage_UsePathStyleAddressing, " +
+                "Storage_Container, Storage_RootPrefix, Storage_LocalDownloadPath FROM Connections;";
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            Assert.True(await reader.ReadAsync(cancellationToken));
+            Assert.True(await reader.IsDBNullAsync(0, cancellationToken));
+            Assert.True(await reader.IsDBNullAsync(1, cancellationToken));
+            Assert.Equal(0L, reader.GetInt64(2));
+            Assert.True(await reader.IsDBNullAsync(3, cancellationToken));
+            Assert.True(await reader.IsDBNullAsync(4, cancellationToken));
+            Assert.True(await reader.IsDBNullAsync(5, cancellationToken));
+        }
+
+        await using (var context = database.Factory.CreateDbContext())
+        {
+            var persisted = await context.Connections.AsNoTracking().SingleAsync(cancellationToken);
+
+            Assert.NotNull(persisted.ObjectStorage);
+            Assert.Null(persisted.ObjectStorage.Region);
+            Assert.Null(persisted.ObjectStorage.ServiceUrl);
+            Assert.Null(persisted.ObjectStorage.Container);
+            Assert.Null(persisted.ObjectStorage.RootPrefix);
+            Assert.Null(persisted.ObjectStorage.LocalDownloadPath);
+            Assert.False(persisted.ObjectStorage.UsePathStyleAddressing);
+        }
+    }
+
+    [Fact]
+    public async Task AStorageConnectionRoundTripsEveryColumnItSets()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var database = SqliteTestDatabase.Create();
+        var connection = Connection.Create(
+            SystemGuidProvider.Instance,
+            "Objects",
+            "s3.eu-west-2.amazonaws.com",
+            443,
+            ProtocolType.S3).Value;
+        var storage = ObjectStorageOptions.Default().Configure(
+            region: "eu-west-2",
+            serviceUrl: "https://minio.example.test",
+            usePathStyleAddressing: true,
+            container: "archive",
+            rootPrefix: "logs/2026",
+            localDownloadPath: "/tmp/objects");
+        _ = connection.SetOptions(
+            SshOptions.Default(),
+            SftpOptions.Default(),
+            RdpOptions.Default(),
+            storage.Value,
+            SystemGuidProvider.Instance);
+
+        await using (var context = database.Factory.CreateDbContext())
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+            _ = context.Add(connection);
+            _ = await context.SaveChangesAsync(cancellationToken);
+        }
+
+        await using (var context = database.Factory.CreateDbContext())
+        {
+            var persisted = await context.Connections.AsNoTracking().SingleAsync(cancellationToken);
+
+            Assert.Equal(ProtocolType.S3, persisted.Protocol);
+            Assert.Equal(443, persisted.Port);
+            Assert.Equal("eu-west-2", persisted.ObjectStorage.Region);
+            Assert.Equal("https://minio.example.test", persisted.ObjectStorage.ServiceUrl);
+            Assert.True(persisted.ObjectStorage.UsePathStyleAddressing);
+            Assert.Equal("archive", persisted.ObjectStorage.Container);
+            Assert.Equal("logs/2026", persisted.ObjectStorage.RootPrefix);
+            Assert.Equal("/tmp/objects", persisted.ObjectStorage.LocalDownloadPath);
         }
     }
 

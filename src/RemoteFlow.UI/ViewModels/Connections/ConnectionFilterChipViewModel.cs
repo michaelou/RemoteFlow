@@ -32,7 +32,8 @@ public sealed partial class ConnectionFilterChipViewModel : ObservableObject
 
     public static ConnectionFilterChipViewModel ForProtocol(ProtocolType protocol)
     {
-        return new ConnectionFilterChipViewModel(protocol.ToString().ToUpperInvariant(), protocol: protocol);
+        // Not ToString().ToUpperInvariant(): that turns AzureBlob into "AZUREBLOB".
+        return new ConnectionFilterChipViewModel(protocol.GetDisplayName(), protocol: protocol);
     }
 
     public static ConnectionFilterChipViewModel ForEnvironment(EnvironmentKind environment)

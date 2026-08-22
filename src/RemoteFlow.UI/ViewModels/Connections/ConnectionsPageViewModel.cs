@@ -138,6 +138,8 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
             ConnectionFilterChipViewModel.ForProtocol(ProtocolType.Ssh),
             ConnectionFilterChipViewModel.ForProtocol(ProtocolType.Sftp),
             ConnectionFilterChipViewModel.ForProtocol(ProtocolType.Rdp),
+            ConnectionFilterChipViewModel.ForProtocol(ProtocolType.S3),
+            ConnectionFilterChipViewModel.ForProtocol(ProtocolType.AzureBlob),
         ];
         EnvironmentFilters =
         [
@@ -753,6 +755,8 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
                 ProtocolType.Ssh => "Icon.Terminals",
                 ProtocolType.Sftp => "Icon.Sftp",
                 ProtocolType.Rdp => "Icon.RemoteDesktop",
+                ProtocolType.S3 => "Icon.Storage",
+                ProtocolType.AzureBlob => "Icon.Storage",
                 _ => throw new ArgumentOutOfRangeException(nameof(item)),
             });
     }

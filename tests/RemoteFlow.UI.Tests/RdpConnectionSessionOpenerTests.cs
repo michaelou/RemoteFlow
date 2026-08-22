@@ -119,7 +119,7 @@ public sealed class RdpConnectionSessionOpenerTests
     public async Task ConnectionDetailsAlwaysExposesDefaultAndWindowsExternalActions()
     {
         var modes = new List<ConnectionOpenMode>();
-        var connection = CreateRdpConnection();
+        var connection = CreateConnection(ProtocolType.Rdp);
         var details = new ConnectionDetailsViewModel(
             connection,
             "No folder",
@@ -142,12 +142,45 @@ public sealed class RdpConnectionSessionOpenerTests
         Assert.Equal([ConnectionOpenMode.Rdp, ConnectionOpenMode.RdpExternal], modes);
     }
 
+    /// <summary>Named after the bug it exists to catch: the default branch only special-cases RDP, so a
+    /// double-clicked storage connection fell through to <c>SessionManager.OpenAsync</c> and came back as
+    /// "Only SSH and SFTP connections can open an SSH terminal session" — a stack trace where an
+    /// explanation belongs. The Storage page arrives with the browsing UI; until then the same seam
+    /// answers plainly.</summary>
+    [Theory]
+    [InlineData(ProtocolType.S3, ConnectionOpenMode.Default)]
+    [InlineData(ProtocolType.AzureBlob, ConnectionOpenMode.Default)]
+    [InlineData(ProtocolType.S3, ConnectionOpenMode.Storage)]
+    [InlineData(ProtocolType.AzureBlob, ConnectionOpenMode.Storage)]
+    public async Task OpeningAStorageConnectionSaysItIsNotAvailableYetInsteadOfThrowing(
+        ProtocolType protocol,
+        ConnectionOpenMode mode)
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = CreateFixture(
+            platformAvailable: false,
+            embeddedSupported: false,
+            protocol: protocol);
+
+        var result = await fixture.Opener.OpenAsync(fixture.Connection.Id, mode, token);
+
+        Assert.False(result.Opened);
+        Assert.NotNull(result.Message);
+        Assert.Contains("not available in this build yet", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("SSH terminal session", result.Message, StringComparison.Ordinal);
+        Assert.Empty(fixture.Workspace.Sessions);
+        Assert.Equal(0, fixture.ExternalLauncher.LaunchCount);
+        // No navigation either: there is no Storage page to navigate to yet.
+        Assert.NotEqual("terminals", fixture.Navigation.CurrentPageKey);
+    }
+
     private static OpenerFixture CreateFixture(
         bool platformAvailable,
         bool embeddedSupported,
-        bool failCreation = false)
+        bool failCreation = false,
+        ProtocolType protocol = ProtocolType.Rdp)
     {
-        var connection = CreateRdpConnection();
+        var connection = CreateConnection(protocol);
         var settings = new InMemorySettingsStore();
         var embeddedFactory = new RecordingEmbeddedFactory(platformAvailable, embeddedSupported)
         {
@@ -175,13 +208,13 @@ public sealed class RdpConnectionSessionOpenerTests
             new SshConnectionSessionOpener(new UnusedSessionManager(), services));
     }
 
-    private static Connection CreateRdpConnection()
+    private static Connection CreateConnection(ProtocolType protocol)
     {
         return Connection.Create(
             SystemGuidProvider.Instance,
-            "DC01",
-            "dc01.example.test",
-            ProtocolType.Rdp,
+            protocol == ProtocolType.Rdp ? "DC01" : "Objects",
+            protocol == ProtocolType.Rdp ? "dc01.example.test" : "s3.eu-west-2.amazonaws.com",
+            protocol,
             DateTimeOffset.UtcNow).Value;
     }
 

@@ -175,6 +175,87 @@ public sealed class ConnectionAndTagServiceTests
         Assert.Empty(connection.Tags);
     }
 
+    /// <summary>Named after the bug it exists to catch: <c>SetOptions</c> replaces every owned options
+    /// object at once, so a value object the editor can set but <c>Configure</c> does not rebuild is
+    /// silently reset to its default on every save. SFTP options had that shape already; the storage
+    /// options must not.</summary>
+    [Fact]
+    public async Task Configure_DoesNotWipeObjectStorageOptionsOnCreateUpdateOrDuplicate()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var store = new InMemoryStore();
+        var service = CreateConnectionService(store);
+        var input = new ConnectionInput(
+            "Objects",
+            "s3.eu-west-2.amazonaws.com",
+            443,
+            ProtocolType.S3,
+            "AKIAEXAMPLE",
+            StorageRegion: "eu-west-2",
+            StorageServiceUrl: "https://minio.example.test",
+            StorageUsePathStyleAddressing: true,
+            StorageContainer: "archive",
+            StorageRootPrefix: "logs/2026");
+
+        var created = await service.CreateAsync(input, token);
+
+        Assert.True(created.IsSuccess);
+        AssertStorageOptions(created.Value);
+
+        var updated = await service.UpdateAsync(created.Value.Id, input with { Name = "Objects renamed" }, token);
+
+        Assert.True(updated.IsSuccess);
+        AssertStorageOptions(updated.Value);
+
+        var duplicated = await service.DuplicateAsync(created.Value.Id, token);
+
+        Assert.True(duplicated.IsSuccess);
+        AssertStorageOptions(duplicated.Value);
+    }
+
+    [Fact]
+    public async Task Create_RejectsAnS3ConnectionWithNeitherARegionNorAnEndpoint()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var service = CreateConnectionService(new InMemoryStore());
+
+        var created = await service.CreateAsync(
+            new ConnectionInput("Objects", "s3.amazonaws.com", 443, ProtocolType.S3, "AKIAEXAMPLE"),
+            token);
+
+        Assert.True(created.IsFailure);
+        Assert.Equal("connection.storage_region", created.Error.Code);
+    }
+
+    [Fact]
+    public async Task Create_RejectsAnObjectStorageConnectionWithAnSshAuthenticationMethod()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var service = CreateConnectionService(new InMemoryStore());
+
+        var created = await service.CreateAsync(
+            new ConnectionInput(
+                "Objects",
+                "contoso.blob.core.windows.net",
+                443,
+                ProtocolType.AzureBlob,
+                "contoso",
+                AuthMethod.Password),
+            token);
+
+        Assert.True(created.IsFailure);
+        Assert.Equal("connection.auth_method", created.Error.Code);
+    }
+
+    private static void AssertStorageOptions(Connection connection)
+    {
+        Assert.Equal("eu-west-2", connection.ObjectStorage.Region);
+        Assert.Equal("https://minio.example.test", connection.ObjectStorage.ServiceUrl);
+        Assert.True(connection.ObjectStorage.UsePathStyleAddressing);
+        Assert.Equal("archive", connection.ObjectStorage.Container);
+        Assert.Equal("logs/2026", connection.ObjectStorage.RootPrefix);
+    }
+
     private static ConnectionService CreateConnectionService(
         InMemoryStore store,
         RecordingCredentialProvider? provider = null)

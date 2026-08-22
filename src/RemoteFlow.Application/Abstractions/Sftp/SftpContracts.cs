@@ -12,6 +12,11 @@ public enum SftpError
     ConnectionLost = 8,
     InvalidPath = 9,
     Unknown = 10,
+
+    /// <summary>The object changed under a ranged read — HTTP 412 against an If-Match ETag — so the
+    /// transfer has to restart. Reached only by the object-storage adapters; no SFTP adapter returns it.
+    /// </summary>
+    PreconditionFailed = 11,
 }
 
 public sealed record SftpFailure(SftpError Error, string Message);

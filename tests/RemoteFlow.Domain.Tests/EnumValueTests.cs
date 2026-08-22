@@ -8,7 +8,7 @@ public sealed class EnumValueTests
     [Fact]
     public void ProtocolTypeValuesAreStable()
     {
-        Assert.Equal([1, 2, 3], Enum.GetValues<ProtocolType>().Select(value => (int)value));
+        Assert.Equal([1, 2, 3, 4, 5], Enum.GetValues<ProtocolType>().Select(value => (int)value));
     }
 
     [Fact]
@@ -44,7 +44,7 @@ public sealed class EnumValueTests
     [Fact]
     public void CredentialKindValuesAreStable()
     {
-        Assert.Equal([0, 1, 2, 3], Enum.GetValues<CredentialKind>().Select(value => (int)value));
+        Assert.Equal([0, 1, 2, 3, 4], Enum.GetValues<CredentialKind>().Select(value => (int)value));
     }
 
     [Fact]

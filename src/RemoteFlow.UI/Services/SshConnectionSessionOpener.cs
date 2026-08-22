@@ -29,6 +29,19 @@ public sealed class SshConnectionSessionOpener(
                     return await LaunchRdpAsync(connectionId, ConnectionOpenMode.Rdp, cancellationToken)
                         .ConfigureAwait(true);
                 }
+
+                // Without this branch the default path falls through to SessionManager.OpenAsync, which
+                // throws "Only SSH and SFTP connections can open an SSH terminal session" — a stack trace
+                // where an explanation belongs.
+                if (defaultConnection?.Protocol.IsObjectStorage() == true)
+                {
+                    return OpenStorage();
+                }
+            }
+
+            if (mode == ConnectionOpenMode.Storage)
+            {
+                return OpenStorage();
             }
 
             if (mode is ConnectionOpenMode.Rdp or ConnectionOpenMode.RdpExternal)
@@ -136,6 +149,15 @@ public sealed class SshConnectionSessionOpener(
         return result.Succeeded
             ? ConnectionOpenResult.Success()
             : ConnectionOpenResult.Failure(result.Message);
+    }
+
+    /// <summary>The seam the Storage page will land behind. It stays here rather than in the caller so
+    /// that every entry point — double-click, the explorer's context menu, the command palette — gets the
+    /// same answer from one place.</summary>
+    private static ConnectionOpenResult OpenStorage()
+    {
+        return ConnectionOpenResult.Failure(
+            "Browsing object storage is not available in this build yet. The connection and its stored key are saved.");
     }
 
     private static ConnectionOpenResult EmbeddedFailure(string message)

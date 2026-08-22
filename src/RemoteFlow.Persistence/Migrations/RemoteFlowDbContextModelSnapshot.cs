@@ -331,6 +331,48 @@ namespace RemoteFlow.Persistence.Migrations
                                 .HasForeignKey("ConnectionId");
                         });
 
+                    b.OwnsOne("RemoteFlow.Domain.ValueObjects.ObjectStorageOptions", "ObjectStorage", b1 =>
+                        {
+                            b1.Property<string>("ConnectionId")
+                                .HasColumnType("TEXT");
+
+                            b1.Property<string>("Container")
+                                .HasMaxLength(63)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Storage_Container");
+
+                            b1.Property<string>("LocalDownloadPath")
+                                .HasMaxLength(4096)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Storage_LocalDownloadPath");
+
+                            b1.Property<string>("Region")
+                                .HasMaxLength(100)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Storage_Region");
+
+                            b1.Property<string>("RootPrefix")
+                                .HasMaxLength(1024)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Storage_RootPrefix");
+
+                            b1.Property<string>("ServiceUrl")
+                                .HasMaxLength(2048)
+                                .HasColumnType("TEXT")
+                                .HasColumnName("Storage_ServiceUrl");
+
+                            b1.Property<bool>("UsePathStyleAddressing")
+                                .HasColumnType("INTEGER")
+                                .HasColumnName("Storage_UsePathStyleAddressing");
+
+                            b1.HasKey("ConnectionId");
+
+                            b1.ToTable("Connections");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ConnectionId");
+                        });
+
                     b.OwnsOne("RemoteFlow.Domain.ValueObjects.RdpOptions", "Rdp", b1 =>
                         {
                             b1.Property<string>("ConnectionId")
@@ -451,6 +493,9 @@ namespace RemoteFlow.Persistence.Migrations
                         });
 
                     b.Navigation("Credential")
+                        .IsRequired();
+
+                    b.Navigation("ObjectStorage")
                         .IsRequired();
 
                     b.Navigation("Rdp")

@@ -6,6 +6,11 @@ public enum ConnectionOpenMode
     Sftp = 1,
     Rdp = 2,
     RdpExternal = 3,
+
+    /// <summary>Browse an object-storage account. The Storage page itself arrives with the dual-pane UI;
+    /// until then this mode reports that it is not available rather than letting the default branch try to
+    /// open an SSH terminal for a protocol that has none.</summary>
+    Storage = 4,
 }
 
 /// <summary>Whether the connection opened, and — when it did not — what to tell the person who asked.

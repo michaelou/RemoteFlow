@@ -78,7 +78,7 @@ public sealed class CredentialProviderTests
         await provider.DeleteConnectionCredentialsAsync(connectionId, cancellationToken);
 
         Assert.Empty(provider.Keys);
-        Assert.Equal(3, provider.DeletedKeys.Count);
+        Assert.Equal(4, provider.DeletedKeys.Count);
     }
 
     [Fact]

@@ -82,6 +82,55 @@ public sealed class DbInitializerTests
         }
     }
 
+    /// <summary>The object-storage protocols make a database this build writes unreadable by a 0.2.x
+    /// binary: that build's icon switch throws on <c>Protocol = 4</c>. The schema version is what turns
+    /// that into a clear message instead of a crash, so it has to be greater than the one those builds
+    /// support.</summary>
+    [Fact]
+    public async Task ADatabaseThisBuildWritesIsRefusedByAReaderThatSupportsOnlyVersionOne()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var directory = TemporaryDirectory.Create();
+        var (initializer, _, paths, settings) = CreateInitializer(directory.Path);
+        using (settings)
+        {
+            await initializer.InitializeAsync(cancellationToken);
+
+            var written = await settings.Get(SettingKeys.SchemaVersion, cancellationToken);
+            Assert.Equal(2, written);
+            Assert.True(written > 1, "A version-one reader would accept this database.");
+
+            var refusal = new NewerDatabaseSchemaException(
+                Path.Combine(paths.DataDirectory, RemoteFlowDatabase.FileName),
+                written,
+                1);
+            Assert.Contains("Upgrade RemoteFlow", refusal.Message, StringComparison.Ordinal);
+            Assert.Contains("schema version 2", refusal.Message, StringComparison.Ordinal);
+            Assert.Contains("supports version 1", refusal.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>The bump is inert without the write-back: <c>SeedDefaults</c> only inserts keys that are
+    /// missing, so a database created before the bump would keep claiming the older version for ever.
+    /// </summary>
+    [Fact]
+    public async Task AnExistingVersionOneDatabaseIsStampedToTwoAfterMigration()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var directory = TemporaryDirectory.Create();
+        var (initializer, _, _, settings) = CreateInitializer(directory.Path);
+        using (settings)
+        {
+            await initializer.InitializeAsync(cancellationToken);
+            await settings.Set(SettingKeys.SchemaVersion, 1, cancellationToken);
+            Assert.Equal(1, await settings.Get(SettingKeys.SchemaVersion, cancellationToken));
+
+            await initializer.InitializeAsync(cancellationToken);
+
+            Assert.Equal(DbInitializer.CurrentSchemaVersion, await settings.Get(SettingKeys.SchemaVersion, cancellationToken));
+        }
+    }
+
     [Fact]
     public async Task CorruptDatabaseProducesActionableExceptionNamingTheFile()
     {

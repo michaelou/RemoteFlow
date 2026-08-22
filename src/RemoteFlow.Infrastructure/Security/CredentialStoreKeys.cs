@@ -21,6 +21,7 @@ public static class CredentialStoreKeys
             CredentialKind.Password => "password",
             CredentialKind.PrivateKeyPassphrase => "private-key-passphrase",
             CredentialKind.RdpPassword => "rdp-password",
+            CredentialKind.StorageSecretKey => "storage-secret-key",
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "A concrete credential kind is required."),
         };
         return $"{_prefix}/{connectionId:D}/{kindName}";

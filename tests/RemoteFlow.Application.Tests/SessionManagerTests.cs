@@ -158,7 +158,7 @@ public sealed class SessionManagerTests
             initialCommand: initialCommand,
             startupDirectory: startupDirectory,
             hostKeyPolicy: HostKeyPolicy.TrustOnFirstUse).Value;
-        _ = connection.SetOptions(ssh, SftpOptions.Default(), RdpOptions.Default(), entityGuids);
+        _ = connection.SetOptions(ssh, SftpOptions.Default(), RdpOptions.Default(), ObjectStorageOptions.Default(), entityGuids);
         var repository = new SingleConnectionRepository(connection);
         var transport = new FakeSshTransport();
         var recent = new RecordingRecentStore();

@@ -7,6 +7,41 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **S3 and Azure Blob accounts can be saved as connections.** Choose **S3** or **Azure Blob** as the
+  protocol and the editor asks for what that provider needs: an access key ID and a region for S3, a
+  storage account name for Azure. The host and port fill themselves in — `s3.{region}.amazonaws.com`,
+  `{account}.blob.core.windows.net`, port 443 — and stop doing so the moment you type over them, which is
+  how a sovereign-cloud account such as `*.blob.core.chinacloudapi.cn` is reached. The secret access key or
+  account key is stored in the platform keychain like every other RemoteFlow credential; it never goes in
+  the database or a plaintext backup entry.
+- **S3-compatible services are supported.** A custom endpoint and a path-style-addressing switch make the
+  S3 protocol work against MinIO, Ceph/RGW, Backblaze B2, Cloudflare R2 and Wasabi.
+- **A bucket or container can be named on the connection**, for a key that is scoped to one and therefore
+  cannot list them. Leave it blank to browse the whole account. An optional prefix starts browsing further
+  in.
+
+  Browsing itself is not in this release. Opening a storage connection says so rather than failing
+  obscurely; the account, its settings and its stored key are saved and ready. See
+  [docs/adr/0019-object-storage-provider-abstraction.md](docs/adr/0019-object-storage-provider-abstraction.md)
+  for what the foundation covers and what is deliberately deferred.
+
+### Changed
+
+- Protocol names are now written out in full wherever they are shown — the filter chips, the details pane
+  and the protocol picker say **Azure Blob**, not `AZUREBLOB`.
+- The database schema version moves to 2. A database that has been opened by this release, or that contains
+  an S3 or Azure Blob connection, is refused by RemoteFlow 0.2.6 and earlier with a message telling you to
+  upgrade, rather than failing part-way through opening the connections page. Existing databases are
+  stamped to 2 on first launch and need no action.
+- A backup written by this release that contains an S3 or Azure Blob connection cannot be imported by
+  RemoteFlow 0.2.6 or earlier: protocol names are stored as strings, and an older build refuses an archive
+  naming one it does not know rather than importing a connection it could not open. Backups containing only
+  SSH, SFTP and RDP connections are unaffected in both directions.
+- RemoteFlow now ships the AWS SDK for S3 and the Azure Storage Blobs SDK, and the packages they pull in.
+  All of them are attributed in `THIRD-PARTY-NOTICES.md`.
+
 ## [0.2.6] - 2026-08-22
 
 ### Added

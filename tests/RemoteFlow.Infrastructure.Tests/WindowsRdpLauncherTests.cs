@@ -174,7 +174,7 @@ public sealed class WindowsRdpLauncherTests : IDisposable
             multimon: false,
             redirectClipboard: false,
             redirectDrives: false);
-        _ = connection.SetOptions(SshOptions.Default(), SftpOptions.Default(), rdp, SystemGuidProvider.Instance);
+        _ = connection.SetOptions(SshOptions.Default(), SftpOptions.Default(), rdp, ObjectStorageOptions.Default(), SystemGuidProvider.Instance);
 
         _ = await launcher.LaunchAsync(connection, token);
 
@@ -388,7 +388,7 @@ public sealed class WindowsRdpLauncherTests : IDisposable
             multimon: true,
             redirectClipboard: true,
             redirectDrives: true);
-        _ = connection.SetOptions(SshOptions.Default(), SftpOptions.Default(), rdp, SystemGuidProvider.Instance);
+        _ = connection.SetOptions(SshOptions.Default(), SftpOptions.Default(), rdp, ObjectStorageOptions.Default(), SystemGuidProvider.Instance);
         if (withStoredPassword)
         {
             _ = connection.SetCredential(

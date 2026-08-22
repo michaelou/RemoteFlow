@@ -25,7 +25,7 @@ public sealed partial class ConnectionDetailsViewModel(
 
     public string HostAndPort => $"{Connection.Host}:{Connection.Port}";
 
-    public string Protocol => Connection.Protocol.ToString().ToUpperInvariant();
+    public string Protocol => Connection.Protocol.GetDisplayName();
 
     public string Authentication => Connection.AuthMethod.ToString();
 

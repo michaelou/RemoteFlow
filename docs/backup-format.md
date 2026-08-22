@@ -48,6 +48,13 @@ base64-encoded salt. The encrypted envelope itself is specified with the credent
 ## Compatibility rules
 
 - Readers must ignore unknown JSON fields. This lets a v1 reader accept compatible additive changes.
+- **Unknown enum *members* are not covered by that rule.** Enums are written as camelCase strings, so an
+  archive naming a protocol, credential kind or policy the reading build does not know fails the whole
+  import rather than skipping the one record. A backup written by a newer RemoteFlow containing an S3 or
+  Azure Blob connection (`"protocol": "s3"`, `"protocol": "azureBlob"`) is therefore refused by a build
+  that predates them, with `The backup contains invalid JSON near '$[0].protocol'.` This is deliberate:
+  the alternative — an `Unsupported` fallback member — would silently import a connection that build cannot
+  open. Export from the older build, or upgrade before importing.
 - Readers must refuse an unknown `formatVersion` before any data is written. Major schema changes use a
   new integer version and a dedicated reader.
 - A missing entity entry is interpreted as an empty collection when that is semantically valid. The

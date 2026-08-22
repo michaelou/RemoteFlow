@@ -147,7 +147,7 @@ public sealed class SystemTerminalLauncherTests
             SystemGuidProvider.Instance);
         var ssh = SshOptions.Default();
         _ = ssh.Configure(privateKeyPath: "C:\\keys\\id_ed25519");
-        _ = connection.SetOptions(ssh, SftpOptions.Default(), RdpOptions.Default(), SystemGuidProvider.Instance);
+        _ = connection.SetOptions(ssh, SftpOptions.Default(), RdpOptions.Default(), ObjectStorageOptions.Default(), SystemGuidProvider.Instance);
         _ = connection.SetCredential(
             CredentialRef.Create(
                 CredentialKind.Password,

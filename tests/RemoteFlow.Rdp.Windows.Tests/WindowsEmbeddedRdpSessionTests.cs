@@ -613,6 +613,7 @@ public sealed class WindowsEmbeddedRdpSessionTests
             SshOptions.Default(),
             SftpOptions.Default(),
             options,
+            ObjectStorageOptions.Default(),
             SystemGuidProvider.Instance);
     }
 

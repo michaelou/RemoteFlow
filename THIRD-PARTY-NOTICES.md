@@ -10,7 +10,7 @@ transitive dependencies included. Regenerate it rather than editing it:
 pwsh ./scripts/generate-notices.ps1
 ```
 
-## Packages (84)
+## Packages (97)
 
 | Package | Version | Licence | Copyright |
 | --- | --- | --- | --- |
@@ -28,6 +28,11 @@ pwsh ./scripts/generate-notices.ps1
 | [Avalonia.Themes.Fluent](https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link) | 12.1.1 | MIT | Copyright 2013-2026 © The AvaloniaUI Project |
 | [Avalonia.Win32](https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link) | 12.1.1 | MIT | Copyright 2013-2026 © The AvaloniaUI Project |
 | [Avalonia.X11](https://avaloniaui.net/?utm_source=nuget&utm_medium=referral&utm_content=project_homepage_link) | 12.1.1 | MIT | Copyright 2013-2026 © The AvaloniaUI Project |
+| [AWSSDK.Core](https://github.com/aws/aws-sdk-net/) | 4.0.102 | Apache-2.0 | Amazon Web Services |
+| [AWSSDK.S3](https://github.com/aws/aws-sdk-net/) | 4.0.102.3 | Apache-2.0 | Amazon Web Services |
+| [Azure.Core](https://github.com/Azure/azure-sdk-for-net/blob/Azure.Core_1.55.0/sdk/core/Azure.Core/README.md) | 1.55.0 | MIT | © Microsoft Corporation. All rights reserved. |
+| [Azure.Storage.Blobs](https://github.com/Azure/azure-sdk-for-net/blob/Azure.Storage.Blobs_12.29.1/sdk/storage/Azure.Storage.Blobs/README.md) | 12.29.1 | MIT | © Microsoft Corporation. All rights reserved. |
+| [Azure.Storage.Common](https://github.com/Azure/azure-sdk-for-net/blob/Azure.Storage.Common_12.28.0/sdk/storage/Azure.Storage.Common/README.md) | 12.28.0 | MIT | © Microsoft Corporation. All rights reserved. |
 | [BouncyCastle.Cryptography](https://www.bouncycastle.org/stable/nuget/csharp/website) | 2.7.0 | MIT | Copyright © Legion of the Bouncy Castle Inc. 2000-2026 |
 | [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) | 8.4.2 | MIT | (c) .NET Foundation and Contributors. All rights reserved. |
 | [HarfBuzzSharp](https://go.microsoft.com/fwlink/?linkid=868515) | 8.3.1.3 | MIT | © Microsoft Corporation. All rights reserved. |
@@ -38,6 +43,7 @@ pwsh ./scripts/generate-notices.ps1
 | [Konscious.Security.Cryptography.Argon2](https://github.com/kmaragon/Konscious.Security.Cryptography) | 1.3.1 | MIT | (c) 2024 Keef Aragon |
 | [Konscious.Security.Cryptography.Blake2](https://github.com/kmaragon/Konscious.Security.Cryptography) | 1.1.1 | MIT | (c) 2024 Keef Aragon |
 | [MicroCom.Runtime](https://github.com/kekekeks/MicroCom) | 0.11.6 | MIT | Copyright 2021 © Nikita Tsukanov |
+| [Microsoft.Bcl.AsyncInterfaces](https://dot.net/) | 10.0.3 | MIT | © Microsoft Corporation. All rights reserved. |
 | [Microsoft.Data.Sqlite.Core](https://docs.microsoft.com/dotnet/standard/data/sqlite/) | 10.0.10 | MIT | © Microsoft Corporation. All rights reserved. |
 | [Microsoft.EntityFrameworkCore](https://docs.microsoft.com/ef/core/) | 10.0.10 | MIT | © Microsoft Corporation. All rights reserved. |
 | [Microsoft.EntityFrameworkCore.Abstractions](https://docs.microsoft.com/ef/core/) | 10.0.10 | MIT | © Microsoft Corporation. All rights reserved. |
@@ -75,6 +81,9 @@ pwsh ./scripts/generate-notices.ps1
 | [Microsoft.Extensions.Options](https://dot.net/) | 10.0.10 | MIT | © Microsoft Corporation. All rights reserved. |
 | [Microsoft.Extensions.Options.ConfigurationExtensions](https://dot.net/) | 10.0.10 | MIT | © Microsoft Corporation. All rights reserved. |
 | [Microsoft.Extensions.Primitives](https://dot.net/) | 10.0.10 | MIT | © Microsoft Corporation. All rights reserved. |
+| [Microsoft.Identity.Client](https://go.microsoft.com/fwlink/?linkid=844761) | 4.83.1 | MIT | © Microsoft Corporation. All rights reserved. |
+| [Microsoft.Identity.Client.Extensions.Msal](https://go.microsoft.com/fwlink/?linkid=844761) | 4.83.1 | MIT | © Microsoft Corporation. All rights reserved. |
+| [Microsoft.IdentityModel.Abstractions](https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet) | 8.14.0 | MIT | © Microsoft Corporation. All rights reserved. |
 | [Porta.Pty](https://github.com/tomlm/Porta.Pty) | 1.0.7 | MIT | Tom Laird-McConnell All Rights Reserved |
 | [Serilog](https://serilog.net/) | 4.2.0 | Apache-2.0 | Copyright © Serilog Contributors |
 | [Serilog.Sinks.File](https://github.com/serilog/serilog-sinks-file) | 7.0.0 | Apache-2.0 | Serilog Contributors |
@@ -89,7 +98,11 @@ pwsh ./scripts/generate-notices.ps1
 | [SQLitePCLRaw.provider.e_sqlite3](https://github.com/ericsink/SQLitePCL.raw) | 2.1.11 | Apache-2.0 | Copyright 2014-2024 SourceGear, LLC |
 | [SSH.NET](https://github.com/sshnet/SSH.NET) | 2026.0.0 | MIT | Copyright © Renci 2010-2026 |
 | [SvcSystems.UI.Terminal](https://github.com/IvanJosipovic/SvcSystems.UI.Terminal) | 1.0.3 | MIT | Ivan Josipovic |
+| [System.ClientModel](https://github.com/Azure/azure-sdk-for-net/blob/System.ClientModel_1.11.0/sdk/core/System.ClientModel/README.md) | 1.11.0 | MIT | © Microsoft Corporation. All rights reserved. |
 | [System.Diagnostics.EventLog](https://dot.net/) | 10.0.10 | MIT | © Microsoft Corporation. All rights reserved. |
+| [System.IO.Hashing](https://dot.net/) | 10.0.3 | MIT | © Microsoft Corporation. All rights reserved. |
+| [System.Memory.Data](https://dot.net/) | 10.0.3 | MIT | © Microsoft Corporation. All rights reserved. |
+| [System.Security.Cryptography.ProtectedData](https://dot.net/) | 10.0.10 | MIT | © Microsoft Corporation. All rights reserved. |
 | [Tmds.DBus.Protocol](https://github.com/tmds/Tmds.DBus.git) | 0.94.1 | MIT | Tom Deseyn |
 | [Tmds.Ssh](https://github.com/tmds/Tmds.Ssh.git) | 0.23.0 | MIT | Tom Deseyn |
 | [Unicode.net](https://github.com/neosmart/unicode.net) | 2.0.0 | MIT | Copyright NeoSmart Technologies 2017 - 2021 |
@@ -103,7 +116,7 @@ pwsh ./scripts/generate-notices.ps1
 
 ### Apache-2.0
 
-Applies to 6 of the packages above.
+Applies to 8 of the packages above.
 
 ```text
                                  Apache License
@@ -344,7 +357,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ### MIT
 
-Applies to 77 of the packages above.
+Applies to 88 of the packages above.
 
 ```text
 MIT License

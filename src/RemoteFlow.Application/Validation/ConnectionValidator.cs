@@ -1,5 +1,6 @@
 using RemoteFlow.Domain.Common;
 using RemoteFlow.Domain.Enums;
+using RemoteFlow.Domain.ValueObjects;
 
 namespace RemoteFlow.Application.Validation;
 
@@ -24,7 +25,13 @@ public sealed record ConnectionInput(
     int? RdpHeight = null,
     bool RdpMultimon = false,
     bool RdpRedirectClipboard = true,
-    bool RdpRedirectDrives = false);
+    bool RdpRedirectDrives = false,
+    string? StorageRegion = null,
+    string? StorageServiceUrl = null,
+    bool StorageUsePathStyleAddressing = false,
+    string? StorageContainer = null,
+    string? StorageRootPrefix = null,
+    string? StorageLocalDownloadPath = null);
 
 public static class ConnectionValidator
 {
@@ -85,6 +92,66 @@ public static class ConnectionValidator
         }
 
         errors.AddRange(ValidateRdpResolution(input.RdpWidth, input.RdpHeight));
+        errors.AddRange(ValidateObjectStorage(input));
+        return errors;
+    }
+
+    /// <summary>The rules that only apply once the protocol is an object store. The identifier is
+    /// required because there is nothing to sign a request with without it; a region or a custom endpoint
+    /// is required for S3 because the SDK cannot address a bucket without one; and the authentication
+    /// method stays <see cref="AuthMethod.None"/>, because an access key is not one of the SSH methods and
+    /// the editor hides the combo for these protocols.</summary>
+    public static IReadOnlyList<RemoteFlowError> ValidateObjectStorage(ConnectionInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if (!input.Protocol.IsObjectStorage())
+        {
+            return [];
+        }
+
+        var errors = new List<RemoteFlowError>();
+        if (string.IsNullOrWhiteSpace(input.Username))
+        {
+            errors.Add(RemoteFlowError.Validation(
+                "connection.username",
+                input.Protocol == ProtocolType.S3
+                    ? "Enter the access key ID."
+                    : "Enter the storage account name."));
+        }
+
+        if (input.AuthMethod != AuthMethod.None)
+        {
+            errors.Add(RemoteFlowError.Validation(
+                "connection.auth_method",
+                "Object storage connections authenticate with an access key, not with an SSH authentication method."));
+        }
+
+        if (input.Protocol == ProtocolType.S3 &&
+            string.IsNullOrWhiteSpace(input.StorageRegion) &&
+            string.IsNullOrWhiteSpace(input.StorageServiceUrl))
+        {
+            errors.Add(RemoteFlowError.Validation(
+                "connection.storage_region",
+                "Enter a region, or a custom endpoint for an S3-compatible service."));
+        }
+
+        if (!string.IsNullOrWhiteSpace(input.StorageServiceUrl) &&
+            (!Uri.TryCreate(input.StorageServiceUrl.Trim(), UriKind.Absolute, out var endpoint) ||
+             (endpoint.Scheme != Uri.UriSchemeHttp && endpoint.Scheme != Uri.UriSchemeHttps)))
+        {
+            errors.Add(RemoteFlowError.Validation(
+                "connection.storage_service_url",
+                "Enter the endpoint as an absolute http or https URL."));
+        }
+
+        if (!string.IsNullOrWhiteSpace(input.StorageContainer) &&
+            !ObjectStorageOptions.IsValidContainerName(input.StorageContainer))
+        {
+            errors.Add(RemoteFlowError.Validation(
+                "connection.storage_container",
+                "The bucket or container name must be 3 to 63 characters of lower-case letters, digits, dots and hyphens, starting and ending with a letter or digit."));
+        }
+
         return errors;
     }
 

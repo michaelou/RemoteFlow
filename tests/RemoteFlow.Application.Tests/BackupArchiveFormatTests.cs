@@ -130,6 +130,137 @@ public sealed class BackupArchiveFormatTests
         Assert.Equal("Unicode 🚀", archive.Connections.Single().Notes);
     }
 
+    [Fact]
+    public async Task AV1ArchiveWithNoObjectStorageFieldReadsBackWithDefaults()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "backup-v1-golden.zip");
+        var serializer = new ZipBackupArchiveSerializer();
+
+        var archive = await serializer.ReadAsync(fixture, token);
+
+        // The parameter is optional with a default, not required: that is what keeps this committed
+        // archive importing without being regenerated.
+        Assert.Null(archive.Connections.Single().ObjectStorage);
+    }
+
+    [Fact]
+    public async Task TheCommittedGoldenArchiveWasNotRegenerated()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "backup-v1-golden.zip");
+
+        using var archive = System.IO.Compression.ZipFile.OpenRead(fixture);
+        var connections = archive.GetEntry(BackupFormat.ConnectionsEntry);
+        Assert.NotNull(connections);
+        using var reader = new StreamReader(connections.Open(), Encoding.UTF8);
+        var json = await reader.ReadToEndAsync(token);
+
+        // A regenerated archive would carry the new field. Its absence is the compatibility promise being
+        // kept rather than re-asserted.
+        Assert.DoesNotContain("objectStorage", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("storage_", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AStorageConnectionRoundTripsThroughTheArchive()
+    {
+        var token = TestContext.Current.CancellationToken;
+        using var directory = new TemporaryArchiveDirectory();
+        var path = Path.Combine(directory.Path, "storage.zip");
+        var serializer = new ZipBackupArchiveSerializer();
+        var source = CreateArchive();
+        var connection = source.Connections[0] with
+        {
+            Protocol = ProtocolType.S3,
+            ObjectStorage = new BackupObjectStorageOptions(
+                "eu-west-2",
+                "https://minio.example.test",
+                true,
+                "archive",
+                "logs/2026",
+                "C:/Objects"),
+        };
+        var archive = source with { Connections = [connection] };
+
+        await serializer.WriteAsync(path, archive, token);
+        var read = await serializer.ReadAsync(path, token);
+
+        Assert.Equal(connection.ObjectStorage, read.Connections.Single().ObjectStorage);
+        Assert.Equal(ProtocolType.S3, read.Connections.Single().Protocol);
+    }
+
+    /// <summary>Backup enums serialise as camelCase strings, not integers, so an older RemoteFlow reading
+    /// an archive that names a protocol it does not know fails the whole import rather than that one
+    /// connection. The ignore-unknown-fields rule covers unknown fields, not unknown enum members. This is
+    /// accepted and documented, and the failure message is pinned here — the alternative, an
+    /// <c>Unsupported</c> fallback member, would silently import a connection nobody can open.</summary>
+    [Fact]
+    public async Task AnArchiveNamingAnUnknownProtocolIsRefusedWithAMessageNamingTheProperty()
+    {
+        var token = TestContext.Current.CancellationToken;
+        using var directory = new TemporaryArchiveDirectory();
+        var path = Path.Combine(directory.Path, "future.zip");
+        var serializer = new ZipBackupArchiveSerializer();
+        await serializer.WriteAsync(path, CreateArchive(), token);
+        RewriteProtocol(path, "gcs");
+
+        var exception = await Assert.ThrowsAsync<BackupArchiveException>(() => serializer.ReadAsync(path, token));
+
+        Assert.Equal("The backup contains invalid JSON near '$[0].protocol'.", exception.Message);
+        _ = Assert.IsType<System.Text.Json.JsonException>(exception.InnerException);
+    }
+
+    [Fact]
+    public void ProtocolNamesAreWrittenAsCamelCaseStrings()
+    {
+        var options = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)
+        {
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase) },
+        };
+
+        Assert.Equal("\"s3\"", System.Text.Json.JsonSerializer.Serialize(ProtocolType.S3, options));
+        Assert.Equal("\"azureBlob\"", System.Text.Json.JsonSerializer.Serialize(ProtocolType.AzureBlob, options));
+    }
+
+    private static void RewriteProtocol(string path, string protocol)
+    {
+        using var archive = System.IO.Compression.ZipFile.Open(
+            path,
+            System.IO.Compression.ZipArchiveMode.Update);
+        var entry = archive.GetEntry(BackupFormat.ConnectionsEntry)!;
+        string json;
+        using (var reader = new StreamReader(entry.Open(), Encoding.UTF8))
+        {
+            json = reader.ReadToEnd();
+        }
+
+        json = json.Replace("\"protocol\": \"ssh\"", $"\"protocol\": \"{protocol}\"", StringComparison.Ordinal);
+        entry.Delete();
+        var replacement = archive.CreateEntry(BackupFormat.ConnectionsEntry);
+        using var writer = new StreamWriter(replacement.Open(), new UTF8Encoding(false));
+        writer.Write(json);
+    }
+
+    private sealed class TemporaryArchiveDirectory : IDisposable
+    {
+        public TemporaryArchiveDirectory()
+        {
+            Path = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                "RemoteFlow.BackupFormat",
+                Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(Path);
+        }
+
+        public string Path { get; }
+
+        public void Dispose()
+        {
+            Directory.Delete(Path, recursive: true);
+        }
+    }
+
     private static BackupArchive CreateArchive()
     {
         var connectionId = Guid.Parse("11111111-1111-1111-1111-111111111111");

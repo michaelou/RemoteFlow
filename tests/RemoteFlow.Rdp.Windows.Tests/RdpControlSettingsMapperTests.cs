@@ -33,6 +33,7 @@ public sealed class RdpControlSettingsMapperTests
             SshOptions.Default(),
             SftpOptions.Default(),
             options,
+            ObjectStorageOptions.Default(),
             SystemGuidProvider.Instance);
 
         var settings = RdpControlSettingsMapper.Map(connection, 800, 600, 1.4d);

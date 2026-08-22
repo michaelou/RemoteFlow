@@ -17,6 +17,7 @@ public sealed class Connection
         Ssh = SshOptions.Default();
         Sftp = SftpOptions.Default();
         Rdp = RdpOptions.Default();
+        ObjectStorage = ObjectStorageOptions.Default();
     }
 
     public Guid Id { get; private set; }
@@ -59,9 +60,13 @@ public sealed class Connection
 
     public RdpOptions Rdp { get; private set; }
 
+    public ObjectStorageOptions ObjectStorage { get; private set; }
+
     public ICollection<ConnectionTag> Tags => _tags;
 
     public bool SupportsSftp => Protocol is ProtocolType.Ssh or ProtocolType.Sftp;
+
+    public bool SupportsObjectStorage => Protocol.IsObjectStorage();
 
     public static Result<Connection> Create(
         IGuidProvider guidProvider,
@@ -239,15 +244,18 @@ public sealed class Connection
         SshOptions ssh,
         SftpOptions sftp,
         RdpOptions rdp,
+        ObjectStorageOptions objectStorage,
         IGuidProvider guidProvider,
         DateTimeOffset? modifiedUtc = null)
     {
         ArgumentNullException.ThrowIfNull(ssh);
         ArgumentNullException.ThrowIfNull(sftp);
         ArgumentNullException.ThrowIfNull(rdp);
+        ArgumentNullException.ThrowIfNull(objectStorage);
         Ssh = ssh;
         Sftp = sftp;
         Rdp = rdp;
+        ObjectStorage = objectStorage;
         Touch(guidProvider, modifiedUtc);
         return this;
     }

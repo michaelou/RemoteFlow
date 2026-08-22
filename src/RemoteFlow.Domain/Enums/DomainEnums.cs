@@ -5,6 +5,8 @@ public enum ProtocolType
     Ssh = 1,
     Sftp = 2,
     Rdp = 3,
+    S3 = 4,
+    AzureBlob = 5,
 }
 
 public enum AuthMethod
@@ -54,6 +56,7 @@ public enum CredentialKind
     Password = 1,
     PrivateKeyPassphrase = 2,
     RdpPassword = 3,
+    StorageSecretKey = 4,
 }
 
 public enum TerminalKind

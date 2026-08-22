@@ -440,6 +440,212 @@ public sealed class ConnectionEditorTests
         return string.Join('|', values);
     }
 
+    [Fact]
+    public async Task StorageProtocolsShowTheirOwnSectionAndHideTheAuthenticationCombo()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+
+        editor.Protocol = ProtocolType.S3;
+
+        Assert.True(editor.IsStorageSectionVisible);
+        Assert.True(editor.IsStorageRegionVisible);
+        Assert.True(editor.IsStorageEndpointVisible);
+        Assert.False(editor.IsAuthMethodVisible);
+        Assert.False(editor.IsSshSectionVisible);
+        Assert.False(editor.IsRdpSectionVisible);
+        Assert.Equal("Access key ID", editor.UsernameLabel);
+        Assert.Equal("Secret access key", editor.CredentialCaptureLabel);
+        Assert.Equal(443, editor.Port);
+
+        editor.Protocol = ProtocolType.AzureBlob;
+
+        // Azure carries its region in the account and reaches a sovereign cloud through the host box, so
+        // neither the region nor the custom-endpoint field applies.
+        Assert.True(editor.IsStorageSectionVisible);
+        Assert.False(editor.IsStorageRegionVisible);
+        Assert.False(editor.IsStorageEndpointVisible);
+        Assert.Equal("Storage account name", editor.UsernameLabel);
+        Assert.Equal("Account key", editor.CredentialCaptureLabel);
+    }
+
+    [Fact]
+    public async Task SwitchingAnSshConnectionToStorageReplacesItsHost()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        editor.Host = "shell.example.test";
+
+        editor.Protocol = ProtocolType.S3;
+
+        // A host that was right for SSH cannot be right for a storage account.
+        Assert.Equal("s3.amazonaws.com", editor.Host);
+
+        editor.StorageRegion = "eu-west-2";
+
+        Assert.Equal("s3.eu-west-2.amazonaws.com", editor.Host);
+    }
+
+    [Fact]
+    public async Task TheHostIsDerivedUntilItIsHandEdited()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+
+        editor.Protocol = ProtocolType.S3;
+        editor.StorageRegion = "eu-west-2";
+
+        Assert.Equal("s3.eu-west-2.amazonaws.com", editor.Host);
+
+        editor.StorageRegion = "us-east-1";
+
+        Assert.Equal("s3.us-east-1.amazonaws.com", editor.Host);
+
+        // The same rule the port box follows: once the user has typed over it, it is theirs. This is how a
+        // sovereign-cloud account is reached without another field.
+        editor.Host = "s3.cn-north-1.amazonaws.com.cn";
+        editor.StorageRegion = "eu-central-1";
+
+        Assert.Equal("s3.cn-north-1.amazonaws.com.cn", editor.Host);
+    }
+
+    [Fact]
+    public async Task AnAzureHostFollowsTheAccountNameAndACustomEndpointWinsOutright()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+
+        editor.Protocol = ProtocolType.AzureBlob;
+        editor.Username = "contoso";
+
+        Assert.Equal("contoso.blob.core.windows.net", editor.Host);
+
+        editor.Protocol = ProtocolType.S3;
+        editor.StorageRegion = "eu-west-2";
+        editor.StorageServiceUrl = "http://minio.example.test:9000";
+
+        Assert.Equal("minio.example.test:9000", editor.Host);
+    }
+
+    /// <summary>Named after the bug it exists to catch: the editor clears the stored credential whenever
+    /// <see cref="AuthMethod.None"/> is saved with no new secret typed, and object storage connections sit
+    /// on <see cref="AuthMethod.None"/> by design. Without the guard, re-saving one deletes the secret key
+    /// it was just given.</summary>
+    [Fact]
+    public async Task ReSavingAStorageConnectionDoesNotClearTheStoredSecretKey()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        editor.Name = "Objects";
+        editor.Protocol = ProtocolType.S3;
+        editor.Username = "AKIAEXAMPLE";
+        editor.StorageRegion = "eu-west-2";
+        editor.StorageContainer = "archive";
+
+        Assert.True(await editor.SaveAsync("a-secret-key".ToCharArray().AsMemory(), token));
+        var id = editor.ConnectionId!.Value;
+        var stored = await fixture.Connections.GetByIdAsync(id, token);
+        Assert.Equal(CredentialKind.StorageSecretKey, stored!.Credential.Kind);
+        Assert.Equal(AuthMethod.None, stored.AuthMethod);
+
+        // No new secret typed: exactly the shape that used to wipe it.
+        Assert.True(await editor.SaveAsync(ReadOnlyMemory<char>.Empty, token));
+
+        var reloaded = await fixture.Connections.GetByIdAsync(id, token);
+        Assert.Equal(CredentialKind.StorageSecretKey, reloaded!.Credential.Kind);
+        Assert.False(reloaded.Credential.IsEmpty);
+        Assert.Equal(CredentialStorageStatus.Stored, editor.CredentialStatus);
+        Assert.Equal("archive", reloaded.ObjectStorage.Container);
+        Assert.Equal("eu-west-2", reloaded.ObjectStorage.Region);
+    }
+
+    [Fact]
+    public async Task AnSshConnectionOnAuthMethodNoneStillHasItsCredentialCleared()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        editor.Name = "Shell";
+        editor.Host = "shell.example.test";
+        editor.Username = "operator";
+        editor.AuthMethod = AuthMethod.Password;
+
+        Assert.True(await editor.SaveAsync("a-password".ToCharArray().AsMemory(), token));
+        var id = editor.ConnectionId!.Value;
+        editor.AuthMethod = AuthMethod.None;
+
+        Assert.True(await editor.SaveAsync(ReadOnlyMemory<char>.Empty, token));
+
+        // The guard is narrow on purpose: it exempts object storage, not every AuthMethod.None save.
+        var reloaded = await fixture.Connections.GetByIdAsync(id, token);
+        Assert.True(reloaded!.Credential.IsEmpty);
+    }
+
+    [Fact]
+    public async Task ReopeningAStorageConnectionLoadsItsOptionsBack()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        editor.Name = "Objects";
+        editor.Protocol = ProtocolType.AzureBlob;
+        editor.Username = "contoso";
+        editor.StorageContainer = "archive";
+        editor.StorageRootPrefix = "logs/2026";
+        Assert.True(await editor.SaveAsync(ReadOnlyMemory<char>.Empty, token));
+
+        var reopened = await fixture.CreateEditorAsync(editor.ConnectionId, token);
+
+        Assert.Equal(ProtocolType.AzureBlob, reopened.Protocol);
+        Assert.Equal("contoso", reopened.Username);
+        Assert.Equal("archive", reopened.StorageContainer);
+        Assert.Equal("logs/2026", reopened.StorageRootPrefix);
+        Assert.Equal("contoso.blob.core.windows.net", reopened.Host);
+        Assert.False(reopened.IsDirty);
+    }
+
+    [Fact]
+    public async Task StorageValidationErrorsLandOnTheirOwnFields()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        editor.Name = "Objects";
+        editor.Protocol = ProtocolType.S3;
+        editor.Username = "AKIAEXAMPLE";
+        editor.StorageServiceUrl = "not-a-url";
+        editor.StorageContainer = "Not Valid";
+        editor.Host = "s3.example.test";
+
+        Assert.False(await editor.SaveAsync(ReadOnlyMemory<char>.Empty, token));
+
+        Assert.NotNull(editor.StorageServiceUrlError);
+        Assert.NotNull(editor.StorageContainerError);
+        // A custom endpoint stands in for the region, so that field is not in error here.
+        Assert.Null(editor.StorageRegionError);
+    }
+
+    [Fact]
+    public async Task AnS3ConnectionWithNeitherARegionNorAnEndpointReportsItOnTheRegionField()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var editor = await fixture.CreateEditorAsync(null, token);
+        editor.Name = "Objects";
+        editor.Protocol = ProtocolType.S3;
+        editor.Username = "AKIAEXAMPLE";
+
+        Assert.False(await editor.SaveAsync(ReadOnlyMemory<char>.Empty, token));
+
+        Assert.NotNull(editor.StorageRegionError);
+        Assert.Null(editor.StorageServiceUrlError);
+    }
+
     private sealed class EditorFixture : IAsyncDisposable
     {
         private readonly UnitOfWork _unitOfWork;

@@ -197,6 +197,7 @@ public sealed class ConnectionCredentialService(
             CredentialKind.Password => "password",
             CredentialKind.PrivateKeyPassphrase => "private-key-passphrase",
             CredentialKind.RdpPassword => "rdp-password",
+            CredentialKind.StorageSecretKey => "storage-secret-key",
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
         return $"{_storeKeyPrefix}/{connectionId:D}/{suffix}";

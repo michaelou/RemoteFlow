@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Application.Services;
 using RemoteFlow.Application.Validation;
 using RemoteFlow.Domain.Common;
@@ -60,6 +61,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     private bool _loading;
     private bool _syncingColorChoice;
     private bool _syncingResolutionChoice;
+    private string? _derivedHost;
 
     public ConnectionEditorViewModel(
         IConnectionService connections,
@@ -159,6 +161,8 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     public partial int Port { get; set; } = ProtocolType.Ssh.GetDefaultPort();
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UsernameLabel))]
+    [NotifyPropertyChangedFor(nameof(CredentialCaptureLabel))]
     public partial ProtocolType Protocol { get; set; } = ProtocolType.Ssh;
 
     [ObservableProperty]
@@ -206,6 +210,24 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         _ => throw new ArgumentOutOfRangeException(nameof(HostKeyPolicy)),
     };
 
+    /// <summary>The identifier box means something different per protocol, and calling an access key ID a
+    /// "username" is the kind of small lie that makes a form hard to fill in.</summary>
+    public string UsernameLabel => Protocol switch
+    {
+        ProtocolType.S3 => "Access key ID",
+        ProtocolType.AzureBlob => "Storage account name",
+        ProtocolType.Ssh or ProtocolType.Sftp or ProtocolType.Rdp => "Username",
+        _ => throw new ArgumentOutOfRangeException(nameof(Protocol)),
+    };
+
+    public string CredentialCaptureLabel => Protocol switch
+    {
+        ProtocolType.S3 => "Secret access key",
+        ProtocolType.AzureBlob => "Account key",
+        ProtocolType.Ssh or ProtocolType.Sftp or ProtocolType.Rdp => "Password",
+        _ => throw new ArgumentOutOfRangeException(nameof(Protocol)),
+    };
+
     [ObservableProperty]
     public partial string? RdpDomain { get; set; }
 
@@ -250,6 +272,21 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     public Task RdpClientDetectionSettled { get; private set; } = Task.CompletedTask;
 
     [ObservableProperty]
+    public partial string? StorageRegion { get; set; }
+
+    [ObservableProperty]
+    public partial string? StorageServiceUrl { get; set; }
+
+    [ObservableProperty]
+    public partial bool StorageUsePathStyleAddressing { get; set; }
+
+    [ObservableProperty]
+    public partial string? StorageContainer { get; set; }
+
+    [ObservableProperty]
+    public partial string? StorageRootPrefix { get; set; }
+
+    [ObservableProperty]
     public partial string? TagInput { get; set; }
 
     [ObservableProperty]
@@ -266,6 +303,24 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool IsRdpSectionVisible { get; private set; }
+
+    [ObservableProperty]
+    public partial bool IsStorageSectionVisible { get; private set; }
+
+    /// <summary>Only S3 carries a region; Azure's is implied by the account.</summary>
+    [ObservableProperty]
+    public partial bool IsStorageRegionVisible { get; private set; }
+
+    /// <summary>A custom endpoint and path-style addressing only mean anything for S3-compatible
+    /// services. Azure reaches a sovereign cloud through the host box instead.</summary>
+    [ObservableProperty]
+    public partial bool IsStorageEndpointVisible { get; private set; }
+
+    /// <summary>Hidden for object storage: an access key is not one of the SSH authentication methods,
+    /// and the combo is <c>Enum.GetValues&lt;AuthMethod&gt;()</c>, so leaving it visible would offer
+    /// choices that mean nothing here.</summary>
+    [ObservableProperty]
+    public partial bool IsAuthMethodVisible { get; private set; } = true;
 
     [ObservableProperty]
     public partial bool IsPrivateKeyPassphraseVisible { get; private set; }
@@ -309,6 +364,15 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string? PrivateKeyPathError { get; private set; }
+
+    [ObservableProperty]
+    public partial string? StorageRegionError { get; private set; }
+
+    [ObservableProperty]
+    public partial string? StorageServiceUrlError { get; private set; }
+
+    [ObservableProperty]
+    public partial string? StorageContainerError { get; private set; }
 
     [ObservableProperty]
     public partial string? SaveError { get; private set; }
@@ -448,7 +512,11 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
                     return false;
                 }
             }
-            else if (AuthMethod == AuthMethod.None && !connection.Credential.IsEmpty)
+            // Object storage connections legitimately sit on AuthMethod.None, so without this guard
+            // re-saving one would delete the secret key it had just been given.
+            else if (AuthMethod == AuthMethod.None &&
+                     !Protocol.IsObjectStorage() &&
+                     !connection.Credential.IsEmpty)
             {
                 var cleared = await _credentials.ClearAsync(connection.Id, cancellationToken).ConfigureAwait(true);
                 if (cleared.IsFailure)
@@ -514,6 +582,19 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         RdpRedirectClipboard = connection.Rdp.RedirectClipboard;
         RdpRedirectDrives = connection.Rdp.RedirectDrives;
         LoadResolution(connection.Rdp.Width, connection.Rdp.Height);
+        StorageRegion = connection.ObjectStorage.Region;
+        StorageServiceUrl = connection.ObjectStorage.ServiceUrl;
+        StorageUsePathStyleAddressing = connection.ObjectStorage.UsePathStyleAddressing;
+        StorageContainer = connection.ObjectStorage.Container;
+        StorageRootPrefix = connection.ObjectStorage.RootPrefix;
+        // Seeding this from the saved values is what tells a hand-edited host from a derived one: if the
+        // stored host is what we would have derived, later edits keep it in step; if it is not, it is the
+        // user's and stays untouched.
+        _derivedHost = ObjectStorageEndpoint.DeriveHost(
+            connection.Protocol,
+            connection.ObjectStorage.Region,
+            connection.Username,
+            connection.ObjectStorage.ServiceUrl);
         var selectedTagIds = connection.Tags.Select(tag => tag.TagId).ToHashSet();
         foreach (var choice in TagChoices)
         {
@@ -629,7 +710,12 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
             height,
             RdpMultimon,
             RdpRedirectClipboard,
-            RdpRedirectDrives);
+            RdpRedirectDrives,
+            StorageRegion,
+            StorageServiceUrl,
+            StorageUsePathStyleAddressing,
+            StorageContainer,
+            StorageRootPrefix);
     }
 
     /// <summary>Reads the two boxes. Anything that is not a whole number of pixels comes back as a parse
@@ -714,6 +800,12 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
             case "connection.private_key_path": PrivateKeyPathError = error.Message; break;
             case "connection.rdp_resolution": RdpResolutionError = error.Message; break;
             case "rdp.dimensions": RdpResolutionError = error.Message; break;
+            case "connection.storage_region":
+            case "storage.region": StorageRegionError = error.Message; break;
+            case "connection.storage_service_url":
+            case "storage.service_url": StorageServiceUrlError = error.Message; break;
+            case "connection.storage_container":
+            case "storage.container": StorageContainerError = error.Message; break;
             default: SaveError = error.Message; break;
         }
     }
@@ -735,12 +827,17 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         ColorOverrideError = null;
         PrivateKeyPathError = null;
         RdpResolutionError = null;
+        StorageRegionError = null;
+        StorageServiceUrlError = null;
+        StorageContainerError = null;
         SaveError = null;
     }
 
     private CredentialKind GetCredentialKind()
     {
-        return AuthMethod == AuthMethod.PrivateKey
+        return Protocol.IsObjectStorage()
+            ? CredentialKind.StorageSecretKey
+            : AuthMethod == AuthMethod.PrivateKey
             ? CredentialKind.PrivateKeyPassphrase
             : Protocol == ProtocolType.Rdp ? CredentialKind.RdpPassword : CredentialKind.Password;
     }
@@ -765,6 +862,10 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         IsSshSectionVisible = Protocol is ProtocolType.Ssh or ProtocolType.Sftp;
         IsSftpSectionVisible = Protocol == ProtocolType.Sftp;
         IsRdpSectionVisible = Protocol == ProtocolType.Rdp;
+        IsStorageSectionVisible = Protocol.IsObjectStorage();
+        IsStorageRegionVisible = Protocol == ProtocolType.S3;
+        IsStorageEndpointVisible = Protocol == ProtocolType.S3;
+        IsAuthMethodVisible = !Protocol.IsObjectStorage();
         IsPrivateKeyPassphraseVisible = AuthMethod == AuthMethod.PrivateKey;
         IsPrivateKeySectionVisible = IsSshSectionVisible && AuthMethod == AuthMethod.PrivateKey;
 
@@ -799,6 +900,31 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         UpdateRdpResolutionError();
     }
 
+    /// <summary>Fills the host box from the storage fields. Overwriting only while the box still holds
+    /// what we last put there is the rule the port box already follows, and hand-editing the host is how a
+    /// sovereign-cloud account — <c>*.blob.core.chinacloudapi.cn</c> — is reached without another field.
+    /// </summary>
+    private void DeriveStorageHost()
+    {
+        if (_loading || !Protocol.IsObjectStorage())
+        {
+            return;
+        }
+
+        var derived = ObjectStorageEndpoint.DeriveHost(Protocol, StorageRegion, Username, StorageServiceUrl);
+        if (derived is null)
+        {
+            return;
+        }
+
+        if (Host.Length == 0 || string.Equals(Host, _derivedHost, StringComparison.OrdinalIgnoreCase))
+        {
+            Host = derived;
+        }
+
+        _derivedHost = derived;
+    }
+
     private void UpdateEnvironmentPreview()
     {
         var fallback = Environment switch
@@ -829,7 +955,12 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     partial void OnNameChanged(string value) { MarkDirty(); }
     partial void OnHostChanged(string value) { MarkDirty(); }
     partial void OnPortChanged(int value) { MarkDirty(); }
-    partial void OnUsernameChanged(string? value) { MarkDirty(); }
+    partial void OnUsernameChanged(string? value)
+    {
+        // Azure addresses the storage account, so the host follows the account name.
+        DeriveStorageHost();
+        MarkDirty();
+    }
     partial void OnNotesChanged(string? value) { MarkDirty(); }
     partial void OnSelectedFolderChanged(FolderChoiceViewModel? value) { MarkDirty(); }
     partial void OnIsFavoriteChanged(bool value) { MarkDirty(); }
@@ -842,6 +973,21 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         MarkDirty();
     }
     partial void OnTagInputChanged(string? value) { MarkDirty(); }
+    partial void OnStorageUsePathStyleAddressingChanged(bool value) { MarkDirty(); }
+    partial void OnStorageContainerChanged(string? value) { MarkDirty(); }
+    partial void OnStorageRootPrefixChanged(string? value) { MarkDirty(); }
+
+    partial void OnStorageRegionChanged(string? value)
+    {
+        DeriveStorageHost();
+        MarkDirty();
+    }
+
+    partial void OnStorageServiceUrlChanged(string? value)
+    {
+        DeriveStorageHost();
+        MarkDirty();
+    }
     partial void OnHostKeyPolicyChanged(HostKeyPolicy value) { MarkDirty(); }
     partial void OnRdpDomainChanged(string? value) { MarkDirty(); }
     partial void OnRdpFullScreenChanged(bool value) { MarkDirty(); }
@@ -881,7 +1027,15 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
             Port = newValue.GetDefaultPort();
         }
 
+        if (!_loading && newValue.IsObjectStorage() && !oldValue.IsObjectStorage())
+        {
+            // A host that was right for SSH cannot be right for a storage account, so the box goes back
+            // under the deriving rule as the protocol changes. Anything typed after that is the user's.
+            _derivedHost = Host;
+        }
+
         UpdateConditionalProperties();
+        DeriveStorageHost();
         MarkDirty();
     }
 

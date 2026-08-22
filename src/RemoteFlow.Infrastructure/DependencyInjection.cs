@@ -4,12 +4,14 @@ using Microsoft.Extensions.Logging;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Ssh;
 using RemoteFlow.Application.Abstractions.Sftp;
+using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Infrastructure.Diagnostics;
 using RemoteFlow.Infrastructure.Platform;
 using RemoteFlow.Infrastructure.Platform.Rdp;
 using RemoteFlow.Infrastructure.Pty;
 using RemoteFlow.Infrastructure.Security;
 using RemoteFlow.Infrastructure.Ssh;
+using RemoteFlow.Infrastructure.Storage;
 using RemoteFlow.Infrastructure.Ssh.Auth;
 using RemoteFlow.Infrastructure.Updates;
 using RemoteFlow.Infrastructure.Security.Crypto;
@@ -64,6 +66,12 @@ public static class DependencyInjection
         services.TryAddSingleton<SshNetTransport>();
         services.TryAddSingleton<ISshTransport, ConfiguredSshTransport>();
         services.TryAddSingleton<INetworkChangeMonitor, NetworkChangeMonitor>();
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IObjectStorageProvider, S3ObjectStorageProvider>());
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IObjectStorageProvider, AzureBlobObjectStorageProvider>());
+        services.TryAddSingleton<IObjectStorageSecretProvider, ConnectionObjectStorageSecretProvider>();
+        services.TryAddSingleton<IObjectStorageClientFactory, ObjectStorageClientFactory>();
         services.TryAddSingleton<ISshAgentDiscovery, SshAgentDiscovery>();
         services.TryAddSingleton<ISshKeyService, SshKeyService>();
         services.TryAddSingleton<ISshAuthenticationMaterialProvider, SshAuthenticationMaterialProvider>();

@@ -91,6 +91,50 @@ public sealed class ConnectionExplorerTests
     }
 
     [AvaloniaFact]
+    public async Task StorageConnectionsAppearInTheListTheSearchBoxAndTheFilterChips()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await ExplorerFixture.CreateAsync(token);
+        var bucket = await fixture.AddConnectionAsync(
+            "Archive bucket",
+            protocol: ProtocolType.S3,
+            cancellationToken: token);
+        var container = await fixture.AddConnectionAsync(
+            "Archive container",
+            protocol: ProtocolType.AzureBlob,
+            cancellationToken: token);
+        _ = await fixture.AddConnectionAsync("Shell", protocol: ProtocolType.Ssh, cancellationToken: token);
+        using var viewModel = fixture.CreateViewModel();
+        await viewModel.InitializeAsync(token);
+
+        // The chips read as product names, not as upper-cased enum members.
+        Assert.Equal(
+            ["SSH", "SFTP", "RDP", "S3", "Azure Blob"],
+            [.. viewModel.ProtocolFilters.Select(chip => chip.Label)]);
+
+        // Both are drawn with the storage glyph. The icon switch throws on an unmapped protocol, so this
+        // is also what proves the new members reached it.
+        var nodes = RealConnections(viewModel);
+        Assert.Equal("Icon.Storage", nodes.Single(node => node.Name == "Archive bucket").IconKey);
+        Assert.Equal("Icon.Storage", nodes.Single(node => node.Name == "Archive container").IconKey);
+        Assert.Equal("Icon.Terminals", nodes.Single(node => node.Name == "Shell").IconKey);
+
+        viewModel.SearchText = "Archive";
+        await viewModel.SearchChangesSettled;
+
+        Assert.Equal(
+            [bucket.Id, container.Id],
+            [.. RealConnections(viewModel).Select(node => node.Id!.Value).Order()]);
+
+        viewModel.SearchText = null;
+        viewModel.ProtocolFilters.Single(chip => chip.Protocol == ProtocolType.AzureBlob).IsSelected = true;
+        await viewModel.SearchChangesSettled;
+
+        Assert.Equal(container.Id, Assert.Single(RealConnections(viewModel)).Id);
+        Assert.Contains("Azure Blob", viewModel.ActiveFilterSummary, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
     public async Task BuildsVirtualRootsAndColorSafeProductionBadgeWithOverride()
     {
         var token = TestContext.Current.CancellationToken;

@@ -57,7 +57,14 @@ public sealed class EfBackupDataSource(IDbContextFactory<RemoteFlowDbContext> co
                     connection.Rdp.Height,
                     connection.Rdp.Multimon,
                     connection.Rdp.RedirectClipboard,
-                    connection.Rdp.RedirectDrives)))
+                    connection.Rdp.RedirectDrives),
+                new BackupObjectStorageOptions(
+                    connection.ObjectStorage.Region,
+                    connection.ObjectStorage.ServiceUrl,
+                    connection.ObjectStorage.UsePathStyleAddressing,
+                    connection.ObjectStorage.Container,
+                    connection.ObjectStorage.RootPrefix,
+                    connection.ObjectStorage.LocalDownloadPath)))
             .ToArrayAsync(cancellationToken)
             .ConfigureAwait(false);
         progress?.Report(new BackupProgress("Connections read", 1, 8));

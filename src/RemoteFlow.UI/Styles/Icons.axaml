@@ -14,6 +14,8 @@
        connection reuses the page glyph for the thing it opens. -->
   <StreamGeometry x:Key="Icon.Favorite">M8,1L9.7,5.65L14.66,5.84L10.76,8.9L12.11,13.66L8,10.9L3.89,13.66L5.24,8.9L1.34,5.84L6.3,5.65Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.Recent">F0 M8,1.5A6.5,6.5 0 1 0 8,14.5A6.5,6.5 0 1 0 8,1.5Z M8,3A5,5 0 1 0 8,13A5,5 0 1 0 8,3Z M7.25,4.5H8.75V8.35H11.5V9.85H7.25Z</StreamGeometry>
+  <!-- Object storage: a stack of drums, which is how both vendors' own consoles draw a bucket. -->
+  <StreamGeometry x:Key="Icon.Storage">F0 M8,1.5C11.6,1.5 14,2.4 14,3.6V12.4C14,13.6 11.6,14.5 8,14.5C4.4,14.5 2,13.6 2,12.4V3.6C2,2.4 4.4,1.5 8,1.5Z M8,3C5.5,3 3.5,3.4 3.5,3.9C3.5,4.4 5.5,4.8 8,4.8C10.5,4.8 12.5,4.4 12.5,3.9C12.5,3.4 10.5,3 8,3Z M3.5,6.2V8.2C3.5,8.7 5.5,9.1 8,9.1C10.5,9.1 12.5,8.7 12.5,8.2V6.2C11.3,6.6 9.7,6.8 8,6.8C6.3,6.8 4.7,6.6 3.5,6.2Z M3.5,10.5V12.2C3.5,12.7 5.5,13.1 8,13.1C10.5,13.1 12.5,12.7 12.5,12.2V10.5C11.3,10.9 9.7,11.1 8,11.1C6.3,11.1 4.7,10.9 3.5,10.5Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.RemoteDesktop">F0 M1.5,2.5H14.5V11.5H1.5Z M3,4V10H13V4Z M6.9,11.5H9.1V13H12V14.5H4V13H6.9Z</StreamGeometry>
 
   <StreamGeometry x:Key="Icon.Edit">M2,10.6L10.6,2L14,5.4L5.4,14L1.2,14.8Z</StreamGeometry>

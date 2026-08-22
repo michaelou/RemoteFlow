@@ -239,8 +239,8 @@ public sealed class EfBackupImportStore(
         BackupConnection value,
         CancellationToken cancellationToken)
     {
-        const string columns = "Id, Name, Host, Port, Protocol, Username, AuthMethod, Notes, FolderId, IsFavorite, Environment, ColorOverrideHex, SortOrder, ConcurrencyStamp, CreatedUtc, ModifiedUtc, Credential_Kind, Credential_StoreKey, Credential_StoreProvider, Credential_UpdatedUtc, Ssh_KeepAliveSeconds, Ssh_TerminalType, Ssh_PrivateKeyPath, Ssh_InitialCommand, Ssh_StartupDirectory, Ssh_HostKeyPolicy, Ssh_RequestPty, Sftp_RemoteRootPath, Sftp_LocalDownloadPath, Sftp_PreserveTimestamps, Sftp_ShowHiddenFiles, Rdp_Domain, Rdp_FullScreen, Rdp_Width, Rdp_Height, Rdp_Multimon, Rdp_RedirectClipboard, Rdp_RedirectDrives";
-        const string values = "@id, @name, @host, @port, @protocol, @username, @authMethod, @notes, @folderId, @favorite, @environment, @color, @sortOrder, @stamp, @createdUtc, @modifiedUtc, @credentialKind, @storeKey, @storeProvider, @credentialUpdated, @keepAlive, @terminalType, @privateKeyPath, @initialCommand, @startupDirectory, @hostKeyPolicy, @requestPty, @remoteRoot, @localDownload, @preserveTimestamps, @showHidden, @domain, @fullScreen, @width, @height, @multimon, @redirectClipboard, @redirectDrives";
+        const string columns = "Id, Name, Host, Port, Protocol, Username, AuthMethod, Notes, FolderId, IsFavorite, Environment, ColorOverrideHex, SortOrder, ConcurrencyStamp, CreatedUtc, ModifiedUtc, Credential_Kind, Credential_StoreKey, Credential_StoreProvider, Credential_UpdatedUtc, Ssh_KeepAliveSeconds, Ssh_TerminalType, Ssh_PrivateKeyPath, Ssh_InitialCommand, Ssh_StartupDirectory, Ssh_HostKeyPolicy, Ssh_RequestPty, Sftp_RemoteRootPath, Sftp_LocalDownloadPath, Sftp_PreserveTimestamps, Sftp_ShowHiddenFiles, Rdp_Domain, Rdp_FullScreen, Rdp_Width, Rdp_Height, Rdp_Multimon, Rdp_RedirectClipboard, Rdp_RedirectDrives, Storage_Region, Storage_ServiceUrl, Storage_UsePathStyleAddressing, Storage_Container, Storage_RootPrefix, Storage_LocalDownloadPath";
+        const string values = "@id, @name, @host, @port, @protocol, @username, @authMethod, @notes, @folderId, @favorite, @environment, @color, @sortOrder, @stamp, @createdUtc, @modifiedUtc, @credentialKind, @storeKey, @storeProvider, @credentialUpdated, @keepAlive, @terminalType, @privateKeyPath, @initialCommand, @startupDirectory, @hostKeyPolicy, @requestPty, @remoteRoot, @localDownload, @preserveTimestamps, @showHidden, @domain, @fullScreen, @width, @height, @multimon, @redirectClipboard, @redirectDrives, @storageRegion, @storageServiceUrl, @storagePathStyle, @storageContainer, @storageRootPrefix, @storageLocalDownload";
         return ExecuteAsync(context, $"INSERT INTO Connections ({columns}) VALUES ({values});",
             new Dictionary<string, object?>
             {
@@ -282,6 +282,14 @@ public sealed class EfBackupImportStore(
                 ["multimon"] = Bool(value.Rdp.Multimon),
                 ["redirectClipboard"] = Bool(value.Rdp.RedirectClipboard),
                 ["redirectDrives"] = Bool(value.Rdp.RedirectDrives),
+                // A v1 archive carries no objectStorage field. Defaults here rather than a NULL bool,
+                // because the column is not nullable and the owned type must materialise.
+                ["storageRegion"] = value.ObjectStorage?.Region,
+                ["storageServiceUrl"] = value.ObjectStorage?.ServiceUrl,
+                ["storagePathStyle"] = Bool(value.ObjectStorage?.UsePathStyleAddressing ?? false),
+                ["storageContainer"] = value.ObjectStorage?.Container,
+                ["storageRootPrefix"] = value.ObjectStorage?.RootPrefix,
+                ["storageLocalDownload"] = value.ObjectStorage?.LocalDownloadPath,
             }, cancellationToken);
     }
 

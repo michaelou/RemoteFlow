@@ -52,6 +52,41 @@ public sealed class DependencyDirectionTests
             "Renci.SshNet");
     }
 
+    /// <summary>The provider SDKs are Infrastructure's alone. Application is allowed exactly three
+    /// non-BCL references and Domain none at all, so a leak there fails the two tests above; the UI would
+    /// not, which is why it is named here as well.</summary>
+    [Fact]
+    public void ApplicationAndUiDoNotReferenceTheObjectStorageSdks()
+    {
+        foreach (var assembly in new[]
+                 {
+                     typeof(Application.AssemblyMarker).Assembly,
+                     typeof(UI.AssemblyMarker).Assembly,
+                     typeof(Domain.AssemblyMarker).Assembly,
+                 })
+        {
+            var violations = GetReferences(assembly)
+                .Where(reference =>
+                    reference.StartsWith("AWSSDK.", StringComparison.Ordinal) ||
+                    reference.Equals("Azure", StringComparison.Ordinal) ||
+                    reference.StartsWith("Azure.", StringComparison.Ordinal))
+                .ToArray();
+
+            Assert.Empty(violations);
+        }
+    }
+
+    [Fact]
+    public void TheObjectStorageSdksAreReferencedByInfrastructure()
+    {
+        // The other way round from the usual guard: a test that only asserts absence would keep passing if
+        // the adapters were deleted.
+        var references = GetReferences(typeof(Infrastructure.AssemblyMarker).Assembly);
+
+        Assert.Contains("AWSSDK.S3", references);
+        Assert.Contains("Azure.Storage.Blobs", references);
+    }
+
     [Fact]
     public void UiDoesNotReferenceInfrastructureOrPersistence()
     {

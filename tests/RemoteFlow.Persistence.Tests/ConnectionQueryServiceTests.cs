@@ -140,6 +140,7 @@ public sealed class ConnectionQueryServiceTests
         Assert.DoesNotContain("Ssh_", projectionCommand, StringComparison.Ordinal);
         Assert.DoesNotContain("Sftp_", projectionCommand, StringComparison.Ordinal);
         Assert.DoesNotContain("Rdp_", projectionCommand, StringComparison.Ordinal);
+        Assert.DoesNotContain("Storage_", projectionCommand, StringComparison.Ordinal);
         Assert.DoesNotContain("ConnectionTags", projectionCommand, StringComparison.Ordinal);
     }
 

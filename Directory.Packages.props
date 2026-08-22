@@ -17,6 +17,15 @@
     <PackageVersion Include="Tmds.Ssh" Version="0.23.0" />
     <!-- 2025.1.0 and earlier are vulnerable (GHSA-q939-rpr3-3284, ScpClient recursive download). -->
     <PackageVersion Include="SSH.NET" Version="2026.0.0" />
+    <!-- The object-storage SDKs. Infrastructure only: the architecture tests fail the build if either
+         name reaches RemoteFlow.Application or RemoteFlow.UI. -->
+    <PackageVersion Include="AWSSDK.S3" Version="4.0.102.3" />
+    <PackageVersion Include="Azure.Storage.Blobs" Version="12.29.1" />
+    <!-- Transitive pin. Azure.Core -> Microsoft.Identity.Client.Extensions.Msal asks for 4.5.0, whose
+         nuspec carries only a licenceUrl and no SPDX expression; generate-notices.ps1 throws on exactly
+         that shape, which fails the build through RF0002. 10.0.10 declares
+         <license type="expression">MIT</license>. Same reason as SQLitePCLRaw.lib.e_sqlite3 below. -->
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10" />
     <!-- EF Core 10.0.10 resolves 2.1.11, which is vulnerable (GHSA-2m69-gcr7-jv3q). -->

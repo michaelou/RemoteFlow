@@ -4,7 +4,8 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
-    xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections">
+    xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
+    xmlns:converters="using:RemoteFlow.UI.Converters">
   <UserControl.Styles>
     <!-- A label sits tight against its own control; the gap between fields comes from the
          section spacing, so related controls read as one unit. -->
@@ -87,11 +88,17 @@
                   TabIndex="3"
                   HorizontalAlignment="Stretch"
                   ItemsSource="{Binding Protocols}"
-                  SelectedItem="{Binding Protocol, Mode=TwoWay}" />
+                  SelectedItem="{Binding Protocol, Mode=TwoWay}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding Converter={x:Static converters:ProtocolDisplayNameConverter.Instance}}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
             </StackPanel>
             <StackPanel Grid.Column="1">
-              <TextBlock Classes="label" Text="Username" />
-              <TextBox AutomationProperties.Name="Username" TabIndex="5" Text="{Binding Username, Mode=TwoWay}" />
+              <TextBlock Classes="label" Text="{Binding UsernameLabel}" />
+              <TextBox AutomationProperties.Name="{Binding UsernameLabel}" TabIndex="5" Text="{Binding Username, Mode=TwoWay}" />
               <TextBlock
                   Classes="error"
                   IsVisible="{Binding UsernameError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -99,7 +106,7 @@
             </StackPanel>
           </Grid>
 
-          <StackPanel>
+          <StackPanel IsVisible="{Binding IsAuthMethodVisible}">
             <TextBlock Classes="label" Text="Authentication" />
             <ComboBox
                 AutomationProperties.Name="Authentication"
@@ -152,8 +159,8 @@
           </StackPanel>
 
           <StackPanel IsVisible="{Binding !IsPrivateKeyPassphraseVisible}">
-            <TextBlock Classes="label" Text="Password" />
-            <TextBox x:Name="PasswordCapture" AutomationProperties.Name="Password" TabIndex="8" PasswordChar="●" />
+            <TextBlock Classes="label" Text="{Binding CredentialCaptureLabel}" />
+            <TextBox x:Name="PasswordCapture" AutomationProperties.Name="{Binding CredentialCaptureLabel}" TabIndex="8" PasswordChar="●" />
             <TextBlock Classes="hint" Text="Leave blank to keep the current credential." />
             <TextBlock Classes="hint" Text="{Binding CredentialActionLabel}" />
           </StackPanel>
@@ -167,6 +174,49 @@
           <StackPanel IsVisible="{Binding IsSftpSectionVisible}">
             <TextBlock Classes="section" Text="SFTP options" />
             <TextBlock Classes="hint" Text="SFTP transfer settings use their defaults." />
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding IsStorageSectionVisible}" Spacing="12">
+            <TextBlock Classes="section" Text="Object storage" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+              <StackPanel IsVisible="{Binding IsStorageRegionVisible}">
+                <TextBlock Classes="label" Text="Region" />
+                <TextBox AutomationProperties.Name="Region" TabIndex="9" Text="{Binding StorageRegion, Mode=TwoWay}" />
+                <TextBlock
+                    Classes="error"
+                    IsVisible="{Binding StorageRegionError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    Text="{Binding StorageRegionError}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1">
+                <TextBlock Classes="label" Text="Bucket or container (optional)" />
+                <TextBox AutomationProperties.Name="Bucket or container" TabIndex="10" Text="{Binding StorageContainer, Mode=TwoWay}" />
+                <TextBlock Classes="hint" Text="Leave blank to browse the whole account. A key that cannot list buckets needs one." />
+                <TextBlock
+                    Classes="error"
+                    IsVisible="{Binding StorageContainerError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    Text="{Binding StorageContainerError}" />
+              </StackPanel>
+            </Grid>
+            <StackPanel IsVisible="{Binding IsStorageEndpointVisible}">
+              <TextBlock Classes="label" Text="Custom endpoint (optional)" />
+              <TextBox AutomationProperties.Name="Custom endpoint" TabIndex="11" Text="{Binding StorageServiceUrl, Mode=TwoWay}" />
+              <TextBlock Classes="hint" Text="For MinIO, Ceph, Backblaze B2, Cloudflare R2 or Wasabi. Leave blank for AWS." />
+              <TextBlock
+                  Classes="error"
+                  IsVisible="{Binding StorageServiceUrlError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                  Text="{Binding StorageServiceUrlError}" />
+            </StackPanel>
+            <CheckBox
+                AutomationProperties.Name="Use path-style addressing"
+                Content="Use path-style addressing"
+                IsVisible="{Binding IsStorageEndpointVisible}"
+                TabIndex="12"
+                IsChecked="{Binding StorageUsePathStyleAddressing, Mode=TwoWay}" />
+            <StackPanel>
+              <TextBlock Classes="label" Text="Prefix (optional)" />
+              <TextBox AutomationProperties.Name="Prefix" TabIndex="13" Text="{Binding StorageRootPrefix, Mode=TwoWay}" />
+              <TextBlock Classes="hint" Text="Browsing starts inside this key prefix." />
+            </StackPanel>
           </StackPanel>
 
           <connectionViews:RdpOptionsSection IsVisible="{Binding IsRdpSectionVisible}" />

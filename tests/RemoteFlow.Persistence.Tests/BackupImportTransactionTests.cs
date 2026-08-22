@@ -57,6 +57,46 @@ public sealed class BackupImportTransactionTests
         Assert.Equal(target.HostKeys, captured.HostKeys);
     }
 
+    /// <summary>A v1 archive carries no <c>objectStorage</c> field at all. The hand-written INSERT has to
+    /// supply the defaults itself: <c>Storage_UsePathStyleAddressing</c> is not nullable, and a column
+    /// missing from that literal list is silently dropped to its SQLite default.</summary>
+    [Fact]
+    public async Task AConnectionWithNoObjectStorageFieldImportsWithDefaults()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await SqliteTempDbFixture.CreateAsync(token);
+        using var store = new EfBackupImportStore(fixture.Factory, fixture.DatabasePath);
+        var snapshot = CreateCompleteSnapshot();
+        var withoutStorage = snapshot.Connections[0] with { ObjectStorage = null };
+        var target = snapshot with { Connections = [withoutStorage] };
+
+        _ = await store.ApplyAsync(target, MergeStrategy.Replace, token);
+
+        var captured = await new EfBackupDataSource(fixture.Factory).CaptureAsync(cancellationToken: token);
+        var storage = captured.Connections.Single().ObjectStorage;
+        Assert.NotNull(storage);
+        Assert.Null(storage.Region);
+        Assert.Null(storage.ServiceUrl);
+        Assert.Null(storage.Container);
+        Assert.Null(storage.RootPrefix);
+        Assert.Null(storage.LocalDownloadPath);
+        Assert.False(storage.UsePathStyleAddressing);
+    }
+
+    [Fact]
+    public async Task EveryStorageColumnSurvivesTheHandWrittenInsert()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await SqliteTempDbFixture.CreateAsync(token);
+        using var store = new EfBackupImportStore(fixture.Factory, fixture.DatabasePath);
+        var target = CreateCompleteSnapshot();
+
+        _ = await store.ApplyAsync(target, MergeStrategy.Replace, token);
+
+        var captured = await new EfBackupDataSource(fixture.Factory).CaptureAsync(cancellationToken: token);
+        Assert.Equal(target.Connections[0].ObjectStorage, captured.Connections.Single().ObjectStorage);
+    }
+
     private static BackupTag CreateBackupTag(string name)
     {
         return new BackupTag(Guid.NewGuid(), name, null, DateTimeOffset.UnixEpoch);
@@ -79,7 +119,9 @@ public sealed class BackupImportTransactionTests
             new BackupCredentialReference(CredentialKind.None, string.Empty, string.Empty, null),
             new BackupSshOptions(30, "xterm-256color", "C:/key", "tmux", "/srv", HostKeyPolicy.Strict, true),
             new BackupSftpOptions("/srv", "C:/Downloads", true, true),
-            new BackupRdpOptions("EXAMPLE", false, 1920, 1080, false, true, false));
+            new BackupRdpOptions("EXAMPLE", false, 1920, 1080, false, true, false),
+            new BackupObjectStorageOptions(
+                "eu-west-2", "https://minio.example.test", true, "archive", "logs/2026", "C:/Objects"));
         var hostKey = new BackupHostKey(
             Guid.Parse("60000000-0000-0000-0000-000000000001"), "example.test", 22, "ssh-ed25519",
             "public-key", "SHA256:fingerprint", HostKeyTrust.Trusted, HostKeySource.Pinned,

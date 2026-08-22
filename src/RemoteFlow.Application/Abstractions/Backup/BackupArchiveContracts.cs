@@ -104,7 +104,11 @@ public sealed record BackupConnection(
     BackupCredentialReference Credential,
     BackupSshOptions Ssh,
     BackupSftpOptions Sftp,
-    BackupRdpOptions Rdp);
+    BackupRdpOptions Rdp,
+    // Optional with a default, not a required parameter: it keeps the committed v1 golden archive
+    // importing, and it keeps every existing caller compiling. A v1 archive has no objectStorage field,
+    // and a connection read from one gets the defaults.
+    BackupObjectStorageOptions? ObjectStorage = null);
 
 public sealed record BackupCredentialReference(
     CredentialKind Kind,
@@ -126,6 +130,14 @@ public sealed record BackupSftpOptions(
     string? LocalDownloadPath,
     bool PreserveTimestamps,
     bool ShowHiddenFiles);
+
+public sealed record BackupObjectStorageOptions(
+    string? Region,
+    string? ServiceUrl,
+    bool UsePathStyleAddressing,
+    string? Container,
+    string? RootPrefix,
+    string? LocalDownloadPath);
 
 public sealed record BackupRdpOptions(
     string? Domain,

@@ -43,6 +43,7 @@ internal sealed class ConnectionConfiguration : IEntityTypeConfiguration<Connect
         ConfigureSsh(builder);
         ConfigureSftp(builder);
         ConfigureRdp(builder);
+        ConfigureObjectStorage(builder);
     }
 
     private static void ConfigureCredential(EntityTypeBuilder<Connection> builder)
@@ -121,5 +122,26 @@ internal sealed class ConnectionConfiguration : IEntityTypeConfiguration<Connect
             owned.Property(options => options.RedirectDrives).HasColumnName("Rdp_RedirectDrives");
         });
         builder.Navigation(connection => connection.Rdp).IsRequired();
+    }
+
+    /// <summary>One owned block for both object-storage providers. Every string column is nullable and
+    /// <c>UsePathStyleAddressing</c> is not: an owned type whose every column is NULL materialises as null,
+    /// and the required navigation below would then throw on query. The non-nullable bool keeps one column
+    /// populated and makes the migration purely additive with a single default.</summary>
+    private static void ConfigureObjectStorage(EntityTypeBuilder<Connection> builder)
+    {
+        builder.OwnsOne(connection => connection.ObjectStorage, owned =>
+        {
+            owned.Property(options => options.Region).HasColumnName("Storage_Region").HasMaxLength(100);
+            owned.Property(options => options.ServiceUrl).HasColumnName("Storage_ServiceUrl").HasMaxLength(2_048);
+            owned.Property(options => options.UsePathStyleAddressing)
+                .HasColumnName("Storage_UsePathStyleAddressing");
+            owned.Property(options => options.Container).HasColumnName("Storage_Container").HasMaxLength(63);
+            owned.Property(options => options.RootPrefix).HasColumnName("Storage_RootPrefix").HasMaxLength(1_024);
+            owned.Property(options => options.LocalDownloadPath)
+                .HasColumnName("Storage_LocalDownloadPath")
+                .HasMaxLength(4_096);
+        });
+        builder.Navigation(connection => connection.ObjectStorage).IsRequired();
     }
 }

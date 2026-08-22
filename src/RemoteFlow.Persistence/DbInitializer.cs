@@ -11,7 +11,10 @@ public sealed class DbInitializer(
     IAppPaths appPaths,
     IClock clock) : IDbInitializer
 {
-    public const int CurrentSchemaVersion = 1;
+    /// <summary>Bumped to 2 by the object-storage protocols. A 0.2.x binary opening a database holding a
+    /// connection with <c>Protocol = 4</c> throws in the icon switch on the connections page;
+    /// <see cref="GuardAgainstNewerSchemaAsync"/> turns that into a clear message instead.</summary>
+    public const int CurrentSchemaVersion = 2;
 
     private readonly IDbContextFactory<RemoteFlowDbContext> _contextFactory =
         contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
@@ -39,6 +42,10 @@ public sealed class DbInitializer(
 
             await context.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
             await _settingsStore.SeedDefaults(cancellationToken).ConfigureAwait(false);
+            // The bump is inert without this write-back: SeedDefaults only inserts keys that are missing,
+            // so a database created before the bump would keep claiming the older version for ever.
+            await _settingsStore.Set(SettingKeys.SchemaVersion, CurrentSchemaVersion, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (NewerDatabaseSchemaException)
         {
