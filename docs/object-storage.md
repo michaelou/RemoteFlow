@@ -78,9 +78,14 @@ followed by a delete. RemoteFlow does not disguise that as a rename, so `F2` wor
 
 ## Transferring
 
-Select rows and press **Upload** or **Download**, drag between the panes, or press `Enter`. A folder is
-counted first and confirmed before a byte moves, because "transfer 1 item" and "transfer 41,000 items" are
-the same drag.
+Select rows and press **Upload** or **Download**, right-click them and choose the same from the row menu,
+drag between the panes, or press `Enter`. A folder is counted first and confirmed before a byte moves,
+because "transfer 1 item" and "transfer 41,000 items" are the same drag.
+
+The local pane reopens where you left it, and it is the *same* memory the SFTP page's local pane uses, so
+walking to a folder on one page and switching to the other lands you in that folder rather than back at your
+home directory. A remembered folder that has since been deleted or unmounted falls back to the home
+directory instead of greeting you with an error.
 
 Objects above 16 MiB go in parallel parts — 8 MiB parts for a 4 GiB object, 64 MiB for a 500 GB one, four
 in flight. Memory stays flat whatever the object size. A failed part is retried on its own rather than

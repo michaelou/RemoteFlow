@@ -7,6 +7,31 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **The SFTP page is dual-pane, like the Storage page.** Your own files on the left, the server on the
+  right, the transfer queue along the bottom. Select rows and press **Upload** or **Download**, right-click
+  them and choose the same from the row menu, or drag them from one pane to the other. **Download** goes to
+  whatever folder the local pane is showing and refreshes it, so what arrived is on screen rather than one
+  refresh away; **Download…** still asks for a folder, and **Upload…** still opens a picker, for the times
+  the pane is not pointed where you want.
+
+  `Ctrl+Shift+Left`, `Ctrl+Shift+Right` and `Ctrl+L` work here now too. The remote list keeps everything it
+  had — the permissions and owner columns, the properties and permissions dialogs, remote editing, the
+  shell-safe path — and its own keys: `Enter`, `Backspace`, `Ctrl+R`, `F2`, `Delete`.
+
+  Dragging out of the remote list still works against your file manager, and dragging it onto the local pane
+  now finishes the transfer that drag already started rather than fetching everything a second time — one
+  transfer of a 4 GB file instead of two, and the temporary directory it used is cleaned up afterwards.
+
+  See [docs/adr/0022-dual-pane-sftp-workspace.md](docs/adr/0022-dual-pane-sftp-workspace.md) for why the
+  right-hand list is deliberately not a third copy of the pane, and what that costs.
+- **The local pane reopens where you left it**, on both pages, from one shared memory: walk to a folder on
+  the Storage page, switch to SFTP, and you are still in it. A remembered folder that has since been deleted
+  or unmounted opens your home directory instead of an error.
+- **Right-clicking a row offers the transfer**, reading **Upload** on a local pane and **Download** on a
+  remote one — the same action as the toolbar button and the drag.
+
 ## [0.3.0] - 2026-08-22
 
 ### Added

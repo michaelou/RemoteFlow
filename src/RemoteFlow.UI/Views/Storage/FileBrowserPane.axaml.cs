@@ -16,9 +16,17 @@ public sealed partial class FileBrowserPane : UserControl
     /// <summary>The drag payload between panes: the pane the rows came from, passed in process. The
     /// receiving pane asks it to run its own transfer, which already knows where the other side points.
     /// Nothing is staged to disk, so the Storage page needs no staging directory and cannot leak one.
-    /// </summary>
-    private static readonly DataFormat<FileBrowserPaneViewModel> _paneFormat =
+    ///
+    /// Public because the SFTP page's remote list is not a pane and has to recognise this format to accept
+    /// an upload dragged out of the local pane beside it.</summary>
+    public static readonly DataFormat<FileBrowserPaneViewModel> PaneFormat =
         DataFormat.CreateInProcessFormat<FileBrowserPaneViewModel>("remoteflow/file-browser-pane");
+
+    /// <summary>The payload for a drop from something that is not a pane — the SFTP page's remote list. The
+    /// pane accepts it without knowing what it is: the payload carries the action, the pane the
+    /// destination.</summary>
+    public static readonly DataFormat<FileBrowserExternalDrop> ExternalDropFormat =
+        DataFormat.CreateInProcessFormat<FileBrowserExternalDrop>("remoteflow/file-browser-external-drop");
 
     private string _typePrefix = string.Empty;
     private DateTimeOffset _lastTyped;
@@ -200,22 +208,32 @@ public sealed partial class FileBrowserPane : UserControl
         }
 
         var transfer = new DataTransfer();
-        transfer.Add(DataTransferItem.Create(_paneFormat, viewModel));
+        transfer.Add(DataTransferItem.Create(PaneFormat, viewModel));
         _ = await DragDrop.DoDragDropAsync(e, transfer, DragDropEffects.Copy).ConfigureAwait(true);
     }
 
     private void EntryList_OnDragOver(object? sender, DragEventArgs e)
     {
-        if (DataContext is not FileBrowserPaneViewModel viewModel ||
-            !viewModel.IsReady ||
-            e.DataTransfer.TryGetValue(_paneFormat) is not { } origin ||
-            ReferenceEquals(origin, viewModel))
+        if (DataContext is not FileBrowserPaneViewModel viewModel || !viewModel.IsReady)
         {
             e.DragEffects = DragDropEffects.None;
             return;
         }
 
-        viewModel.SetDropTarget(FindItem(e.Source));
+        if (e.DataTransfer.TryGetValue(ExternalDropFormat) is { } external)
+        {
+            viewModel.SetDropTarget(FindItem(e.Source), external.Verb);
+        }
+        else if (e.DataTransfer.TryGetValue(PaneFormat) is { } origin && !ReferenceEquals(origin, viewModel))
+        {
+            viewModel.SetDropTarget(FindItem(e.Source));
+        }
+        else
+        {
+            e.DragEffects = DragDropEffects.None;
+            return;
+        }
+
         e.DragEffects = DragDropEffects.Copy;
         e.Handled = true;
     }
@@ -230,12 +248,19 @@ public sealed partial class FileBrowserPane : UserControl
 
     private async void EntryList_OnDrop(object? sender, DragEventArgs e)
     {
-        // Dragging happens between the two panes, so there is no operating-system staging directory here
-        // at all — see ADR-0021, and the SFTP leak it deliberately does not replicate.
+        // Between two panes there is no operating-system staging directory at all — see ADR-0021, and the
+        // SFTP leak it deliberately does not replicate.
         if (DataContext is FileBrowserPaneViewModel viewModel)
         {
+            var hovered = FindItem(e.Source);
             viewModel.ClearDropTarget();
-            if (e.DataTransfer.TryGetValue(_paneFormat) is { } origin && !ReferenceEquals(origin, viewModel))
+            if (e.DataTransfer.TryGetValue(ExternalDropFormat) is { } external)
+            {
+                await external.DropAsync(viewModel.DropTargetPath(hovered), CancellationToken.None)
+                    .ConfigureAwait(true);
+                await viewModel.RefreshAsync().ConfigureAwait(true);
+            }
+            else if (e.DataTransfer.TryGetValue(PaneFormat) is { } origin && !ReferenceEquals(origin, viewModel))
             {
                 await origin.TransferAsync().ConfigureAwait(true);
             }
@@ -293,6 +318,16 @@ public sealed partial class FileBrowserPane : UserControl
             DataContext is FileBrowserPaneViewModel viewModel)
         {
             _ = await viewModel.OpenAsync(item).ConfigureAwait(true);
+        }
+    }
+
+    /// <summary>Upload or download from the row menu. Right-clicking outside the selection has already
+    /// narrowed it to the clicked row, so this transfers exactly what the menu was opened over.</summary>
+    private async void Transfer_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is FileBrowserPaneViewModel viewModel)
+        {
+            await viewModel.TransferAsync().ConfigureAwait(true);
         }
     }
 

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions.Sftp;
+using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Application.Queries;
 using RemoteFlow.Application.Services;
 using RemoteFlow.Domain.Enums;
@@ -36,7 +37,8 @@ public sealed partial class StoragePageViewModel : PageViewModel, IAsyncDisposab
         IConfirmationDialogService confirmation,
         ITransferConflictResolverFactory conflictResolvers,
         TransfersPageViewModel transfers,
-        IConnectionQueryService? connectionQueries = null) : base("Storage")
+        IConnectionQueryService? connectionQueries = null,
+        ILocalFolderMemory? folderMemory = null) : base("Storage")
     {
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _confirmation = confirmation ?? throw new ArgumentNullException(nameof(confirmation));
@@ -47,7 +49,13 @@ public sealed partial class StoragePageViewModel : PageViewModel, IAsyncDisposab
         // One pane class, two instances. The names differ because one control used twice would otherwise
         // give both Refresh buttons the same accessible name and leave a screen-reader user unable to tell
         // the panes apart — a gap no audit catches.
-        Local = new FileBrowserPaneViewModel("local folder", "Upload", confirmation, new LocalFileBrowserSource());
+        // Only the local pane gets the folder memory: the remote pane's root is pinned by the connection.
+        Local = new FileBrowserPaneViewModel(
+            "local folder",
+            "Upload",
+            confirmation,
+            new LocalFileBrowserSource(),
+            folderMemory);
         Remote = new FileBrowserPaneViewModel("remote prefix", "Download", confirmation);
         Local.TransferHandler = UploadAsync;
         Remote.TransferHandler = DownloadAsync;
@@ -162,8 +170,8 @@ public sealed partial class StoragePageViewModel : PageViewModel, IAsyncDisposab
         }
     }
 
-    /// <summary>Opens the local pane at its default root. Called when the page is shown, so the left half
-    /// is usable before any account is attached.</summary>
+    /// <summary>Opens the local pane where it was last left, or at its default root the first time. Called
+    /// when the page is shown, so the left half is usable before any account is attached.</summary>
     public Task InitializeLocalAsync(CancellationToken cancellationToken = default)
     {
         return Local.Source is { } source && Local.CurrentPath.Length == 0

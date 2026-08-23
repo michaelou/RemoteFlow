@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -8,7 +9,9 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
+using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Application.Queries;
+using RemoteFlow.Application.Services;
 using RemoteFlow.Domain.Abstractions;
 using RemoteFlow.Domain.Entities;
 using RemoteFlow.Domain.Enums;
@@ -17,6 +20,7 @@ using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels.Sftp;
 using RemoteFlow.UI.ViewModels.Transfers;
 using RemoteFlow.UI.Views.Sftp;
+using RemoteFlow.UI.Views.Storage;
 using Xunit;
 
 #pragma warning disable IDE0022 // Compact forwarding members keep this fault-injection double readable.
@@ -497,9 +501,12 @@ public sealed class SftpWorkspaceTests
         Dispatcher.UIThread.RunJobs();
         window.UpdateLayout();
 
+        // Scoped to the remote half by a heading only it has: the local pane on the left carries column
+        // headings of its own, and the first one found would otherwise be measured against a remote row.
         var headings = window.GetVisualDescendants()
             .OfType<Grid>()
-            .First(grid => grid.Children.OfType<Button>().Any(button => button.Classes.Contains("column")));
+            .First(grid => grid.Children.OfType<Button>().Any(button =>
+                AutomationProperties.GetName(button) == "Sort by permissions"));
         var row = window.GetVisualDescendants()
             .OfType<Grid>()
             .First(grid => grid.DataContext is SftpItemViewModel && grid.ContextFlyout is not null);
@@ -534,6 +541,45 @@ public sealed class SftpWorkspaceTests
 
         Assert.Equal(Glyph(window, "logs"), Resource("Icon.Folder"));
         Assert.Equal(Glyph(window, "app.conf"), Resource("Icon.File"));
+        window.Close();
+    }
+
+    /// <summary>The page really is the Storage page's shape: a local browser pane on the left, the remote
+    /// list on the right, and the shared transfer queue along the bottom. Asserted against the laid-out
+    /// visual tree, because "same UI" is a claim about what is on screen.</summary>
+    [AvaloniaFact]
+    public async Task ThePageShowsALocalPaneAndTheSharedQueueBesideTheRemoteList()
+    {
+        var token = TestContext.Current.CancellationToken;
+        using var transfers = new TransfersPageViewModel(new InlineDispatcher(), new NoOpRevealService());
+        var fixture = CreateFixture(transferManager: transfers);
+        await SeedFileAsync(fixture.Sftp, "/home/test/app.conf", [1], token);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var window = new Window
+        {
+            Width = 1200,
+            Height = 700,
+            Content = new SftpWorkspace { DataContext = fixture.ViewModel },
+        };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var localPane = Assert.Single(window.GetVisualDescendants().OfType<FileBrowserPane>());
+        var queue = Assert.Single(window.GetVisualDescendants().OfType<TransferQueuePane>());
+        var remoteRow = window.GetVisualDescendants()
+            .OfType<Grid>()
+            .First(grid => grid.DataContext is SftpItemViewModel);
+
+        Assert.Same(fixture.ViewModel.Local, localPane.DataContext);
+        Assert.Same(transfers, queue.DataContext);
+        Assert.True(queue.IsVisible, "the transfer queue is bound but not shown.");
+
+        // Left of the remote rows, and both actually laid out rather than collapsed to nothing.
+        Assert.True(localPane.Bounds.Width > 300, $"the local pane was not laid out: {localPane.Bounds}");
+        Assert.True(
+            localPane.TranslatePoint(default, window)!.Value.X < remoteRow.TranslatePoint(default, window)!.Value.X,
+            "the local pane is not to the left of the remote list.");
         window.Close();
     }
 
@@ -697,12 +743,134 @@ public sealed class SftpWorkspaceTests
             null);
     }
 
+    /// <summary>The dual-pane gestures: the local pane's Upload sends its selection to the folder the remote
+    /// list is showing, and the remote list's Download sends its selection to the folder the local pane is
+    /// showing. These are what the row menus and the drags between the panes both run.</summary>
+    [Fact]
+    public async Task TheTwoPanesTransferIntoEachOthersCurrentFolder()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = CreateFixture();
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var localRoot = CreateTempDirectory();
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(localRoot, "notes.txt"), "notes", token);
+            _ = await fixture.ViewModel.Local.NavigateAsync(localRoot, token);
+            fixture.ViewModel.Local.SetSelection(fixture.ViewModel.Local.Items);
+
+            await fixture.ViewModel.UploadSelectionAsync(token);
+
+            Assert.Null(fixture.ViewModel.ErrorMessage);
+            Assert.NotNull((await fixture.Sftp.StatAsync("/home/test/notes.txt", token)).Value);
+
+            await SeedFileAsync(fixture.Sftp, "/home/test/fetched.bin", [7, 7], token);
+            await fixture.ViewModel.RefreshAsync(token);
+            fixture.ViewModel.SetSelection(
+                fixture.ViewModel.Items.Where(item => item.Name == "fetched.bin"));
+
+            await fixture.ViewModel.DownloadSelectionAsync(token);
+
+            Assert.Null(fixture.ViewModel.ErrorMessage);
+            Assert.Equal(
+                new byte[] { 7, 7 },
+                await File.ReadAllBytesAsync(Path.Combine(localRoot, "fetched.bin"), token));
+
+            // The pane it landed in was refreshed, so the arrival is on screen rather than one F5 away.
+            Assert.Contains(fixture.ViewModel.Local.Items, item => item.Name == "fetched.bin");
+        }
+        finally
+        {
+            Directory.Delete(localRoot, recursive: true);
+        }
+    }
+
+    /// <summary>A drag out of the remote list downloads once, to build the operating-system file payload
+    /// ADR-0013 requires. Dropping it on the local pane therefore has to move those files, not fetch them
+    /// again — and taking the staging directory with them is the only place it is ever cleaned up.</summary>
+    [Fact]
+    public async Task ADropOnTheLocalPaneMovesTheStagedFilesAndRemovesTheStagingDirectory()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = CreateFixture();
+        var contents = "already downloaded once"u8.ToArray();
+        await SeedFileAsync(fixture.Sftp, "/home/test/report.txt", contents, token);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var item = Assert.Single(fixture.ViewModel.Items);
+        var localRoot = CreateTempDirectory();
+        var staging = Path.Combine(localRoot, "staging");
+        var destination = Directory.CreateDirectory(Path.Combine(localRoot, "destination")).FullName;
+        try
+        {
+            var staged = await fixture.ViewModel.PrepareDragOutAsync([item], staging, token);
+
+            var moved = await fixture.ViewModel.CompleteDragToLocalAsync(staging, staged, destination, token);
+
+            Assert.Equal(1, moved);
+            Assert.Equal(contents, await File.ReadAllBytesAsync(Path.Combine(destination, "report.txt"), token));
+            Assert.False(Directory.Exists(staging));
+            Assert.Null(fixture.ViewModel.ErrorMessage);
+        }
+        finally
+        {
+            Directory.Delete(localRoot, recursive: true);
+        }
+    }
+
+    /// <summary>One memory, shared. Walking to a folder on the SFTP page and then opening the Storage page
+    /// lands in that same folder — two independent memories would be indistinguishable from none on
+    /// whichever page you did not use last.</summary>
+    [Fact]
+    public async Task TheSftpAndStoragePagesRememberTheSameLocalFolder()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var root = CreateTempDirectory();
+        try
+        {
+            var walked = Directory.CreateDirectory(Path.Combine(root, "shared")).FullName;
+            var settings = new InMemorySettingsStore();
+            var memory = new SettingsLocalFolderMemory(settings);
+            var fixture = CreateFixture(folderMemory: memory);
+            await fixture.ViewModel.InitializeLocalAsync(token);
+
+            _ = await fixture.ViewModel.Local.NavigateAsync(walked, token);
+            for (var attempt = 0; attempt < 200 &&
+                await settings.Get(SettingKeys.LastLocalFolder, token) != walked; attempt++)
+            {
+                await Task.Delay(5, token);
+            }
+
+            await using var storage = StorageTestDoubles.CreateFixture(folderMemory: memory);
+            await storage.Page.InitializeLocalAsync(token);
+
+            Assert.Equal(walked, storage.Page.Local.CurrentPath);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>The queue at the foot of the page is the injected singleton, not a second one. A second
+    /// would mean two independent three-slot gates — six concurrent transfers, neither aware of the other.
+    /// </summary>
+    [Fact]
+    public void TheTransferQueueIsTheInjectedSingletonAndNotASecondQueue()
+    {
+        using var transfers = new TransfersPageViewModel(new InlineDispatcher(), new NoOpRevealService());
+        var fixture = CreateFixture(transferManager: transfers);
+
+        Assert.Same(transfers, fixture.ViewModel.Transfers);
+        Assert.True(fixture.ViewModel.HasTransferQueue);
+    }
+
     private static Fixture CreateFixture(
         ISftpService? service = null,
         bool confirmationResult = true,
         TransfersPageViewModel? transferManager = null,
         IRemoteEditServiceFactory? remoteEdits = null,
-        IConnectionQueryService? connectionQueries = null)
+        IConnectionQueryService? connectionQueries = null,
+        ILocalFolderMemory? folderMemory = null)
     {
         var connection = Connection.Create(SystemGuidProvider.Instance, "Files", "example.test").Value;
         var ssh = new FakeSshConnection();
@@ -721,7 +889,8 @@ public sealed class SftpWorkspaceTests
                 clipboard,
                 remoteEdits,
                 transferManager,
-                connectionQueries: connectionQueries),
+                connectionQueries: connectionQueries,
+                folderMemory: folderMemory),
             confirmation,
             clipboard);
     }

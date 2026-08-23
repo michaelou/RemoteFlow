@@ -250,6 +250,10 @@
                 <Grid.ContextFlyout>
                   <MenuFlyout>
                     <MenuItem Header="Open" Click="Open_OnClick" />
+                    <!-- "Upload" on the local pane and "Download" on the remote one, carried on the row:
+                         a flyout is a popup, so $parent does not reach the pane from in here. -->
+                    <MenuItem Header="{Binding TransferLabel}" Click="Transfer_OnClick" />
+                    <Separator />
                     <MenuItem Header="Rename" Click="Rename_OnClick" />
                     <MenuItem Header="Delete…" Click="Delete_OnClick" />
                     <Separator />

@@ -27,3 +27,11 @@ object storage without changing the SFTP or transfer contracts: `TransferEngine`
 This ADR is amended rather than superseded. The **SFTP** workspace stays single-pane and remote-first, with
 the staging-directory drag-out described above, and is still governed by everything here. Nothing in
 ADR-0021 applies to it.
+
+## Amendment: SFTP became dual-pane too
+
+[ADR-0022](0022-dual-pane-sftp-workspace.md) gave the SFTP page a local pane beside the remote list, so the
+paragraph above no longer describes it. What that ADR does not change: the remote list is still this ADR's
+virtualized, remote-first pane, and the staging-directory drag-out is still required exactly as described —
+a native consumer needs every advertised path to exist for the whole drop. ADR-0022 adds a second, in-process
+payload alongside those files, and the only path on which the staging directory is swept.

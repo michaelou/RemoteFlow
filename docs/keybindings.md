@@ -52,10 +52,15 @@ This file is generated from `KeymapService.Bindings`. Changes must be made in th
 
 All other control-key combinations are sent to the PTY. `Alt` plus text is encoded as an ESC prefix. Ctrl+C sends byte `03` unless the optional, default-off CopyWhenSelected policy is enabled and a selection exists.
 
-## Storage page
+## Storage and SFTP pages
 
-These are RemoteFlow's own bindings on the dual-pane Storage page. They are **not** part of the terminal
+These are RemoteFlow's own bindings on the two dual-pane pages. They are **not** part of the terminal
 keymap: nothing here is sent to a PTY, and none of it appears in `KeymapService.Bindings`.
+
+The table below describes the local pane on either page, and the remote pane on the Storage page. The SFTP
+page's remote list keeps its own longer-standing set — `Enter` to descend, `Backspace` up, `Ctrl+R`
+refresh, `F2` rename, `Delete` delete — plus the three pane-level chords in the first three rows, which
+work the same on both pages.
 
 | Binding | Result |
 | --- | --- |
@@ -67,7 +72,7 @@ keymap: nothing here is sent to a PTY, and none of it appears in `KeymapService.
 | `Alt+Right` | Forward, through the pane's own history. |
 | `F5` | Refresh the focused pane. |
 | `F7` | New folder in the focused pane. |
-| `F2` | Rename. Local pane only: object storage has no rename. |
+| `F2` | Rename. Not on the Storage page's remote pane: object storage has no rename. |
 | `Delete` | Delete the selection, after a confirmation that counts what would go. |
 | Typing | Type-ahead: jumps to the next row whose name starts with what you typed. |
 

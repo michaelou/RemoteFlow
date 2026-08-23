@@ -346,6 +346,72 @@ public sealed class LocalFileBrowserSource : IFileBrowserSource
         }
     }
 
+    /// <summary>Moves one file or folder into a destination directory, and answers where it landed.
+    ///
+    /// Not on <see cref="IFileBrowserSource"/>: moving into a prefix is a server-side copy plus a delete on
+    /// object storage, billed and size-capped, and there is nothing to move <em>from</em> there anyway. This
+    /// exists for the one caller that has already put bytes on disk and needs them somewhere else — the SFTP
+    /// page finishing a drag whose rows it downloaded to a staging directory to build the drag payload.
+    /// Doing that as a move rather than a second download is the difference between one transfer of a 4 GB
+    /// file and two.
+    ///
+    /// An existing destination is a failure rather than an overwrite: a silent clobber of a local file the
+    /// user never named is not something a drag should be able to do.</summary>
+    public Task<SftpResult<string>> MoveIntoAsync(
+        string sourcePath,
+        string destinationDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        if (!IsValidPath(destinationDirectory) || !Directory.Exists(destinationDirectory))
+        {
+            return Task.FromResult(SftpResult<string>.Fail(
+                SftpError.InvalidPath,
+                $"'{destinationDirectory}' is not a folder that can be written to."));
+        }
+
+        var name = GetName(sourcePath);
+        var destination = Path.Combine(destinationDirectory, name);
+        if (Directory.Exists(destination) || File.Exists(destination))
+        {
+            return Task.FromResult(SftpResult<string>.Fail(
+                SftpError.AlreadyExists,
+                $"'{name}' already exists in {destinationDirectory}."));
+        }
+
+        try
+        {
+            if (Directory.Exists(sourcePath))
+            {
+                MoveDirectory(sourcePath, destination, cancellationToken);
+            }
+            else if (File.Exists(sourcePath))
+            {
+                File.Move(sourcePath, destination);
+            }
+            else
+            {
+                return Task.FromResult(SftpResult<string>.Fail(
+                    SftpError.NotFound,
+                    $"'{sourcePath}' was not found."));
+            }
+
+            return Task.FromResult(SftpResult<string>.Success(destination));
+        }
+        catch (OperationCanceledException)
+        {
+            return Task.FromResult(SftpResult<string>.Fail(SftpError.Cancelled, "The move was cancelled."));
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Task.FromResult(SftpResult<string>.Fail(SftpError.PermissionDenied, exception.Message));
+        }
+        catch (Exception exception) when (exception is IOException or NotSupportedException)
+        {
+            return Task.FromResult(SftpResult<string>.Fail(SftpError.Unknown, exception.Message));
+        }
+    }
+
     public async IAsyncEnumerable<FileBrowserEntry> EnumerateRecursiveAsync(
         FileBrowserEntry root,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -407,6 +473,43 @@ public sealed class LocalFileBrowserSource : IFileBrowserSource
             window,
             next < entries.Count ? next.ToString(CultureInfo.InvariantCulture) : null,
             warning);
+    }
+
+    /// <summary><see cref="Directory.Move(string, string)"/> cannot cross a volume, and a staging directory
+    /// under the temporary folder sits on a different volume from the destination often enough on Windows
+    /// that the copy fallback is the ordinary path rather than the exotic one. A file needs no fallback:
+    /// <see cref="File.Move(string, string)"/> copies across volumes by itself.</summary>
+    private static void MoveDirectory(string source, string destination, CancellationToken cancellationToken)
+    {
+        try
+        {
+            Directory.Move(source, destination);
+            return;
+        }
+        catch (IOException)
+        {
+            // Almost always "source and destination are on different volumes". Anything else this hides
+            // will surface again from the copy below, with its own message.
+        }
+
+        CopyDirectory(source, destination, cancellationToken);
+        Directory.Delete(source, recursive: true);
+    }
+
+    private static void CopyDirectory(string source, string destination, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        _ = Directory.CreateDirectory(destination);
+        foreach (var file in Directory.EnumerateFiles(source))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)), overwrite: false);
+        }
+
+        foreach (var directory in Directory.EnumerateDirectories(source))
+        {
+            CopyDirectory(directory, Path.Combine(destination, Path.GetFileName(directory)), cancellationToken);
+        }
     }
 
     private static FileBrowserEntry? Describe(FileSystemInfo info, FileBrowserListOptions options)

@@ -277,6 +277,57 @@ public sealed class FileBrowserSourceTests
         Assert.Equal("media/2024", source.GetBreadcrumbs("/media/2024/raw")[0].Label);
     }
 
+    /// <summary>The move behind a drag from the SFTP page's remote list onto its local pane: the rows are
+    /// already staged on disk, so finishing the drop must not download them a second time.</summary>
+    [Fact]
+    public async Task MovingIntoAFolderRelocatesFilesAndTreesAndRefusesToClobber()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var root = CreateTempDirectory();
+        try
+        {
+            var staging = Directory.CreateDirectory(Path.Combine(root, "staging")).FullName;
+            var destination = Directory.CreateDirectory(Path.Combine(root, "destination")).FullName;
+            await File.WriteAllTextAsync(Path.Combine(staging, "report.txt"), "report", token);
+            var tree = Directory.CreateDirectory(Path.Combine(staging, "tree")).FullName;
+            _ = Directory.CreateDirectory(Path.Combine(tree, "nested"));
+            await File.WriteAllTextAsync(Path.Combine(tree, "nested", "child.txt"), "child", token);
+            var source = new LocalFileBrowserSource();
+
+            var file = await source.MoveIntoAsync(Path.Combine(staging, "report.txt"), destination, token);
+            var directory = await source.MoveIntoAsync(tree, destination, token);
+
+            Assert.True(file.IsSuccess);
+            Assert.Equal(Path.Combine(destination, "report.txt"), file.Value);
+            Assert.Equal("report", await File.ReadAllTextAsync(file.Value, token));
+            Assert.False(File.Exists(Path.Combine(staging, "report.txt")));
+            Assert.True(directory.IsSuccess);
+            Assert.Equal(
+                "child",
+                await File.ReadAllTextAsync(Path.Combine(destination, "tree", "nested", "child.txt"), token));
+            Assert.False(Directory.Exists(tree));
+
+            // A silent overwrite of a local file the user never named is not something a drop may do.
+            await File.WriteAllTextAsync(Path.Combine(staging, "report.txt"), "second", token);
+            var clash = await source.MoveIntoAsync(Path.Combine(staging, "report.txt"), destination, token);
+            Assert.Equal(SftpError.AlreadyExists, clash.Failure.Error);
+            Assert.Equal("report", await File.ReadAllTextAsync(file.Value, token));
+
+            var missing = await source.MoveIntoAsync(Path.Combine(staging, "gone.txt"), destination, token);
+            Assert.Equal(SftpError.NotFound, missing.Failure.Error);
+
+            var nowhere = await source.MoveIntoAsync(
+                Path.Combine(staging, "report.txt"),
+                Path.Combine(root, "not-a-folder"),
+                token);
+            Assert.Equal(SftpError.InvalidPath, nowhere.Failure.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "remoteflow-browser-" + Path.GetRandomFileName());

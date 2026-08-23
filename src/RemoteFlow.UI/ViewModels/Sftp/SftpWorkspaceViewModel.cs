@@ -3,10 +3,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
+using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Application.Queries;
 using RemoteFlow.Application.Services;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
+using RemoteFlow.UI.ViewModels.Storage;
 using RemoteFlow.UI.ViewModels.Transfers;
 
 namespace RemoteFlow.UI.ViewModels.Sftp;
@@ -83,16 +85,16 @@ public sealed record SftpPropertiesViewModel(
     public string OwnerAndGroup => $"{Owner} / {Group}";
 }
 
-public sealed partial class SftpWorkspaceViewModel(
-    ISftpWorkspaceSessionFactory sessions,
-    IFilePickerService filePicker,
-    IConfirmationDialogService confirmation,
-    IClipboardService clipboard,
-    IRemoteEditServiceFactory? remoteEditFactory = null,
-    TransfersPageViewModel? transferManager = null,
-    IUiDispatcher? dispatcher = null,
-    IConnectionQueryService? connectionQueries = null) : PageViewModel("SFTP"), IAsyncDisposable
+public sealed partial class SftpWorkspaceViewModel : PageViewModel, IAsyncDisposable
 {
+    private readonly ISftpWorkspaceSessionFactory _sessions;
+    private readonly IFilePickerService _filePicker;
+    private readonly IConfirmationDialogService _confirmation;
+    private readonly IClipboardService _clipboard;
+    private readonly IRemoteEditServiceFactory? _remoteEditFactory;
+    private readonly IUiDispatcher? _dispatcher;
+    private readonly IConnectionQueryService? _connectionQueries;
+    private readonly LocalFileBrowserSource _localFiles = new();
     private readonly List<string> _backHistory = [];
     private readonly List<string> _forwardHistory = [];
     private Guid? _attachedConnectionId;
@@ -102,11 +104,53 @@ public sealed partial class SftpWorkspaceViewModel(
     private CancellationTokenSource? _operationCancellation;
     private CancellationTokenSource? _busyIndicatorDelay;
 
+    /// <summary>Spelled out rather than a primary constructor because the local pane's Upload button is an
+    /// instance method, and a property initializer cannot reach one.</summary>
+    public SftpWorkspaceViewModel(
+        ISftpWorkspaceSessionFactory sessions,
+        IFilePickerService filePicker,
+        IConfirmationDialogService confirmation,
+        IClipboardService clipboard,
+        IRemoteEditServiceFactory? remoteEditFactory = null,
+        TransfersPageViewModel? transferManager = null,
+        IUiDispatcher? dispatcher = null,
+        IConnectionQueryService? connectionQueries = null,
+        ILocalFolderMemory? folderMemory = null) : base("SFTP")
+    {
+        _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+        _filePicker = filePicker ?? throw new ArgumentNullException(nameof(filePicker));
+        _confirmation = confirmation ?? throw new ArgumentNullException(nameof(confirmation));
+        _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
+        _remoteEditFactory = remoteEditFactory;
+        Transfers = transferManager;
+        _dispatcher = dispatcher;
+        _connectionQueries = connectionQueries;
+        Local = new FileBrowserPaneViewModel("local folder", "Upload", confirmation, _localFiles, folderMemory)
+        {
+            TransferHandler = UploadSelectionAsync,
+        };
+    }
+
     public ObservableCollection<SftpItemViewModel> Items { get; } = [];
 
     public ObservableCollection<SftpItemViewModel> SelectedItems { get; } = [];
 
     public ObservableCollection<SftpBreadcrumb> Breadcrumbs { get; } = [];
+
+    /// <summary>The local half of the page: the same <c>FileBrowserPane</c> the Storage page puts on its
+    /// left, over the same <see cref="LocalFileBrowserSource"/> and sharing the same memory of where it was
+    /// last pointed, so the two pages open in the same folder.
+    ///
+    /// Its Upload button and row menu send the local selection to whatever folder the remote list is
+    /// showing, which is why the pane is constructed in the body rather than in an initializer.</summary>
+    public FileBrowserPaneViewModel Local { get; }
+
+    /// <summary>The application-wide transfer queue shown at the foot of the page — the injected singleton,
+    /// the same one the Transfers page and the Storage page bind, not a second queue. Null only in a test
+    /// that did not ask for one, which is why every call site checks.</summary>
+    public TransfersPageViewModel? Transfers { get; }
+
+    public bool HasTransferQueue => Transfers is not null;
 
     /// <summary>The SFTP-capable connections offered by the picker, so the workspace can be opened from
     /// here instead of only by connecting from the explorer.</summary>
@@ -210,13 +254,13 @@ public sealed partial class SftpWorkspaceViewModel(
     [RelayCommand]
     public async Task LoadConnectionsAsync(CancellationToken cancellationToken = default)
     {
-        if (connectionQueries is null)
+        if (_connectionQueries is null)
         {
             return;
         }
         try
         {
-            var items = await connectionQueries.QueryAsync(
+            var items = await _connectionQueries.QueryAsync(
                 new ConnectionFilter
                 {
                     Protocols = [ProtocolType.Ssh, ProtocolType.Sftp],
@@ -256,7 +300,7 @@ public sealed partial class SftpWorkspaceViewModel(
         ErrorMessage = null;
         try
         {
-            var next = await sessions.OpenAsync(connectionId, cancellationToken).ConfigureAwait(true);
+            var next = await _sessions.OpenAsync(connectionId, cancellationToken).ConfigureAwait(true);
             if (!await DisposeSessionAsync().ConfigureAwait(true))
             {
                 await next.DisposeAsync().ConfigureAwait(true);
@@ -265,7 +309,7 @@ public sealed partial class SftpWorkspaceViewModel(
             }
             _session = next;
             _transfers = new TransferEngine(next.Sftp);
-            _remoteEdits = remoteEditFactory?.Create(next.Sftp, Guid.NewGuid());
+            _remoteEdits = _remoteEditFactory?.Create(next.Sftp, Guid.NewGuid());
             if (_remoteEdits is { } activeRemoteEdits)
             {
                 activeRemoteEdits.ActiveEditsChanged += OnActiveEditsChanged;
@@ -448,7 +492,7 @@ public sealed partial class SftpWorkspaceViewModel(
     [RelayCommand]
     public async Task ChooseAndUploadAsync(CancellationToken cancellationToken = default)
     {
-        var paths = await filePicker.PickUploadPathsAsync(cancellationToken).ConfigureAwait(true);
+        var paths = await _filePicker.PickUploadPathsAsync(cancellationToken).ConfigureAwait(true);
         await UploadAsync(paths, CurrentPath, cancellationToken).ConfigureAwait(true);
     }
 
@@ -463,7 +507,7 @@ public sealed partial class SftpWorkspaceViewModel(
         }
         ErrorMessage = null;
         var paths = localPaths.ToArray();
-        if (transferManager is null)
+        if (Transfers is null)
         {
             foreach (var localPath in paths)
             {
@@ -487,7 +531,7 @@ public sealed partial class SftpWorkspaceViewModel(
             {
                 var name = Path.GetFileName(localPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
                 var destination = SftpPath.Combine(targetDirectory, name);
-                queued.Add(await transferManager.QueueAsync(new TransferQueueRequest(
+                queued.Add(await Transfers.QueueAsync(new TransferQueueRequest(
                     TransferDirection.Upload,
                     localPath,
                     destination,
@@ -515,7 +559,7 @@ public sealed partial class SftpWorkspaceViewModel(
         {
             return;
         }
-        var folder = await filePicker.PickDownloadFolderAsync(
+        var folder = await _filePicker.PickDownloadFolderAsync(
             _session.Definition.Sftp.LocalDownloadPath,
             cancellationToken).ConfigureAwait(true);
         if (folder is not null)
@@ -535,7 +579,7 @@ public sealed partial class SftpWorkspaceViewModel(
         }
         var selected = items.ToArray();
         var completed = new List<string>();
-        if (transferManager is null)
+        if (Transfers is null)
         {
             foreach (var item in selected)
             {
@@ -559,7 +603,7 @@ public sealed partial class SftpWorkspaceViewModel(
             foreach (var item in selected)
             {
                 var localPath = Path.Combine(localDirectory, item.Name);
-                var managed = await transferManager.QueueAsync(new TransferQueueRequest(
+                var managed = await Transfers.QueueAsync(new TransferQueueRequest(
                     TransferDirection.Download,
                     item.FullPath,
                     localPath,
@@ -585,6 +629,111 @@ public sealed partial class SftpWorkspaceViewModel(
             FeedbackMessage = $"Downloaded {completed.Count} item(s).";
         }
         return completed;
+    }
+
+    /// <summary>Opens the local pane where it was last left, or at the home directory the first time. Called
+    /// when the page is shown, so the left half is usable before a connection is attached.</summary>
+    public Task InitializeLocalAsync(CancellationToken cancellationToken = default)
+    {
+        return Local.CurrentPath.Length == 0
+            ? Local.AttachAsync(_localFiles, cancellationToken)
+            : Task.CompletedTask;
+    }
+
+    /// <summary>The local pane's Upload button, its row menu, and a drop onto the remote list: the local
+    /// selection into the folder the remote list is showing.</summary>
+    public async Task UploadSelectionAsync(CancellationToken cancellationToken = default)
+    {
+        if (_session is null)
+        {
+            ErrorMessage = "Connect to a server first.";
+            return;
+        }
+
+        var paths = Local.SelectedItems.Select(item => item.Path).ToArray();
+        if (paths.Length == 0)
+        {
+            Local.FeedbackMessage = "Select something to upload first.";
+            return;
+        }
+
+        await UploadAsync(paths, CurrentPath, cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>The remote list's Download button and its row menu: the remote selection into the folder the
+    /// local pane is showing, which is then refreshed so the arrivals appear.</summary>
+    [RelayCommand]
+    public Task DownloadSelectionAsync(CancellationToken cancellationToken = default)
+    {
+        return DownloadToLocalPaneAsync(SelectedItems, cancellationToken);
+    }
+
+    public async Task DownloadToLocalPaneAsync(
+        IEnumerable<SftpItemViewModel> items,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        var selected = items.ToArray();
+        if (selected.Length == 0)
+        {
+            FeedbackMessage = "Select something to download first.";
+            return;
+        }
+
+        if (Local.CurrentPath.Length == 0)
+        {
+            ErrorMessage = "The local pane has no folder open.";
+            return;
+        }
+
+        _ = await DownloadAsync(selected, Local.CurrentPath, cancellationToken).ConfigureAwait(true);
+        await Local.RefreshAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>Finishes a drag that started in the remote list and landed on the local pane.
+    ///
+    /// The rows were already downloaded once, into a staging directory, to build the drag's
+    /// operating-system file payload — see <see cref="PrepareDragOutAsync"/> and ADR-0013, which requires
+    /// every advertised path to exist for the whole drop. Finishing the drop is therefore a move, not a
+    /// second download: one transfer of a 4 GB file rather than two. The staging directory goes with them,
+    /// which makes this the one path on which it is ever cleaned up.</summary>
+    public async Task<int> CompleteDragToLocalAsync(
+        string stagingDirectory,
+        IReadOnlyList<string> stagedPaths,
+        string destinationDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stagingDirectory);
+        ArgumentNullException.ThrowIfNull(stagedPaths);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationDirectory);
+        var moved = 0;
+        var failures = new List<string>();
+        foreach (var staged in stagedPaths)
+        {
+            var result = await _localFiles.MoveIntoAsync(staged, destinationDirectory, cancellationToken)
+                .ConfigureAwait(true);
+            if (result.IsSuccess)
+            {
+                moved++;
+            }
+            else
+            {
+                failures.Add($"{Path.GetFileName(staged)}: {result.Failure.Message}");
+            }
+        }
+
+        DiscardStaging(stagingDirectory);
+        if (failures.Count > 0)
+        {
+            ErrorMessage = $"Moved {moved} of {stagedPaths.Count} into {destinationDirectory}. " +
+                string.Join(" ", failures);
+        }
+        else
+        {
+            FeedbackMessage = $"Downloaded {moved} item(s) to {destinationDirectory}.";
+        }
+
+        return moved;
     }
 
     public Task<IReadOnlyList<string>> PrepareDragOutAsync(
@@ -758,7 +907,7 @@ public sealed partial class SftpWorkspaceViewModel(
                 }
             }
 
-            var confirmed = await confirmation.ConfirmAsync(
+            var confirmed = await _confirmation.ConfirmAsync(
                 plan.Count == 1 ? "Delete item?" : "Delete items recursively?",
                 $"Permanently delete {plan.Count} item(s)? This includes every file and folder below the selection.",
                 "Delete",
@@ -859,7 +1008,7 @@ public sealed partial class SftpWorkspaceViewModel(
             target,
             isCurrentDirectory,
             _session.Sftp,
-            confirmation,
+            _confirmation,
             token => NavigateCoreAsync(CurrentPath, addHistory: false, token));
     }
 
@@ -867,7 +1016,7 @@ public sealed partial class SftpWorkspaceViewModel(
     {
         ArgumentNullException.ThrowIfNull(item);
         var literal = SftpPath.ToShellLiteral(item.FullPath);
-        var result = await clipboard.WriteTextAsync(literal, cancellationToken).ConfigureAwait(true);
+        var result = await _clipboard.WriteTextAsync(literal, cancellationToken).ConfigureAwait(true);
         if (result.Succeeded)
         {
             FeedbackMessage = $"Copied shell-safe path: {literal}";
@@ -971,6 +1120,23 @@ public sealed partial class SftpWorkspaceViewModel(
         if (IsLoading)
         {
             IsBusyIndicatorVisible = true;
+        }
+    }
+
+    /// <summary>Best effort, and silent. A staging directory that survives is the pre-existing leak
+    /// ADR-0021 records; failing to remove it must not turn a drop that worked into an error banner.
+    /// </summary>
+    private static void DiscardStaging(string stagingDirectory)
+    {
+        try
+        {
+            if (Directory.Exists(stagingDirectory))
+            {
+                Directory.Delete(stagingDirectory, recursive: true);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
         }
     }
 
@@ -1175,12 +1341,12 @@ public sealed partial class SftpWorkspaceViewModel(
     private void OnUiThread(Action action)
     {
         // Watcher callbacks arrive on a background thread; bound state has to change on the UI thread.
-        if (dispatcher is null)
+        if (_dispatcher is null)
         {
             action();
             return;
         }
-        _ = dispatcher.InvokeAsync(action).AsTask();
+        _ = _dispatcher.InvokeAsync(action).AsTask();
     }
 
     private async Task<bool> BuildDeletePlanAsync(

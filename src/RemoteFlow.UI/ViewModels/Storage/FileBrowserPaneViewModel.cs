@@ -13,9 +13,15 @@ public enum FileBrowserSortColumn
     Modified = 2,
 }
 
-public sealed partial class FileBrowserItemViewModel(FileBrowserEntry entry) : ObservableObject
+public sealed partial class FileBrowserItemViewModel(FileBrowserEntry entry, string transferLabel = "Transfer")
+    : ObservableObject
 {
     public FileBrowserEntry Entry { get; } = entry;
+
+    /// <summary>"Upload" or "Download", carried on the row rather than reached for through the visual tree.
+    /// A context menu lives in a popup, so <c>$parent[FileBrowserPane]</c> does not find the pane from
+    /// inside it and the header would silently bind to nothing.</summary>
+    public string TransferLabel { get; } = transferLabel;
 
     public string Name => Entry.Name;
 
@@ -75,18 +81,21 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
     public const int MaxRows = 10_000;
 
     private readonly IConfirmationDialogService _confirmation;
+    private readonly ILocalFolderMemory? _folderMemory;
     private readonly List<string> _backHistory = [];
     private readonly List<string> _forwardHistory = [];
     private string? _continuationToken;
     private int _pagesLoaded;
     private bool _syncingRoot;
+    private string? _rememberedPath;
     private CancellationTokenSource? _busyIndicatorDelay;
 
     public FileBrowserPaneViewModel(
         string paneName,
         string transferLabel,
         IConfirmationDialogService confirmation,
-        IFileBrowserSource? source = null)
+        IFileBrowserSource? source = null,
+        ILocalFolderMemory? folderMemory = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(paneName);
         ArgumentException.ThrowIfNullOrWhiteSpace(transferLabel);
@@ -94,6 +103,9 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
         TransferLabel = transferLabel;
         _confirmation = confirmation ?? throw new ArgumentNullException(nameof(confirmation));
         Source = source;
+        // Only a pane the user roams freely gets a memory. The remote pane's root is pinned by the
+        // connection, and restoring a prefix from a different bucket would open on an error banner.
+        _folderMemory = folderMemory;
     }
 
     /// <summary>"local folder" or "remote prefix". Every accessible name on the pane is derived from it.
@@ -431,10 +443,18 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
         return null;
     }
 
-    public void SetDropTarget(FileBrowserItemViewModel? hoveredDirectory)
+    /// <summary>Where a drop would land: the folder under the pointer, or the folder being shown when the
+    /// pointer is over a file or over empty space.</summary>
+    public string DropTargetPath(FileBrowserItemViewModel? hoveredDirectory)
     {
-        var target = hoveredDirectory is { IsDirectory: true } ? hoveredDirectory.Path : CurrentPath;
-        DropTargetMessage = $"Drop into {target}";
+        return hoveredDirectory is { IsDirectory: true } ? hoveredDirectory.Path : CurrentPath;
+    }
+
+    /// <summary>The verb comes from the drag payload rather than being fixed here, so a drop that will run
+    /// a download says so instead of the pane-to-pane "Drop into".</summary>
+    public void SetDropTarget(FileBrowserItemViewModel? hoveredDirectory, string verb = "Drop into")
+    {
+        DropTargetMessage = $"{verb} {DropTargetPath(hoveredDirectory)}";
     }
 
     public void ClearDropTarget()
@@ -640,7 +660,18 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
         _forwardHistory.Clear();
         ReloadRoots();
         NotifyHistoryChanged();
-        return await NavigateCoreAsync(source.RootPath, addHistory: false, cancellationToken).ConfigureAwait(true);
+
+        var remembered = _folderMemory is null
+            ? null
+            : await _folderMemory.RecallAsync(cancellationToken).ConfigureAwait(true);
+
+        // Where the pane was last pointed wins over the source's own root, and the short-circuit is the
+        // fallback: a remembered path that no longer lists — a deleted folder, an ejected drive — opens the
+        // root instead of greeting the user with an error banner, whose message the second navigate clears.
+        return (remembered is not null &&
+                source.IsValidPath(remembered) &&
+                await NavigateCoreAsync(remembered, addHistory: false, cancellationToken).ConfigureAwait(true)) ||
+            await NavigateCoreAsync(source.RootPath, addHistory: false, cancellationToken).ConfigureAwait(true);
     }
 
     public void Detach()
@@ -774,6 +805,7 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
             RebuildBreadcrumbs(source, path);
             SyncSelectedRoot(path);
             NotifyHistoryChanged();
+            Remember(path);
             return true;
         }
         catch (OperationCanceledException)
@@ -796,7 +828,7 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
     {
         foreach (var entry in page.Entries)
         {
-            Items.Add(new FileBrowserItemViewModel(entry));
+            Items.Add(new FileBrowserItemViewModel(entry, TransferLabel));
         }
 
         _pagesLoaded++;
@@ -908,6 +940,32 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
         finally
         {
             _syncingRoot = false;
+        }
+    }
+
+    /// <summary>Written on arrival rather than on the way out, so a crash or a kill still leaves the folder
+    /// remembered. Fire and forget, and deliberately silent: where the pane is pointed is a convenience,
+    /// and a failed settings write must not turn a folder that loaded fine into an error banner.</summary>
+    private void Remember(string path)
+    {
+        if (_folderMemory is null || string.Equals(_rememberedPath, path, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _rememberedPath = path;
+        _ = RememberAsync(_folderMemory, path);
+    }
+
+    private static async Task RememberAsync(ILocalFolderMemory memory, string path)
+    {
+        try
+        {
+            await memory.RememberAsync(path, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Nothing the user can act on, and nothing worth taking the pane's error banner for.
         }
     }
 

@@ -190,3 +190,12 @@ surfaced as an unrelated SFTP hit-test failure three runs in five.
 [ADR-0013](0013-sftp-workspace.md) is **amended, not superseded**. Its prediction that a dual-pane mode
 could arrive without changing the SFTP or transfer contracts held. The SFTP workspace stays single-pane and
 remote-first, and remains governed by it.
+
+## Amended by ADR-0022
+
+[ADR-0022](0022-dual-pane-sftp-workspace.md) gave the SFTP page a local pane of its own, so the sentence
+above is no longer true. Everything else here stands — and that ADR is the evidence for it: a second page
+grew a local half without one line of `FileBrowserPane` changing. Two things here did change:
+`PaneFormat` is now public, because the SFTP remote list is not a pane and must recognise it; and the
+staging leak recorded under "Known limitations" is swept on the one path where a drag out of that list ends
+on the local pane.

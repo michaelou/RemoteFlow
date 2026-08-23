@@ -5,6 +5,8 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RemoteFlow.UI.ViewModels.Sftp;
+using RemoteFlow.UI.ViewModels.Storage;
+using RemoteFlow.UI.Views.Storage;
 
 namespace RemoteFlow.UI.Views.Sftp;
 
@@ -20,11 +22,70 @@ public sealed partial class SftpWorkspace : UserControl
 
     private async void Workspace_OnLoaded(object? sender, RoutedEventArgs e)
     {
-        _ = FileList.Focus();
+        // The connection picker is the first tab stop, so the keyboard lands on the decision the page
+        // exists to make rather than in the middle of a file list.
+        _ = ConnectionPicker.Focus();
         if (DataContext is SftpWorkspaceViewModel viewModel)
         {
+            await viewModel.InitializeLocalAsync().ConfigureAwait(true);
             await viewModel.LoadConnectionsAsync().ConfigureAwait(true);
         }
+    }
+
+    /// <summary>The explicit pane jump, the same three chords the Storage page binds — see ADR-0021 for why
+    /// <c>Tab</c>, <c>F6</c>, <c>Ctrl+Tab</c> and <c>Alt+1</c>/<c>Alt+2</c> are all left alone.</summary>
+    private void Workspace_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            return;
+        }
+
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key == Key.Left)
+        {
+            _ = LocalPane.FocusList();
+            e.Handled = true;
+        }
+        else if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key == Key.Right)
+        {
+            _ = FocusRemoteList();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.L)
+        {
+            if (LocalPane.IsKeyboardFocusWithin)
+            {
+                _ = LocalPane.FocusPathBox();
+            }
+            else
+            {
+                _ = PathEditor.Focus();
+                PathEditor.SelectAll();
+            }
+
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>The row, not the list: the Fluent <c>ListBox</c> is not itself focusable — focus belongs to
+    /// the item containers — so calling <c>Focus</c> on the list quietly does nothing.</summary>
+    private bool FocusRemoteList()
+    {
+        if (FileList.ItemCount > 0)
+        {
+            if (FileList.SelectedIndex < 0)
+            {
+                FileList.SelectedIndex = 0;
+            }
+
+            if (FileList.ContainerFromIndex(FileList.SelectedIndex) is InputElement container &&
+                container.Focus())
+            {
+                return true;
+            }
+        }
+
+        return FileList.Focus();
     }
 
     private async void PathEditor_OnKeyDown(object? sender, KeyEventArgs e)
@@ -149,7 +210,19 @@ public sealed partial class SftpWorkspace : UserControl
         {
             return;
         }
+
         var transfer = new DataTransfer();
+
+        // Two payloads for one drag. The operating system gets real files, because ADR-0013 requires every
+        // advertised path to exist for the whole drop and there is no lazy file payload to hand it. The
+        // local pane beside this list gets an in-process action instead, which moves those same staged
+        // files into wherever it was dropped — so an in-app drop is one transfer, not two, and the staging
+        // directory is cleaned up rather than left behind.
+        transfer.Add(DataTransferItem.Create(
+            FileBrowserPane.ExternalDropFormat,
+            new FileBrowserExternalDrop(
+                "Download to",
+                (destination, token) => viewModel.CompleteDragToLocalAsync(staging, paths, destination, token))));
         foreach (var path in paths)
         {
             IStorageItem? storageItem = Directory.Exists(path)
@@ -160,15 +233,16 @@ public sealed partial class SftpWorkspace : UserControl
                 transfer.Add(DataTransferItem.CreateFile(storageItem));
             }
         }
-        if (transfer.Items.Count > 0)
-        {
-            _ = await DragDrop.DoDragDropAsync(e, transfer, DragDropEffects.Copy).ConfigureAwait(true);
-        }
+
+        _ = await DragDrop.DoDragDropAsync(e, transfer, DragDropEffects.Copy).ConfigureAwait(true);
     }
 
     private void FileList_OnDragOver(object? sender, DragEventArgs e)
     {
-        if (DataContext is not SftpWorkspaceViewModel viewModel || e.DataTransfer.TryGetFiles() is not { Length: > 0 })
+        if (DataContext is not SftpWorkspaceViewModel viewModel ||
+            !viewModel.IsConnected ||
+            (!ReferenceEquals(e.DataTransfer.TryGetValue(FileBrowserPane.PaneFormat), viewModel.Local) &&
+                e.DataTransfer.TryGetFiles() is not { Length: > 0 }))
         {
             e.DragEffects = DragDropEffects.None;
             return;
@@ -188,13 +262,24 @@ public sealed partial class SftpWorkspace : UserControl
 
     private async void FileList_OnDrop(object? sender, DragEventArgs e)
     {
-        if (DataContext is SftpWorkspaceViewModel viewModel && e.DataTransfer.TryGetFiles() is { Length: > 0 } files)
+        if (DataContext is SftpWorkspaceViewModel viewModel)
         {
             var hovered = FindItem(e.Source);
             var target = hovered is { IsDirectory: true } ? hovered.FullPath : viewModel.CurrentPath;
-            var paths = files.Select(file => file.TryGetLocalPath()).Where(path => path is not null).Cast<string>();
-            await viewModel.UploadAsync(paths, target).ConfigureAwait(true);
-            viewModel.ClearDropTarget();
+            if (ReferenceEquals(e.DataTransfer.TryGetValue(FileBrowserPane.PaneFormat), viewModel.Local))
+            {
+                // Out of the local pane, so the paths are already on this machine and nothing is staged:
+                // the rows the pane has selected go straight to the folder the pointer was over.
+                string[] paths = [.. viewModel.Local.SelectedItems.Select(item => item.Path)];
+                await viewModel.UploadAsync(paths, target).ConfigureAwait(true);
+                viewModel.ClearDropTarget();
+            }
+            else if (e.DataTransfer.TryGetFiles() is { Length: > 0 } files)
+            {
+                var paths = files.Select(file => file.TryGetLocalPath()).Where(path => path is not null).Cast<string>();
+                await viewModel.UploadAsync(paths, target).ConfigureAwait(true);
+                viewModel.ClearDropTarget();
+            }
         }
         e.Handled = true;
     }
@@ -257,6 +342,20 @@ public sealed partial class SftpWorkspace : UserControl
             DataContext is SftpWorkspaceViewModel viewModel)
         {
             BeginRename(viewModel, item);
+        }
+    }
+
+    /// <summary>Download from the row menu, into the folder the local pane is showing. Right-clicking
+    /// outside the selection has already narrowed it to the clicked row.</summary>
+    private async void Download_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: SftpItemViewModel item } &&
+            DataContext is SftpWorkspaceViewModel viewModel)
+        {
+            SftpItemViewModel[] selected = viewModel.SelectedItems.Contains(item)
+                ? [.. viewModel.SelectedItems]
+                : [item];
+            await viewModel.DownloadToLocalPaneAsync(selected).ConfigureAwait(true);
         }
     }
 

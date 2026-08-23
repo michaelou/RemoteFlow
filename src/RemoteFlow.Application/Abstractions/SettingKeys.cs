@@ -137,6 +137,10 @@ public static class SettingKeys
     public static SettingKey<StorageConflictDefault> StorageConflictDefault { get; } =
         new("StorageConflictDefault", global::RemoteFlow.Application.Abstractions.StorageConflictDefault.Overwrite);
 
+    /// <summary>Where a local browser pane was last pointed. Shared by the Storage and SFTP pages, so the
+    /// two land in the same folder rather than each keeping its own idea of where you were.</summary>
+    public static SettingKey<string?> LastLocalFolder { get; } = new("LastLocalFolder", null);
+
     public static IReadOnlyList<ISettingKey> All { get; } =
     [
         Theme,
@@ -174,5 +178,6 @@ public static class SettingKeys
         StorageDownloadDir,
         StorageMaxPartsInFlight,
         StorageConflictDefault,
+        LastLocalFolder,
     ];
 }

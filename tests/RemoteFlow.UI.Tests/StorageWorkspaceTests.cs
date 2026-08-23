@@ -1,4 +1,5 @@
 using System.Text;
+using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Application.Queries;
 using RemoteFlow.Application.Services;
@@ -357,6 +358,80 @@ public sealed class StorageWorkspaceTests
         // Not faked: S3's nearest primitive is a billed, size-capped server-side copy plus a delete.
         Assert.False(item.IsRenaming);
         Assert.Contains("no rename", fixture.Page.Remote.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The local pane opens where it was left. The fallback matters as much as the memory: a
+    /// remembered folder that has since gone must not leave the pane on an error banner every launch.
+    /// </summary>
+    [Fact]
+    public async Task TheLocalPaneReopensWhereItWasLeftAndFallsBackWhenThatFolderIsGone()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var root = CreateTempDirectory();
+        try
+        {
+            var remembered = Directory.CreateDirectory(Path.Combine(root, "remembered")).FullName;
+            var settings = new InMemorySettingsStore();
+            var memory = new SettingsLocalFolderMemory(settings);
+
+            // One page per launch, so what carries over between them is only what was written down.
+            async Task<(string Path, string? Error)> LaunchAsync(string? walkTo)
+            {
+                await using var fixture = StorageTestDoubles.CreateFixture(folderMemory: memory);
+                await fixture.Page.InitializeLocalAsync(token);
+                if (walkTo is not null)
+                {
+                    _ = await fixture.Page.Local.NavigateAsync(walkTo, token);
+                    await WaitUntilAsync(
+                        () => settings.Get(SettingKeys.LastLocalFolder, token).GetAwaiter().GetResult() == walkTo,
+                        token);
+                }
+
+                return (fixture.Page.Local.CurrentPath, fixture.Page.Local.ErrorMessage);
+            }
+
+            var firstLaunch = await LaunchAsync(null);
+            Assert.NotEqual(remembered, firstLaunch.Path);
+
+            _ = await LaunchAsync(remembered);
+            Assert.Equal(remembered, (await LaunchAsync(null)).Path);
+
+            Directory.Delete(remembered, recursive: true);
+            var afterItWentAway = await LaunchAsync(null);
+
+            Assert.NotEqual(remembered, afterItWentAway.Path);
+            Assert.NotEmpty(afterItWentAway.Path);
+            Assert.Null(afterItWentAway.Error);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>The row menu's transfer entry reads "Upload" on the local pane and "Download" on the remote
+    /// one. It is carried on the row because a flyout is a popup, where <c>$parent</c> finds no pane.
+    /// </summary>
+    [Fact]
+    public async Task TheRowMenuNamesTheTransferAfterTheDirectionItRuns()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var root = CreateTempDirectory();
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root, "clip.mov"), "frames", token);
+            await using var fixture = StorageTestDoubles.CreateFixture();
+            fixture.Storage.Seed("/media/2024/clip.mov", Encoding.UTF8.GetBytes("frames"));
+            await fixture.Page.AttachAsync(fixture.Connection.Id, token);
+            _ = await fixture.Page.Local.NavigateAsync(root, token);
+
+            Assert.Equal("Upload", Assert.Single(fixture.Page.Local.Items).TransferLabel);
+            Assert.Equal("Download", Assert.Single(fixture.Page.Remote.Items).TransferLabel);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition, CancellationToken cancellationToken)

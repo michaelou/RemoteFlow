@@ -2,6 +2,7 @@ using Avalonia.Headless.XUnit;
 using Microsoft.Extensions.DependencyInjection;
 using RemoteFlow.Application;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Infrastructure;
 using RemoteFlow.Persistence;
 using RemoteFlow.UI.Navigation;
@@ -40,6 +41,11 @@ public sealed class NavigationCompositionTests
                 ValidateOnBuild = false,
                 ValidateScopes = true,
             });
+
+            // Optional constructor parameters are the trap here: an unregistered one silently takes its
+            // default, so the two pages with a local browser pane would each quietly stop remembering where
+            // it was pointed and no page-level test would notice.
+            _ = provider.GetRequiredService<ILocalFolderMemory>();
 
             var registrations = provider.GetServices<NavigationPageRegistration>().ToArray();
 

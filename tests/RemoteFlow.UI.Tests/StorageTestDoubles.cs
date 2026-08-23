@@ -1,5 +1,6 @@
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
+using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Application.Queries;
 using RemoteFlow.Domain.Abstractions;
 using RemoteFlow.Domain.Entities;
@@ -45,7 +46,8 @@ internal static class StorageTestDoubles
         InMemoryObjectStorage? storage = null,
         bool confirmationResult = true,
         StorageConflictDefault conflictDefault = StorageConflictDefault.Overwrite,
-        IConnectionQueryService? connectionQueries = null)
+        IConnectionQueryService? connectionQueries = null,
+        ILocalFolderMemory? folderMemory = null)
     {
         var connection = StorageConnection();
         var store = storage ?? new InMemoryObjectStorage();
@@ -62,7 +64,8 @@ internal static class StorageTestDoubles
             confirmation,
             new TransferConflictResolverFactory(dialogs, settings),
             transfers,
-            connectionQueries);
+            connectionQueries,
+            folderMemory);
         return new StorageFixture(connection, store, page, transfers, confirmation, dialogs, settings);
     }
 
