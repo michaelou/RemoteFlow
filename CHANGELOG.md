@@ -7,7 +7,7 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
-## [0.3.1] - 2026-08-23
+## [0.4.0] - 2026-08-23
 
 ### Added
 
@@ -469,8 +469,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.3.1...HEAD
-[0.3.1]: https://github.com/michaelou/RemoteFlow/compare/v0.3.0...v0.3.1
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/michaelou/RemoteFlow/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/michaelou/RemoteFlow/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/michaelou/RemoteFlow/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/michaelou/RemoteFlow/compare/v0.2.4...v0.2.5
