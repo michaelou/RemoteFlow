@@ -91,6 +91,46 @@
     <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
   </Style>
 
+  <!-- The file and folder table on the Storage and SFTP pages. It is a dense listing rather than a list
+       of cards: smaller type and a shorter row than the rest of the app, so a folder of a hundred entries
+       can be scanned without scrolling. The metrics live here rather than in each view because the SFTP
+       page puts a local pane and a remote listing side by side, and two tables that do not measure the
+       same are two tables whose headings sit at different heights.
+
+       The heading strip's left padding is the listing's padding plus a row's, so a heading and the cells
+       it labels start on the same pixel: 10 = 4 + 6. -->
+  <Style Selector="Border.browser-header">
+    <Setter Property="Padding" Value="10,3" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+    <Setter Property="BorderThickness" Value="0,1,0,1" />
+  </Style>
+  <!-- The column headings are labels first and buttons second: they read as part of the table until they
+       are pointed at, which is when the flat class gives them a box. MinHeight is cleared so the heading
+       row is the height of its own padding rather than the height a form button wants to be. -->
+  <Style Selector="Button.column">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="8,2" />
+  </Style>
+  <Style Selector="TextBlock.sort">
+    <Setter Property="FontSize" Value="8" />
+    <Setter Property="Margin" Value="4,0,0,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ListBox.browser">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="4,2" />
+  </Style>
+  <!-- MinHeight is cleared for the same reason, and the corner comes down with the row: the panel radius
+       on a 24-pixel row rounds away the ends of the selection instead of marking it. -->
+  <Style Selector="ListBox.browser ListBoxItem">
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Small}" />
+  </Style>
+
   <!-- A button whose content is a single glyph. Equal padding on all four sides keeps it square
        instead of stretching into the width a word would need. -->
   <Style Selector="Button.icon">

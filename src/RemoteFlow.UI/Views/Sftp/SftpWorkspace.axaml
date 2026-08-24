@@ -7,19 +7,6 @@
     xmlns:storage="using:RemoteFlow.UI.Views.Storage"
     Loaded="Workspace_OnLoaded"
     KeyDown="Workspace_OnKeyDown">
-  <UserControl.Styles>
-    <!-- The column headings are labels first and buttons second: they read as part of the table until
-         they are pointed at, which is when the flat class gives them a box. -->
-    <Style Selector="Button.column">
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="HorizontalAlignment" Value="Stretch" />
-    </Style>
-    <Style Selector="TextBlock.sort">
-      <Setter Property="FontSize" Value="9" />
-      <Setter Property="Margin" Value="4,0,0,0" />
-      <Setter Property="VerticalAlignment" Value="Center" />
-    </Style>
-  </UserControl.Styles>
   <Grid RowDefinitions="*,Auto">
   <!-- Local filesystem on the left, the server on the right, the shared transfer queue along the bottom —
        the Storage page's shape, so the two pages are one thing to learn. The transfer row is a fixed pixel
@@ -87,134 +74,133 @@
           Background="Transparent"
           ResizeDirection="Columns" />
 
-      <Grid Grid.Column="2" RowDefinitions="Auto,Auto,*">
-        <!-- Navigation and actions share one card: where you are, how to move, and what you can do to this
-             folder, in that reading order. -->
-        <Border Classes="panel" Margin="0,0,0,10" Padding="12,10" IsVisible="{Binding IsConnected}">
-          <StackPanel Spacing="10">
-            <Grid ColumnDefinitions="Auto,*,Auto">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <Button AutomationProperties.Name="Back" Classes="icon" IsEnabled="{Binding CanGoBack}" Command="{Binding BackCommand}" ToolTip.Tip="Back">
-                  <PathIcon Data="{DynamicResource Icon.Back}" />
-                </Button>
-                <Button AutomationProperties.Name="Forward" Classes="icon" IsEnabled="{Binding CanGoForward}" Command="{Binding ForwardCommand}" ToolTip.Tip="Forward">
-                  <PathIcon Data="{DynamicResource Icon.Forward}" />
-                </Button>
-                <Button AutomationProperties.Name="Up one folder" Classes="icon" Command="{Binding UpCommand}" ToolTip.Tip="Up">
-                  <PathIcon Data="{DynamicResource Icon.Up}" />
-                </Button>
-                <Button AutomationProperties.Name="Refresh this folder" Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh">
-                  <PathIcon Data="{DynamicResource Icon.Refresh}" />
-                </Button>
-              </StackPanel>
-              <TextBox
-                  x:Name="PathEditor"
-                  Grid.Column="1"
-                  AutomationProperties.Name="Remote path"
-                  Margin="10,0"
-                  Text="{Binding PathText}"
-                  KeyDown="PathEditor_OnKeyDown"
-                  PlaceholderText="/absolute/remote/path" />
-              <CheckBox Grid.Column="2" Content="Hidden files" IsChecked="{Binding ShowHiddenFiles}" />
-            </Grid>
-
-            <Grid ColumnDefinitions="*,Auto">
-              <ItemsControl ClipToBounds="True" ItemsSource="{Binding Breadcrumbs}" VerticalAlignment="Center">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="viewModels:SftpBreadcrumb">
-                    <StackPanel Orientation="Horizontal">
-                      <Button Classes="flat" Content="{Binding Label}" Click="Breadcrumb_OnClick" />
-                      <TextBlock Margin="3,0" VerticalAlignment="Center" Text="/" Foreground="{DynamicResource Brush.Text.Muted}" />
-                    </StackPanel>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
-                <Button AutomationProperties.Name="New folder" Click="NewFolder_OnClick" ToolTip.Tip="Create a folder here">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.NewFolder}" />
-                    <TextBlock Text="New folder" />
-                  </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="Current permissions" Click="CurrentPermissions_OnClick" ToolTip.Tip="Permissions of the folder being shown">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Permissions}" />
-                    <TextBlock Text="Permissions…" />
-                  </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="Upload" Command="{Binding ChooseAndUploadCommand}" ToolTip.Tip="Upload files into this folder">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Upload}" />
-                    <TextBlock Text="Upload…" />
-                  </StackPanel>
-                </Button>
-                <!-- Download to the local pane, and Download… to a folder you pick. The first is the dual-pane
-                     gesture; the second is the one that predates the pane and still reaches anywhere. -->
-                <Button
-                    AutomationProperties.Name="Download the selection to the local pane"
-                    Classes="accent"
-                    Command="{Binding DownloadSelectionCommand}"
-                    ToolTip.Tip="Download the selected items into the folder the local pane is showing">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Download}" />
-                    <TextBlock Text="Download" />
-                  </StackPanel>
-                </Button>
-                <Button AutomationProperties.Name="Download to a folder you choose" Command="{Binding ChooseAndDownloadCommand}" ToolTip.Tip="Download the selected items into a folder you choose">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Download}" />
-                    <TextBlock Text="Download…" />
-                  </StackPanel>
-                </Button>
-                <Button
-                    AutomationProperties.Name="Cancel operation"
-                    Command="{Binding CancelOperationCommand}"
-                    IsVisible="{Binding IsMutating}"
-                    ToolTip.Tip="Cancel the operation in progress">
-                  <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Cancel}" />
-                    <TextBlock Text="Cancel" />
-                  </StackPanel>
-                </Button>
-              </StackPanel>
-            </Grid>
-
-            <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsCreatingFolder}">
-              <TextBox
-                  x:Name="NewFolderEditor"
-                  AutomationProperties.Name="New folder name"
-                  Width="260"
-                  Text="{Binding NewFolderName}"
-                  KeyDown="NewFolderEditor_OnKeyDown" />
-              <Button Classes="accent" Content="Create" Click="CreateFolder_OnClick" />
-              <Button Content="Cancel" Click="CancelCreateFolder_OnClick" />
+      <!-- The remote listing mirrors the local pane row for row: one card, the same gutters, the same
+           heading strip. The two sit side by side, and a heading a few pixels off from the one next to it
+           reads as a broken table rather than as two panes. -->
+      <Border Grid.Column="2" Classes="panel" ClipToBounds="True">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+          <!-- Where you are and how to move, in reading order. -->
+          <Grid Margin="8,6,8,0" ColumnDefinitions="Auto,*,Auto" IsVisible="{Binding IsConnected}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <Button AutomationProperties.Name="Back" Classes="icon" IsEnabled="{Binding CanGoBack}" Command="{Binding BackCommand}" ToolTip.Tip="Back">
+                <PathIcon Data="{DynamicResource Icon.Back}" />
+              </Button>
+              <Button AutomationProperties.Name="Forward" Classes="icon" IsEnabled="{Binding CanGoForward}" Command="{Binding ForwardCommand}" ToolTip.Tip="Forward">
+                <PathIcon Data="{DynamicResource Icon.Forward}" />
+              </Button>
+              <Button AutomationProperties.Name="Up one folder" Classes="icon" Command="{Binding UpCommand}" ToolTip.Tip="Up">
+                <PathIcon Data="{DynamicResource Icon.Up}" />
+              </Button>
+              <Button AutomationProperties.Name="Refresh this folder" Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh">
+                <PathIcon Data="{DynamicResource Icon.Refresh}" />
+              </Button>
             </StackPanel>
+            <TextBox
+                x:Name="PathEditor"
+                Grid.Column="1"
+                AutomationProperties.Name="Remote path"
+                Margin="8,0"
+                Text="{Binding PathText}"
+                KeyDown="PathEditor_OnKeyDown"
+                PlaceholderText="/absolute/remote/path" />
+            <CheckBox
+                Grid.Column="2"
+                AutomationProperties.Name="Show hidden files"
+                Content="Hidden"
+                IsChecked="{Binding ShowHiddenFiles}" />
+          </Grid>
+
+          <Grid Grid.Row="1" Margin="8,6,8,0" ColumnDefinitions="*,Auto" IsVisible="{Binding IsConnected}">
+            <ItemsControl ClipToBounds="True" ItemsSource="{Binding Breadcrumbs}" VerticalAlignment="Center">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="viewModels:SftpBreadcrumb">
+                  <StackPanel Orientation="Horizontal">
+                    <Button Classes="flat" Content="{Binding Label}" Click="Breadcrumb_OnClick" />
+                    <TextBlock Margin="2,0" VerticalAlignment="Center" Text="/" Foreground="{DynamicResource Brush.Text.Muted}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+              <Button AutomationProperties.Name="New folder" Click="NewFolder_OnClick" ToolTip.Tip="Create a folder here">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.NewFolder}" />
+                  <TextBlock Text="New folder" />
+                </StackPanel>
+              </Button>
+              <Button AutomationProperties.Name="Current permissions" Click="CurrentPermissions_OnClick" ToolTip.Tip="Permissions of the folder being shown">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Permissions}" />
+                  <TextBlock Text="Permissions…" />
+                </StackPanel>
+              </Button>
+              <Button AutomationProperties.Name="Upload" Command="{Binding ChooseAndUploadCommand}" ToolTip.Tip="Upload files into this folder">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Upload}" />
+                  <TextBlock Text="Upload…" />
+                </StackPanel>
+              </Button>
+              <!-- Download to the local pane, and Download… to a folder you pick. The first is the dual-pane
+                   gesture; the second is the one that predates the pane and still reaches anywhere. -->
+              <Button
+                  AutomationProperties.Name="Download the selection to the local pane"
+                  Classes="accent"
+                  Command="{Binding DownloadSelectionCommand}"
+                  ToolTip.Tip="Download the selected items into the folder the local pane is showing">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Download}" />
+                  <TextBlock Text="Download" />
+                </StackPanel>
+              </Button>
+              <Button AutomationProperties.Name="Download to a folder you choose" Command="{Binding ChooseAndDownloadCommand}" ToolTip.Tip="Download the selected items into a folder you choose">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Download}" />
+                  <TextBlock Text="Download…" />
+                </StackPanel>
+              </Button>
+              <Button
+                  AutomationProperties.Name="Cancel operation"
+                  Command="{Binding CancelOperationCommand}"
+                  IsVisible="{Binding IsMutating}"
+                  ToolTip.Tip="Cancel the operation in progress">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Cancel}" />
+                  <TextBlock Text="Cancel" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Grid>
+
+          <StackPanel Grid.Row="2" Margin="8,6,8,0" Orientation="Horizontal" Spacing="6" IsVisible="{Binding IsCreatingFolder}">
+            <TextBox
+                x:Name="NewFolderEditor"
+                AutomationProperties.Name="New folder name"
+                Width="220"
+                Text="{Binding NewFolderName}"
+                KeyDown="NewFolderEditor_OnKeyDown" />
+            <Button Classes="accent" Content="Create" Click="CreateFolder_OnClick" />
+            <Button Content="Cancel" Click="CancelCreateFolder_OnClick" />
           </StackPanel>
-        </Border>
 
-        <Border
-            Grid.Row="1"
-            Margin="0,0,0,10"
-            Padding="12,8"
-            Background="#33D43B3B"
-            CornerRadius="{DynamicResource Radius.Control}"
-            IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-          <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
-        </Border>
+          <Border
+              Grid.Row="3"
+              Margin="8,6,8,0"
+              Padding="10,6"
+              Background="{DynamicResource Brush.Danger.Surface}"
+              BorderBrush="{DynamicResource Brush.Danger}"
+              BorderThickness="1"
+              CornerRadius="{DynamicResource Radius.Control}"
+              IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+          </Border>
 
-        <!-- The listing and its column headings are one card, clipped so the rows stop at the rounded
-             corners instead of squaring them off. -->
-        <Border Grid.Row="2" Classes="panel" ClipToBounds="True" IsVisible="{Binding IsConnected}">
-          <Grid RowDefinitions="Auto,*">
-            <Border
-                Padding="12,6"
-                BorderBrush="{DynamicResource Brush.Border}"
-                BorderThickness="0,0,0,1">
+          <Grid Grid.Row="4" Margin="0,6,0,0" RowDefinitions="Auto,*" IsVisible="{Binding IsConnected}">
+            <Border Classes="browser-header">
               <Grid ColumnDefinitions="2*,80,125,95,105">
-                <Button AutomationProperties.Name="Sort by name" Classes="flat column" HorizontalContentAlignment="Left" Padding="24,4,8,4" Click="SortName_OnClick">
+                <Button AutomationProperties.Name="Sort by name" Classes="flat column" HorizontalContentAlignment="Left" Padding="20,2,8,2" Click="SortName_OnClick">
                   <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Name" />
                     <TextBlock Classes="sort" Text="{Binding NameSortGlyph}" />
@@ -226,7 +212,7 @@
                     <TextBlock Classes="sort" Text="{Binding SizeSortGlyph}" />
                   </StackPanel>
                 </Button>
-                <Button Grid.Column="2" AutomationProperties.Name="Sort by modified date" Classes="flat column" HorizontalContentAlignment="Left" Padding="12,4,8,4" Click="SortModified_OnClick">
+                <Button Grid.Column="2" AutomationProperties.Name="Sort by modified date" Classes="flat column" HorizontalContentAlignment="Left" Padding="12,2,8,2" Click="SortModified_OnClick">
                   <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Modified" />
                     <TextBlock Classes="sort" Text="{Binding ModifiedSortGlyph}" />
@@ -250,8 +236,8 @@
             <ListBox
                 x:Name="FileList"
                 Grid.Row="1"
+                Classes="browser"
                 Background="Transparent"
-                Padding="6,4"
                 SelectionMode="Multiple"
                 ItemsSource="{Binding Items}"
                 SelectionChanged="FileList_OnSelectionChanged"
@@ -263,12 +249,6 @@
                 DragDrop.DragOver="FileList_OnDragOver"
                 DragDrop.DragLeave="FileList_OnDragLeave"
                 DragDrop.Drop="FileList_OnDrop">
-              <ListBox.Styles>
-                <Style Selector="ListBoxItem">
-                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                  <Setter Property="Padding" Value="6,0" />
-                </Style>
-              </ListBox.Styles>
               <ListBox.ItemsPanel>
                 <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
               </ListBox.ItemsPanel>
@@ -276,21 +256,21 @@
                 <DataTemplate x:DataType="viewModels:SftpItemViewModel">
                   <!-- The transparent background is what makes the gaps between the columns hit-testable, so
                        the context menu opens anywhere on the row rather than only over the file name. -->
-                  <Grid ColumnDefinitions="2*,80,125,95,105" MinHeight="32" Background="Transparent">
-                    <Grid ColumnDefinitions="24,*">
+                  <Grid ColumnDefinitions="2*,80,125,95,105" MinHeight="24" Background="Transparent">
+                    <Grid ColumnDefinitions="20,*">
                       <!-- Two glyphs rather than one bound to a converter: a folder is the accent colour and a
                            file is not, and picking that with IsVisible keeps the choice in the view. -->
                       <PathIcon
-                          Width="15"
-                          Height="15"
+                          Width="13"
+                          Height="13"
                           HorizontalAlignment="Left"
                           VerticalAlignment="Center"
                           Data="{DynamicResource Icon.Folder}"
                           Foreground="{DynamicResource Brush.Accent}"
                           IsVisible="{Binding IsDirectory}" />
                       <PathIcon
-                          Width="15"
-                          Height="15"
+                          Width="13"
+                          Height="13"
                           HorizontalAlignment="Left"
                           VerticalAlignment="Center"
                           Data="{DynamicResource Icon.File}"
@@ -325,26 +305,26 @@
               </ListBox.ItemTemplate>
             </ListBox>
           </Grid>
-        </Border>
 
-        <Border Grid.Row="2" Classes="panel" Padding="40" IsVisible="{Binding !IsConnected}">
-          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
-            <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="Not connected" />
-            <TextBlock
-                HorizontalAlignment="Center"
-                TextAlignment="Center"
-                TextWrapping="Wrap"
-                Foreground="{DynamicResource Brush.Text.Secondary}"
-                Text="{Binding NoConnectionMessage}" />
-            <Button
-                Classes="accent"
-                Content="Connect"
-                HorizontalAlignment="Center"
-                IsVisible="{Binding HasConnectionChoices}"
-                Command="{Binding ConnectSelectedCommand}" />
-          </StackPanel>
-        </Border>
-      </Grid>
+          <Border Grid.Row="4" Padding="40" IsVisible="{Binding !IsConnected}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+              <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="Not connected" />
+              <TextBlock
+                  HorizontalAlignment="Center"
+                  TextAlignment="Center"
+                  TextWrapping="Wrap"
+                  Foreground="{DynamicResource Brush.Text.Secondary}"
+                  Text="{Binding NoConnectionMessage}" />
+              <Button
+                  Classes="accent"
+                  Content="Connect"
+                  HorizontalAlignment="Center"
+                  IsVisible="{Binding HasConnectionChoices}"
+                  Command="{Binding ConnectSelectedCommand}" />
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Border>
     </Grid>
 
     <GridSplitter

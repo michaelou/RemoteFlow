@@ -520,6 +520,42 @@ public sealed class SftpWorkspaceTests
         window.Close();
     }
 
+    /// <summary>
+    /// The local pane and the remote listing are two separate tables side by side, so nothing but matching
+    /// geometry puts their column headings on one line. This is the regression that mattered: the remote
+    /// half used to hang its toolbar in a card of its own with different padding, which pushed its heading
+    /// strip roughly a row and a half below the local one.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TheLocalAndRemoteColumnHeadingsSitAtTheSameHeight()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = CreateFixture();
+        await SeedFileAsync(fixture.Sftp, "/home/test/app.conf", [1], token);
+        await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
+        var window = new Window
+        {
+            Width = 1400,
+            Height = 700,
+            Content = new SftpWorkspace { DataContext = fixture.ViewModel },
+        };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var headers = window.GetVisualDescendants()
+            .OfType<Border>()
+            .Where(border => border.Classes.Contains("browser-header"))
+            .Select(border => border.TranslatePoint(default, window))
+            .ToArray();
+
+        Assert.Equal(2, headers.Length);
+        Assert.All(headers, point => Assert.True(point.HasValue));
+        Assert.Equal(headers[0]!.Value.Y, headers[1]!.Value.Y, 0.5);
+        Assert.True(headers[0]!.Value.Y > 0, "the heading strips were not laid out.");
+        window.Close();
+    }
+
     /// <summary>A folder and a file have to be told apart at a glance, which is the row glyph's whole job.</summary>
     [AvaloniaFact]
     public async Task RowsCarryAFolderOrFileGlyph()
