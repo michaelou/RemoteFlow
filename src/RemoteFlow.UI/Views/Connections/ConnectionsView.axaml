@@ -37,10 +37,43 @@
             PlaceholderText="Search name, host, user, notes, or tags"
             Text="{Binding SearchText, Mode=TwoWay}" />
         <Grid ColumnDefinitions="Auto,*,Auto">
+          <!-- One worded button for what the page is for, and glyphs for the rest: they are the four
+               things done to the list rather than to a connection, and words for all of them crowded out
+               the search box above them. Every glyph button names itself twice — a tooltip for the pointer
+               and an automation name for a screen reader — because an unlabelled icon is a guess. -->
           <StackPanel Orientation="Horizontal" Spacing="8">
             <Button Classes="accent" Click="CreateConnection_OnClick" Content="New connection" />
-            <Button Click="NewFolder_OnClick" Content="New folder" ToolTip.Tip="Create a top-level folder. Right-click a folder to add one inside it." />
-            <Button Click="ClearRecent_OnClick" Content="Clear recent" />
+            <Button
+                AutomationProperties.Name="New folder"
+                Classes="icon"
+                Click="NewFolder_OnClick"
+                ToolTip.Tip="Create a top-level folder. Right-click a folder to add one inside it.">
+              <PathIcon Data="{DynamicResource Icon.NewFolder}" />
+            </Button>
+            <Button
+                AutomationProperties.Name="Clear recent"
+                Classes="icon"
+                Click="ClearRecent_OnClick"
+                ToolTip.Tip="Empty the Recent list">
+              <PathIcon Data="{DynamicResource Icon.ClearRecent}" />
+            </Button>
+            <!-- One button, not two: it closes the folders while any are open and opens them again once
+                 they are all shut, and its glyph and its tooltip both say which. -->
+            <Button
+                AutomationProperties.Name="{Binding ExpandCollapseLabel}"
+                Classes="icon"
+                Click="ToggleFolders_OnClick"
+                IsEnabled="{Binding HasFolders}"
+                ToolTip.Tip="{Binding ExpandCollapseLabel}">
+              <PathIcon Data="{Binding ExpandCollapseIconKey, Converter={x:Static converters:ResourceKeyConverter.Instance}}" />
+            </Button>
+            <Button
+                AutomationProperties.Name="{Binding SecondaryTextLabel}"
+                Classes="icon"
+                Click="ToggleSecondaryText_OnClick"
+                ToolTip.Tip="{Binding SecondaryTextLabel}">
+              <PathIcon Data="{Binding SecondaryTextIconKey, Converter={x:Static converters:ResourceKeyConverter.Instance}}" />
+            </Button>
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
             <!-- Protocol, environment and tags used to sit on the page as three rows of checkboxes, which
@@ -131,6 +164,7 @@
             Background="Transparent"
             BorderThickness="0"
             Classes="explorer"
+            Classes.compact="{Binding !ShowSecondaryText}"
             DragDrop.AllowDrop="True"
             ItemsSource="{Binding RootNodes}"
             DragDrop.DragOver="ConnectionTree_OnDragOver"
@@ -165,6 +199,15 @@
               <Setter Property="CornerRadius" Value="0" />
               <Setter Property="MinHeight" Value="40" />
               <Setter Property="Padding" Value="0,6" />
+            </Style>
+
+            <!-- With the host line off, a row holds one line of text, and the height a two-line row needs
+                 becomes air. The class is on the tree rather than on each row because the toolbar's toggle
+                 is a decision about the whole list, and the tree is the control whose data context knows
+                 about it. -->
+            <Style Selector="TreeView.explorer.compact TreeViewItem">
+              <Setter Property="MinHeight" Value="0" />
+              <Setter Property="Padding" Value="0,4" />
             </Style>
 
             <!-- Fluent reserves 36px for the chevron whether or not a node has children. That is the gutter that
@@ -218,6 +261,27 @@
               <Setter Property="BorderThickness" Value="0,0,0,1" />
             </Style>
 
+            <!-- One hue per protocol, matched on the tag the row carries. Dynamic resources rather than a
+                 brush built in the view model: these are the one part of a row that has to change when the
+                 window switches between light and dark, and a brush handed over by a converter would stay
+                 the colour it was built as. The glyph is only half of the signal — the shape differs too —
+                 so nothing here is the sole carrier of what a row is. -->
+            <Style Selector="TreeView.explorer PathIcon[Tag=ssh]">
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Protocol.Ssh}" />
+            </Style>
+            <Style Selector="TreeView.explorer PathIcon[Tag=sftp]">
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Protocol.Sftp}" />
+            </Style>
+            <Style Selector="TreeView.explorer PathIcon[Tag=rdp]">
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Protocol.Rdp}" />
+            </Style>
+            <Style Selector="TreeView.explorer PathIcon[Tag=s3]">
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Protocol.S3}" />
+            </Style>
+            <Style Selector="TreeView.explorer PathIcon[Tag=azure-blob]">
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Protocol.AzureBlob}" />
+            </Style>
+
             <!-- Favorites and Recent are headings for the rows underneath them, not rows in their own right. -->
             <Style Selector="TreeView.explorer Grid.group TextBlock">
               <Setter Property="FontSize" Value="11" />
@@ -251,13 +315,15 @@
                   ColumnDefinitions="Auto,*,Auto"
                   ColumnSpacing="10"
                   PointerPressed="Node_OnPointerPressed">
-                <!-- No Foreground: the glyph inherits the row's, so it turns with the text when the row
-                     is selected instead of staying grey against the highlight. -->
+                <!-- The tag is what the protocol colour rules above select on. A node that is not a
+                     connection carries none, so no rule matches it and its glyph goes on inheriting the
+                     row's foreground — which is what turns a selected folder's glyph with its name. -->
                 <PathIcon
                     Width="16"
                     Height="16"
                     VerticalAlignment="Center"
-                    Data="{Binding IconKey, Converter={x:Static converters:ResourceKeyConverter.Instance}}" />
+                    Data="{Binding IconKey, Converter={x:Static converters:ResourceKeyConverter.Instance}}"
+                    Tag="{Binding ProtocolTag}" />
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                   <Grid>
                     <TextBlock IsVisible="{Binding !IsRenaming}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
@@ -269,13 +335,19 @@
                         MinWidth="140"
                         Text="{Binding EditName}" />
                   </Grid>
-                  <TextBlock
-                      FontSize="11"
-                      Margin="0,1,0,0"
-                      Foreground="{DynamicResource Brush.Text.Muted}"
-                      IsVisible="{Binding SecondaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                      Text="{Binding SecondaryText}"
-                      TextTrimming="CharacterEllipsis" />
+                  <!-- Two nested visibilities rather than one expression: the panel answers the toolbar's
+                       show-and-hide for the whole list, and the line inside it answers whether this row has
+                       a host to show at all. A collapsed panel takes no height, so hiding the line closes
+                       the row up instead of leaving a gap where it was. -->
+                  <Panel IsVisible="{Binding $parent[UserControl].((connectionViewModels:ConnectionsPageViewModel)DataContext).ShowSecondaryText}">
+                    <TextBlock
+                        FontSize="11"
+                        Margin="0,1,0,0"
+                        Foreground="{DynamicResource Brush.Text.Muted}"
+                        IsVisible="{Binding SecondaryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                        Text="{Binding SecondaryText}"
+                        TextTrimming="CharacterEllipsis" />
+                  </Panel>
                 </StackPanel>
                 <!-- Held at the row's right edge rather than trailing the host name, so the badges form their
                      own column instead of starting at a different place on every row. -->

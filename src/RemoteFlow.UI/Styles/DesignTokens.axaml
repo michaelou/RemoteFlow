@@ -27,6 +27,15 @@
            workspace still carries: opaque, so its contrast can actually be measured, and dark enough for
            primary text to clear 4.5:1 on it. -->
       <Color x:Key="Color.Danger.Surface">#391F26</Color>
+      <!-- The five protocols, one hue each, so a glance down the explorer sorts a shell from a screen from
+           a bucket without reading a word. Every one of these clears 3:1 against Surface.1 and Surface.2 —
+           the floor for a graphic that carries meaning — and they are deliberately not the environment
+           colours below: an amber bucket must not read as a staging badge. -->
+      <Color x:Key="Color.Protocol.Ssh">#7EE787</Color>
+      <Color x:Key="Color.Protocol.Sftp">#79C0FF</Color>
+      <Color x:Key="Color.Protocol.Rdp">#D2A8FF</Color>
+      <Color x:Key="Color.Protocol.S3">#FFA657</Color>
+      <Color x:Key="Color.Protocol.AzureBlob">#56D4DD</Color>
       <Color x:Key="Color.Environment.Dev">#5DE28C</Color>
       <Color x:Key="Color.Environment.Staging">#FFCA58</Color>
       <Color x:Key="Color.Environment.Production">#FF7B72</Color>
@@ -46,6 +55,11 @@
       <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />
       <SolidColorBrush x:Key="Brush.Danger" Color="{DynamicResource Color.Danger}" />
       <SolidColorBrush x:Key="Brush.Danger.Surface" Color="{DynamicResource Color.Danger.Surface}" />
+      <SolidColorBrush x:Key="Brush.Protocol.Ssh" Color="{DynamicResource Color.Protocol.Ssh}" />
+      <SolidColorBrush x:Key="Brush.Protocol.Sftp" Color="{DynamicResource Color.Protocol.Sftp}" />
+      <SolidColorBrush x:Key="Brush.Protocol.Rdp" Color="{DynamicResource Color.Protocol.Rdp}" />
+      <SolidColorBrush x:Key="Brush.Protocol.S3" Color="{DynamicResource Color.Protocol.S3}" />
+      <SolidColorBrush x:Key="Brush.Protocol.AzureBlob" Color="{DynamicResource Color.Protocol.AzureBlob}" />
       <SolidColorBrush x:Key="Brush.Environment.Dev" Color="{DynamicResource Color.Environment.Dev}" />
       <SolidColorBrush x:Key="Brush.Environment.Staging" Color="{DynamicResource Color.Environment.Staging}" />
       <SolidColorBrush x:Key="Brush.Environment.Production" Color="{DynamicResource Color.Environment.Production}" />
@@ -67,6 +81,12 @@
       <Color x:Key="Color.Warning">#8A5A00</Color>
       <Color x:Key="Color.Danger">#B42318</Color>
       <Color x:Key="Color.Danger.Surface">#FDECEA</Color>
+      <!-- The same five hues, darkened until each clears 3:1 on white rather than glowing on it. -->
+      <Color x:Key="Color.Protocol.Ssh">#1A7F37</Color>
+      <Color x:Key="Color.Protocol.Sftp">#0969DA</Color>
+      <Color x:Key="Color.Protocol.Rdp">#8250DF</Color>
+      <Color x:Key="Color.Protocol.S3">#BC4C00</Color>
+      <Color x:Key="Color.Protocol.AzureBlob">#0F6D75</Color>
       <Color x:Key="Color.Environment.Dev">#137333</Color>
       <Color x:Key="Color.Environment.Staging">#8A5A00</Color>
       <Color x:Key="Color.Environment.Production">#B42318</Color>
@@ -86,6 +106,11 @@
       <SolidColorBrush x:Key="Brush.Warning" Color="{DynamicResource Color.Warning}" />
       <SolidColorBrush x:Key="Brush.Danger" Color="{DynamicResource Color.Danger}" />
       <SolidColorBrush x:Key="Brush.Danger.Surface" Color="{DynamicResource Color.Danger.Surface}" />
+      <SolidColorBrush x:Key="Brush.Protocol.Ssh" Color="{DynamicResource Color.Protocol.Ssh}" />
+      <SolidColorBrush x:Key="Brush.Protocol.Sftp" Color="{DynamicResource Color.Protocol.Sftp}" />
+      <SolidColorBrush x:Key="Brush.Protocol.Rdp" Color="{DynamicResource Color.Protocol.Rdp}" />
+      <SolidColorBrush x:Key="Brush.Protocol.S3" Color="{DynamicResource Color.Protocol.S3}" />
+      <SolidColorBrush x:Key="Brush.Protocol.AzureBlob" Color="{DynamicResource Color.Protocol.AzureBlob}" />
       <SolidColorBrush x:Key="Brush.Environment.Dev" Color="{DynamicResource Color.Environment.Dev}" />
       <SolidColorBrush x:Key="Brush.Environment.Staging" Color="{DynamicResource Color.Environment.Staging}" />
       <SolidColorBrush x:Key="Brush.Environment.Production" Color="{DynamicResource Color.Environment.Production}" />

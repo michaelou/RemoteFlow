@@ -29,7 +29,7 @@ public sealed class SettingsStoreTests
         Assert.False(await store.Get(SettingKeys.SuppressPasteWarning, cancellationToken));
         // One key fewer off Windows: WindowsRdpOpenMode joins All only where the embedded RDP control
         // can be hosted, so a Linux or macOS database is never seeded with a setting it cannot honour.
-        Assert.Equal(OperatingSystem.IsWindows() ? 36 : 35, SettingKeys.All.Count);
+        Assert.Equal(OperatingSystem.IsWindows() ? 37 : 36, SettingKeys.All.Count);
         await using var context = await database.Factory.CreateDbContextAsync(cancellationToken);
         Assert.Equal(SettingKeys.All.Count, await context.Settings.CountAsync(cancellationToken));
     }

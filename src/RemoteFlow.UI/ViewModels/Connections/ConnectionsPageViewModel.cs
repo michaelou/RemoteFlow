@@ -175,6 +175,10 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
     public Task WorkspaceChangesSettled { get; private set; } = Task.CompletedTask;
 
+    /// <summary>The last toolbar preference write — the host line and collapse-all both persist, and a test
+    /// has to be able to wait for the store rather than for a repaint.</summary>
+    public Task PreferenceChangesSettled { get; private set; } = Task.CompletedTask;
+
     [ObservableProperty]
     public partial ConnectionEditorViewModel? Editor { get; private set; }
 
@@ -207,6 +211,28 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     [ObservableProperty]
     public partial bool IsLoading { get; private set; }
 
+    /// <summary>Whether a connection row carries its host and port under the name. A display preference
+    /// rather than a filter: hiding it takes a row from 45 pixels to 26 and shows about seventy per
+    /// cent more of the tree, which is worth having on a long list of hosts you already know by name.</summary>
+    [ObservableProperty]
+    public partial bool ShowSecondaryText { get; private set; } = true;
+
+    public string SecondaryTextIconKey => ShowSecondaryText ? "Icon.DetailLine" : "Icon.DetailLineOff";
+
+    public string SecondaryTextLabel => ShowSecondaryText
+        ? "Hide the host line under each name"
+        : "Show the host line under each name";
+
+    /// <summary>True when at least one folder is open, which is also what the collapse-all button reads to
+    /// decide which way it points: something to close, or nothing left but to open.</summary>
+    public bool HasExpandedFolders => FolderNodes(RootNodes).Any(node => node.IsExpanded);
+
+    public bool HasFolders => FolderNodes(RootNodes).Any();
+
+    public string ExpandCollapseIconKey => HasExpandedFolders ? "Icon.CollapseAll" : "Icon.ExpandAll";
+
+    public string ExpandCollapseLabel => HasExpandedFolders ? "Collapse all folders" : "Expand all folders";
+
     [ObservableProperty]
     public partial string? FeedbackMessage { get; private set; }
 
@@ -218,8 +244,19 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         ClearFeedbackAction();
     }
 
+    partial void OnShowSecondaryTextChanged(bool value)
+    {
+        OnPropertyChanged(nameof(SecondaryTextIconKey));
+        OnPropertyChanged(nameof(SecondaryTextLabel));
+    }
+
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        // Read, never written back here: only the toolbar button writes, so opening the page cannot
+        // overwrite the preference with the default it started at.
+        ShowSecondaryText = await _settings
+            .Get(SettingKeys.ShowConnectionDetailLine, cancellationToken)
+            .ConfigureAwait(true);
         await EnsureTagFiltersAsync(cancellationToken).ConfigureAwait(true);
         if (RootNodes.Count == 0)
         {
@@ -364,6 +401,51 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
             _guidProvider,
             _clock.UtcNow);
         await _folders.UpdateAsync(node.Folder, cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>Flips the host line on every row and remembers the choice. A failed write is reported the
+    /// way a failed expansion write is: the toolbar did what was asked, and only the remembering failed.
+    /// </summary>
+    public async Task ToggleSecondaryTextAsync(CancellationToken cancellationToken = default)
+    {
+        ShowSecondaryText = !ShowSecondaryText;
+        try
+        {
+            await _settings
+                .Set(SettingKeys.ShowConnectionDetailLine, ShowSecondaryText, cancellationToken)
+                .ConfigureAwait(true);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            FeedbackMessage = $"The row layout could not be saved: {exception.Message}";
+        }
+    }
+
+    public void RequestToggleSecondaryText()
+    {
+        PreferenceChangesSettled = ToggleSecondaryTextAsync();
+    }
+
+    /// <summary>Closes every folder, or opens every folder when they are all already closed. Each one goes
+    /// through <see cref="SetExpandedAsync"/>, so a collapse survives a restart the same way collapsing one
+    /// folder by hand does. Favorites and Recent are left alone: they are headings, not folders.</summary>
+    public async Task ToggleAllFoldersAsync(CancellationToken cancellationToken = default)
+    {
+        var expand = !HasExpandedFolders;
+        foreach (var node in FolderNodes(RootNodes).ToArray())
+        {
+            if (node.IsExpanded != expand)
+            {
+                await SetExpandedAsync(node, expand, cancellationToken).ConfigureAwait(true);
+            }
+        }
+
+        NotifyFolderExpansionState();
+    }
+
+    public void RequestToggleAllFolders()
+    {
+        PreferenceChangesSettled = ToggleAllFoldersAsync();
     }
 
     public async Task ClearRecentAsync(CancellationToken cancellationToken = default)
@@ -666,6 +748,15 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         // Folders on their own keep the tree on screen: the empty state covers it, and a user who has
         // built a folder layout before adding connections still needs to reach it.
         IsEmpty = items.Count == 0 && (HasActiveFilters || folders.Count == 0);
+        NotifyFolderExpansionState();
+    }
+
+    private void NotifyFolderExpansionState()
+    {
+        OnPropertyChanged(nameof(HasExpandedFolders));
+        OnPropertyChanged(nameof(HasFolders));
+        OnPropertyChanged(nameof(ExpandCollapseIconKey));
+        OnPropertyChanged(nameof(ExpandCollapseLabel));
     }
 
     private static string NextFolderName(IEnumerable<Folder> folders, Guid? parentId)
@@ -709,6 +800,24 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         return null;
     }
 
+    /// <summary>Every folder node in the tree, depth first. The view model tree is whole whether or not the
+    /// control has realized it, so this reaches folders inside collapsed ones.</summary>
+    private static IEnumerable<ExplorerNodeViewModel> FolderNodes(IEnumerable<ExplorerNodeViewModel> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.Kind == ExplorerNodeKind.Folder)
+            {
+                yield return node;
+            }
+
+            foreach (var descendant in FolderNodes(node.Children))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
     private static bool ExpandAncestors(
         IEnumerable<ExplorerNodeViewModel> nodes,
         ExplorerNodeViewModel target)
@@ -744,21 +853,27 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
     private ExplorerNodeViewModel CreateConnectionNode(ConnectionListItem item)
     {
+        // A connection is drawn as the thing it opens: a shell, a file browser, a screen, a bucket, a
+        // cloud. One shape and one colour per protocol, so the two agree and neither carries the meaning
+        // alone — the shape is what still reads for someone who cannot tell the hues apart. The tag names
+        // the colour without choosing it: the view keeps that behind a dynamic resource so it can follow a
+        // theme switch.
+        var (iconKey, protocolTag) = item.Protocol switch
+        {
+            ProtocolType.Ssh => ("Icon.Terminals", "ssh"),
+            ProtocolType.Sftp => ("Icon.Sftp", "sftp"),
+            ProtocolType.Rdp => ("Icon.RemoteDesktop", "rdp"),
+            ProtocolType.S3 => ("Icon.Storage", "s3"),
+            ProtocolType.AzureBlob => ("Icon.Cloud", "azure-blob"),
+            _ => throw new ArgumentOutOfRangeException(nameof(item)),
+        };
         return CreateNode(
             ExplorerNodeKind.Connection,
             item.Name,
             item.Id,
             connection: item,
-            // A connection is drawn as the thing it opens: a shell, a file browser, or a screen.
-            iconKey: item.Protocol switch
-            {
-                ProtocolType.Ssh => "Icon.Terminals",
-                ProtocolType.Sftp => "Icon.Sftp",
-                ProtocolType.Rdp => "Icon.RemoteDesktop",
-                ProtocolType.S3 => "Icon.Storage",
-                ProtocolType.AzureBlob => "Icon.Storage",
-                _ => throw new ArgumentOutOfRangeException(nameof(item)),
-            });
+            iconKey: iconKey,
+            protocolTag: protocolTag);
     }
 
     private ExplorerNodeViewModel CreateNode(
@@ -767,9 +882,19 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         Guid? id = null,
         Folder? folder = null,
         ConnectionListItem? connection = null,
-        string iconKey = "")
+        string iconKey = "",
+        string protocolTag = "")
     {
-        return new ExplorerNodeViewModel(kind, name, ExecuteActionAsync, RenameAsync, id, folder, connection, iconKey);
+        return new ExplorerNodeViewModel(
+            kind,
+            name,
+            ExecuteActionAsync,
+            RenameAsync,
+            id,
+            folder,
+            connection,
+            iconKey,
+            protocolTag);
     }
 
     private async Task ExecuteActionAsync(ExplorerNodeViewModel node, ExplorerAction action)
@@ -904,6 +1029,7 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         try
         {
             await SetExpandedAsync(node, isExpanded).ConfigureAwait(true);
+            NotifyFolderExpansionState();
         }
         catch (Exception exception)
         {

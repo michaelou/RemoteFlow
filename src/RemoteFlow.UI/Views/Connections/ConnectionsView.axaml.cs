@@ -179,6 +179,22 @@ public sealed partial class ConnectionsView : UserControl
         }
     }
 
+    private void ToggleFolders_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ConnectionsPageViewModel viewModel)
+        {
+            viewModel.RequestToggleAllFolders();
+        }
+    }
+
+    private void ToggleSecondaryText_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ConnectionsPageViewModel viewModel)
+        {
+            viewModel.RequestToggleSecondaryText();
+        }
+    }
+
     private void CreateConnection_OnClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is ConnectionsPageViewModel viewModel)

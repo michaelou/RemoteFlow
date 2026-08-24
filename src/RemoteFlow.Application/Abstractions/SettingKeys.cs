@@ -137,6 +137,10 @@ public static class SettingKeys
     public static SettingKey<StorageConflictDefault> StorageConflictDefault { get; } =
         new("StorageConflictDefault", global::RemoteFlow.Application.Abstractions.StorageConflictDefault.Overwrite);
 
+    /// <summary>Whether the connection explorer draws the host and port under each connection's name. A
+    /// display preference, remembered because it is set once and then lived with.</summary>
+    public static SettingKey<bool> ShowConnectionDetailLine { get; } = new("ShowConnectionDetailLine", true);
+
     /// <summary>Where a local browser pane was last pointed. Shared by the Storage and SFTP pages, so the
     /// two land in the same folder rather than each keeping its own idea of where you were.</summary>
     public static SettingKey<string?> LastLocalFolder { get; } = new("LastLocalFolder", null);
@@ -179,5 +183,6 @@ public static class SettingKeys
         StorageMaxPartsInFlight,
         StorageConflictDefault,
         LastLocalFolder,
+        ShowConnectionDetailLine,
     ];
 }

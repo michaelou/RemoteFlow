@@ -16,7 +16,22 @@
   <StreamGeometry x:Key="Icon.Recent">F0 M8,1.5A6.5,6.5 0 1 0 8,14.5A6.5,6.5 0 1 0 8,1.5Z M8,3A5,5 0 1 0 8,13A5,5 0 1 0 8,3Z M7.25,4.5H8.75V8.35H11.5V9.85H7.25Z</StreamGeometry>
   <!-- Object storage: a stack of drums, which is how both vendors' own consoles draw a bucket. -->
   <StreamGeometry x:Key="Icon.Storage">F0 M8,1.5C11.6,1.5 14,2.4 14,3.6V12.4C14,13.6 11.6,14.5 8,14.5C4.4,14.5 2,13.6 2,12.4V3.6C2,2.4 4.4,1.5 8,1.5Z M8,3C5.5,3 3.5,3.4 3.5,3.9C3.5,4.4 5.5,4.8 8,4.8C10.5,4.8 12.5,4.4 12.5,3.9C12.5,3.4 10.5,3 8,3Z M3.5,6.2V8.2C3.5,8.7 5.5,9.1 8,9.1C10.5,9.1 12.5,8.7 12.5,8.2V6.2C11.3,6.6 9.7,6.8 8,6.8C6.3,6.8 4.7,6.6 3.5,6.2Z M3.5,10.5V12.2C3.5,12.7 5.5,13.1 8,13.1C10.5,13.1 12.5,12.7 12.5,12.2V10.5C11.3,10.9 9.7,11.1 8,11.1C6.3,11.1 4.7,10.9 3.5,10.5Z</StreamGeometry>
+  <!-- Object storage again, but the other vendor's: a cloud, so an S3 bucket and an Azure container are
+       told apart by shape and not only by colour. Authored as one closed outline — three overlapping
+       circles would need a winding rule the rest of this file does not use. -->
+  <StreamGeometry x:Key="Icon.Cloud">M3.4,11.8A2.6,2.6 0 0 1 4.3,6.75A4,4 0 0 1 11.6,7.9A2.1,2.1 0 0 1 12.6,11.8Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.RemoteDesktop">F0 M1.5,2.5H14.5V11.5H1.5Z M3,4V10H13V4Z M6.9,11.5H9.1V13H12V14.5H4V13H6.9Z</StreamGeometry>
+
+  <!-- The explorer's own toolbar. Clear recent is the Recent clock with a cross beside it rather than a
+       cross struck through it: an even-odd glyph punches a hole wherever two shapes overlap, so the two
+       are drawn side by side and kept apart. -->
+  <StreamGeometry x:Key="Icon.ClearRecent">F0 M6,1A5,5 0 1 0 6,11A5,5 0 1 0 6,1Z M6,2.2A3.8,3.8 0 1 0 6,9.8A3.8,3.8 0 1 0 6,2.2Z M5.4,3.2H6.6V6.1H8.7V7.3H5.4Z M10.85,10.15L13,12.3L15.15,10.15L15.85,10.85L13.7,13L15.85,15.15L15.15,15.85L13,13.7L10.85,15.85L10.15,15.15L12.3,13L10.15,10.85Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.CollapseAll">M8,2L13.5,7.5L11.9,9.1L8,5.2L4.1,9.1L2.5,7.5Z M8,7.4L13.5,12.9L11.9,14.5L8,10.6L4.1,14.5L2.5,12.9Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.ExpandAll">M8,14L13.5,8.5L11.9,6.9L8,10.8L4.1,6.9L2.5,8.5Z M8,8.6L13.5,3.1L11.9,1.5L8,5.4L4.1,1.5L2.5,3.1Z</StreamGeometry>
+  <!-- The row's second line, shown and hidden: a whole rule under the name, or the dashes left when it
+       is gone. The pair reads as one control changing state rather than as two unrelated glyphs. -->
+  <StreamGeometry x:Key="Icon.DetailLine">M2,4H14V6.2H2Z M2,9.4H9.5V11.6H2Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.DetailLineOff">M2,4H14V6.2H2Z M2,9.4H3.9V11.6H2Z M5.2,9.4H7.1V11.6H5.2Z M8.4,9.4H10.3V11.6H8.4Z</StreamGeometry>
 
   <StreamGeometry x:Key="Icon.Edit">M2,10.6L10.6,2L14,5.4L5.4,14L1.2,14.8Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.Duplicate">F0 M5,1.5H14.5V11H12.5V3.5H5Z M1.5,5H11V14.5H1.5Z M3,6.5V13H9.5V6.5Z</StreamGeometry>

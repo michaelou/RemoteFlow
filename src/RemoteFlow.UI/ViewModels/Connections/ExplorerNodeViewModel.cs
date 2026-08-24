@@ -42,7 +42,8 @@ public sealed partial class ExplorerNodeViewModel : ObservableObject
         Guid? id = null,
         Folder? folder = null,
         ConnectionListItem? connection = null,
-        string iconKey = "")
+        string iconKey = "",
+        string protocolTag = "")
     {
         Kind = kind;
         Name = name;
@@ -53,6 +54,7 @@ public sealed partial class ExplorerNodeViewModel : ObservableObject
         Folder = folder;
         Connection = connection;
         IconKey = iconKey;
+        ProtocolTag = protocolTag;
         IsExpanded = folder?.IsExpanded ?? kind is ExplorerNodeKind.Favorites or ExplorerNodeKind.Recent;
         Badge = connection is null ? null : CreateBadge(connection.Environment, connection.ColorOverrideHex);
         SecondaryText = connection is null ? null : $"{connection.Host}:{connection.Port}";
@@ -94,6 +96,11 @@ public sealed partial class ExplorerNodeViewModel : ObservableObject
 
     /// <summary>Names the glyph resource the row draws, so the geometry stays declared in XAML.</summary>
     public string IconKey { get; }
+
+    /// <summary>Which protocol the row is drawn for, as a word the view can select a style on, or empty for
+    /// a node that is not a connection. The colour itself stays in XAML behind a dynamic resource, so it
+    /// follows a theme switch; a brush built here would be frozen at the theme it was built in.</summary>
+    public string ProtocolTag { get; }
 
     public string? SecondaryText { get; }
 

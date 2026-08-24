@@ -1,6 +1,8 @@
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Services;
@@ -112,11 +114,12 @@ public sealed class ConnectionExplorerTests
             ["SSH", "SFTP", "RDP", "S3", "Azure Blob"],
             [.. viewModel.ProtocolFilters.Select(chip => chip.Label)]);
 
-        // Both are drawn with the storage glyph. The icon switch throws on an unmapped protocol, so this
+        // A bucket and a container are drawn differently: they used to share the storage glyph, and colour
+        // alone is not a difference for everyone. The icon switch throws on an unmapped protocol, so this
         // is also what proves the new members reached it.
         var nodes = RealConnections(viewModel);
         Assert.Equal("Icon.Storage", nodes.Single(node => node.Name == "Archive bucket").IconKey);
-        Assert.Equal("Icon.Storage", nodes.Single(node => node.Name == "Archive container").IconKey);
+        Assert.Equal("Icon.Cloud", nodes.Single(node => node.Name == "Archive container").IconKey);
         Assert.Equal("Icon.Terminals", nodes.Single(node => node.Name == "Shell").IconKey);
 
         viewModel.SearchText = "Archive";
@@ -348,6 +351,207 @@ public sealed class ConnectionExplorerTests
 
         Assert.InRange(realizedRows, 1, 100);
         window.Close();
+    }
+
+    /// <summary>Each protocol paints its glyph in its own colour, and the nodes that have no protocol keep
+    /// inheriting the row's foreground. The second half is the part that would break silently: a rule that
+    /// matched every glyph would blank the folders or freeze them at one colour.</summary>
+    [AvaloniaFact]
+    public async Task EachProtocolPaintsItsGlyphAndAFolderKeepsInheritingTheRow()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await ExplorerFixture.CreateAsync(token);
+        var folder = await fixture.AddFolderAsync("Servers", cancellationToken: token);
+        foreach (var (name, protocol) in new[]
+        {
+            ("Shell", ProtocolType.Ssh),
+            ("Files", ProtocolType.Sftp),
+            ("Desktop", ProtocolType.Rdp),
+            ("Bucket", ProtocolType.S3),
+            ("Container", ProtocolType.AzureBlob),
+        })
+        {
+            _ = await fixture.AddConnectionAsync(name, protocol: protocol, cancellationToken: token);
+        }
+
+        using var viewModel = fixture.CreateViewModel();
+        await viewModel.InitializeAsync(token);
+        await viewModel.SetExpandedAsync(FindFolder(viewModel, folder.Id), true, token);
+        var view = new ConnectionsView { DataContext = viewModel };
+        var window = new Window { Width = 900, Height = 700, Content = view };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var expected = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Shell"] = "Brush.Protocol.Ssh",
+            ["Files"] = "Brush.Protocol.Sftp",
+            ["Desktop"] = "Brush.Protocol.Rdp",
+            ["Bucket"] = "Brush.Protocol.S3",
+            ["Container"] = "Brush.Protocol.AzureBlob",
+        };
+        var painted = expected.Keys
+            .Select(name => RowGlyph(window, name).Foreground)
+            .ToArray();
+
+        foreach (var (name, key) in expected)
+        {
+            var glyph = RowGlyph(window, name);
+            Assert.Equal(Brush(window, key), glyph.Foreground);
+            // Geometry that fails to parse resolves to nothing and draws nothing, silently.
+            Assert.NotNull(glyph.Data);
+        }
+
+        // Five protocols, five colours: a shared brush would make two of them indistinguishable.
+        Assert.Equal(5, painted.Distinct().Count());
+
+        // The folder names no brush, so its glyph still answers to the row rather than to nothing.
+        Assert.NotNull(RowGlyph(window, "Servers").Foreground);
+        window.Close();
+    }
+
+    /// <summary>The two toolbar toggles: one closes and reopens every folder and persists what it did, and
+    /// one drops the host line off the rows and is remembered for next time.</summary>
+    [AvaloniaFact]
+    public async Task TheToolbarCollapsesEveryFolderAndHidesTheHostLineAndRemembersBoth()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await ExplorerFixture.CreateAsync(token);
+        var outer = await fixture.AddFolderAsync("Outer", cancellationToken: token);
+        var inner = await fixture.AddFolderAsync("Inner", outer, token);
+        _ = await fixture.AddConnectionAsync("Shell", inner.Id, cancellationToken: token);
+        using var viewModel = fixture.CreateViewModel();
+        await viewModel.InitializeAsync(token);
+
+        Assert.False(viewModel.HasExpandedFolders);
+        Assert.True(viewModel.HasFolders);
+        Assert.Equal("Icon.ExpandAll", viewModel.ExpandCollapseIconKey);
+
+        // Open everything, including the folder nested inside the closed one.
+        await viewModel.ToggleAllFoldersAsync(token);
+
+        Assert.True(viewModel.HasExpandedFolders);
+        Assert.Equal("Icon.CollapseAll", viewModel.ExpandCollapseIconKey);
+        Assert.True((await fixture.Folders.GetByIdAsync(inner.Id, token))!.IsExpanded);
+
+        await viewModel.ToggleAllFoldersAsync(token);
+
+        Assert.False(viewModel.HasExpandedFolders);
+        Assert.False((await fixture.Folders.GetByIdAsync(outer.Id, token))!.IsExpanded);
+        Assert.False((await fixture.Folders.GetByIdAsync(inner.Id, token))!.IsExpanded);
+
+        Assert.True(viewModel.ShowSecondaryText);
+        Assert.Equal("Icon.DetailLine", viewModel.SecondaryTextIconKey);
+
+        await viewModel.ToggleSecondaryTextAsync(token);
+
+        Assert.False(viewModel.ShowSecondaryText);
+        Assert.Equal("Icon.DetailLineOff", viewModel.SecondaryTextIconKey);
+        Assert.False(await fixture.Settings.Get(SettingKeys.ShowConnectionDetailLine, token));
+
+        // A page opened later starts where this one was left.
+        using var reopened = fixture.CreateViewModel();
+        await reopened.InitializeAsync(token);
+
+        Assert.False(reopened.ShowSecondaryText);
+    }
+
+    /// <summary>The toolbar's glyph buttons: every one of them draws a glyph, and every one says what it is
+    /// twice over — a tooltip for the pointer and an automation name for a screen reader. An icon button
+    /// that resolved no geometry would be an invisible, unlabelled square, which is a thing that renders
+    /// perfectly and tells nobody anything.</summary>
+    [AvaloniaFact]
+    public async Task EveryGlyphButtonInTheToolbarDrawsAGlyphAndNamesItself()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await ExplorerFixture.CreateAsync(token);
+        _ = await fixture.AddFolderAsync("Servers", cancellationToken: token);
+        using var viewModel = fixture.CreateViewModel();
+        await viewModel.InitializeAsync(token);
+        var view = new ConnectionsView { DataContext = viewModel };
+        var window = new Window { Width = 900, Height = 700, Content = view };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        foreach (var name in new[]
+        {
+            "New folder",
+            "Clear recent",
+            "Expand all folders",
+            "Hide the host line under each name",
+        })
+        {
+            var button = GlyphButton(window, name);
+            var glyph = Assert.IsType<PathIcon>(button.Content);
+            Assert.NotNull(glyph.Data);
+            Assert.False(
+                string.IsNullOrWhiteSpace(ToolTip.GetTip(button) as string),
+                $"the {name} button has no tooltip.");
+        }
+
+        // The two toggles say which way they point, in the glyph as well as in the words.
+        var folders = GlyphButton(window, "Expand all folders");
+        var before = ((PathIcon)folders.Content!).Data;
+        await viewModel.ToggleAllFoldersAsync(token);
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        Assert.NotEqual(before, ((PathIcon)GlyphButton(window, "Collapse all folders").Content!).Data);
+        window.Close();
+    }
+
+    /// <summary>Hiding the host line has to close the row up rather than leave the gap it was in. The point
+    /// of the toggle is the rows it buys back, so the height a two-line row reserves has to go with it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task HidingTheHostLineShortensTheRowItWasOn()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await ExplorerFixture.CreateAsync(token);
+        _ = await fixture.AddConnectionAsync("Shell", cancellationToken: token);
+        using var viewModel = fixture.CreateViewModel();
+        await viewModel.InitializeAsync(token);
+        var view = new ConnectionsView { DataContext = viewModel };
+        var window = new Window { Width = 900, Height = 700, Content = view };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        var tall = RowGlyph(window, "Shell").FindAncestorOfType<TreeViewItem>()!.Bounds.Height;
+
+        await viewModel.ToggleSecondaryTextAsync(token);
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        var short_ = RowGlyph(window, "Shell").FindAncestorOfType<TreeViewItem>()!.Bounds.Height;
+
+        Assert.True(
+            short_ <= tall * 0.75,
+            $"the row barely closed up: {tall} before, {short_} after.");
+        window.Close();
+    }
+
+    /// <summary>Resolved against the window's own theme variant: the protocol colours live in the theme
+    /// dictionaries, and the application-level lookup does not carry a variant to match them with.</summary>
+    private static IBrush Brush(Window window, string key)
+    {
+        Assert.True(window.TryFindResource(key, window.ActualThemeVariant, out var value), $"{key} is missing.");
+        return Assert.IsAssignableFrom<IBrush>(value);
+    }
+
+    private static Button GlyphButton(Window window, string automationName)
+    {
+        return window.GetVisualDescendants()
+            .OfType<Button>()
+            .Single(button => AutomationProperties.GetName(button) == automationName);
+    }
+
+    /// <summary>The one glyph drawn on the row for the named node.</summary>
+    private static PathIcon RowGlyph(Window window, string name)
+    {
+        return window.GetVisualDescendants()
+            .OfType<PathIcon>()
+            .Single(icon => icon.DataContext is ExplorerNodeViewModel node && node.Name == name);
     }
 
     private static ExplorerNodeViewModel FindFolder(ConnectionsPageViewModel viewModel, Guid id)
