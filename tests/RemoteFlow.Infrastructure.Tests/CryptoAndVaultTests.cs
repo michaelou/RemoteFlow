@@ -1,4 +1,6 @@
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Services;
+using RemoteFlow.Application.Services.Backup;
 using RemoteFlow.Infrastructure.Platform;
 using RemoteFlow.Infrastructure.Security;
 using RemoteFlow.Infrastructure.Security.Crypto;
@@ -222,6 +224,153 @@ public sealed class CryptoAndVaultTests
 
         Assert.False(state.IsKeyringUnavailable);
         Assert.Null(state.BannerMessage);
+    }
+
+    /// <summary>The unlockable face of the vault, used by the startup unlock flow. It exists because a wrong
+    /// passphrase is an ordinary thing for a person to do, and the layer that asks cannot name
+    /// <c>VaultUnlockException</c>.</summary>
+    [Fact]
+    public async Task TryUnlockCreatesAVaultThenOpensItAndRejectsAWrongPassphrase()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var directory = TemporaryDirectory.Create();
+        var paths = TestAppPaths.Under(directory.Path);
+
+        using (var created = CreateVault(paths))
+        {
+            // Nothing on disk yet: the first unlock is what brings a vault into being.
+            Assert.False(created.Exists);
+            Assert.False(created.IsUnlocked);
+
+            Assert.Equal(
+                VaultUnlockOutcome.Unlocked,
+                await created.TryUnlockAsync("first-Passphrase9!".AsMemory(), cancellationToken));
+            Assert.True(created.IsUnlocked);
+            Assert.True(created.Exists);
+            await created.SetAsync("remoteflow/test/key", "a secret".AsMemory(), "Test", cancellationToken);
+        }
+
+        using var reopened = CreateVault(paths);
+        Assert.True(reopened.Exists);
+        Assert.False(reopened.IsUnlocked);
+
+        Assert.Equal(
+            VaultUnlockOutcome.IncorrectPassphrase,
+            await reopened.TryUnlockAsync("not-the-Passphrase9!".AsMemory(), cancellationToken));
+        Assert.False(reopened.IsUnlocked);
+
+        Assert.Equal(
+            VaultUnlockOutcome.Unlocked,
+            await reopened.TryUnlockAsync("first-Passphrase9!".AsMemory(), cancellationToken));
+        using var secret = await reopened.GetAsync("remoteflow/test/key", cancellationToken);
+        Assert.NotNull(secret);
+        Assert.Equal("a secret", secret.Secret.ToString());
+    }
+
+    /// <summary>An empty passphrase reaches UnlockAsync as an ArgumentException, which is a programming
+    /// error rather than an answer. The result-returning face has to absorb it: the prompt guards against
+    /// empty input, but the vault must not throw out of a retry loop if anything ever gets past it.</summary>
+    [Fact]
+    public async Task TryUnlockTreatsAnEmptyPassphraseAsAWrongOne()
+    {
+        using var directory = TemporaryDirectory.Create();
+        using var vault = CreateVault(TestAppPaths.Under(directory.Path));
+
+        var outcome = await vault.TryUnlockAsync(
+            ReadOnlyMemory<char>.Empty, TestContext.Current.CancellationToken);
+
+        Assert.Equal(VaultUnlockOutcome.IncorrectPassphrase, outcome);
+        Assert.False(vault.IsUnlocked);
+    }
+
+    /// <summary>The startup flow with real parts: the real selector choosing the real encrypted vault, and
+    /// the real coordinator opening it. Everything except the dialog, which is the one piece a test cannot
+    /// be. Proves a vault is created on first run and reopened on the next launch with the same passphrase.</summary>
+    [Fact]
+    public async Task TheUnlockFlowCreatesAVaultOnFirstRunAndReopensItOnTheNext()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var directory = TemporaryDirectory.Create();
+        var paths = TestAppPaths.Under(directory.Path);
+        var settings = new InMemorySettingsStore();
+        // Forced so the test does not depend on whether this machine happens to have a working keyring.
+        await settings.Set(SettingKeys.ForceFileVault, true, cancellationToken);
+
+        using (var vault = CreateVault(paths))
+        {
+            var prompt = new ScriptedPrompt("vault-Passphrase9!");
+            using var service = new VaultUnlockService(
+                new CredentialProviderSelector(settings, [vault]), prompt);
+
+            var status = await service.EnsureUnlockedAsync(cancellationToken);
+
+            Assert.True(status.IsUsable);
+            Assert.True(status.WasPrompted);
+            Assert.True(Assert.Single(prompt.Requests).IsNewVault);
+            Assert.True(vault.IsUnlocked);
+            await vault.SetAsync("remoteflow/test/key", "a secret".AsMemory(), "Test", cancellationToken);
+        }
+
+        // A second launch: same files, new objects, and this time the vault already exists.
+        using var reopened = CreateVault(paths);
+        var secondPrompt = new ScriptedPrompt("wrong-Passphrase9!", "vault-Passphrase9!");
+        using var secondService = new VaultUnlockService(
+            new CredentialProviderSelector(settings, [reopened]), secondPrompt);
+
+        var second = await secondService.EnsureUnlockedAsync(cancellationToken);
+
+        Assert.True(second.IsUsable);
+        Assert.Equal(2, secondPrompt.Requests.Count);
+        Assert.False(secondPrompt.Requests[0].IsNewVault);
+        Assert.NotNull(secondPrompt.Requests[1].Problem);
+        using var secret = await reopened.GetAsync("remoteflow/test/key", cancellationToken);
+        Assert.NotNull(secret);
+        Assert.Equal("a secret", secret.Secret.ToString());
+    }
+
+    /// <summary>Declining leaves the session running with the vault shut. The credential store then reports
+    /// the situation rather than throwing, which is what the Backup page reads.</summary>
+    [Fact]
+    public async Task DecliningTheUnlockLeavesTheVaultShutAndReadable()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var directory = TemporaryDirectory.Create();
+        var settings = new InMemorySettingsStore();
+        await settings.Set(SettingKeys.ForceFileVault, true, cancellationToken);
+        using var vault = CreateVault(TestAppPaths.Under(directory.Path));
+        using var service = new VaultUnlockService(
+            new CredentialProviderSelector(settings, [vault]), new ScriptedPrompt());
+
+        var status = await service.EnsureUnlockedAsync(cancellationToken);
+
+        Assert.False(status.IsUsable);
+        Assert.False(vault.IsUnlocked);
+        Assert.NotNull(status.Problem);
+
+        // The passphrase store used by automatic backup reports this rather than letting it escape.
+        var passphrases = new AutoBackupPassphraseStore(
+            new CredentialProviderSelector(settings, [vault]), [vault]);
+        var state = await passphrases.InspectAsync(cancellationToken);
+
+        Assert.False(state.IsUsable);
+        Assert.Equal("The credential vault is locked.", state.Problem);
+    }
+
+    private sealed class ScriptedPrompt(params string[] answers) : IVaultUnlockPrompt
+    {
+        private int _next;
+
+        public List<VaultUnlockPromptRequest> Requests { get; } = [];
+
+        public ValueTask<VaultUnlockPromptResult?> PromptAsync(
+            VaultUnlockPromptRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return ValueTask.FromResult(_next >= answers.Length
+                ? null
+                : new VaultUnlockPromptResult(new SecretHandle(answers[_next++])));
+        }
     }
 
     private static EncryptedFileVaultProvider CreateVault(

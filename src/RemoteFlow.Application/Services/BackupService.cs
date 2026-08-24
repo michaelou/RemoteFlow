@@ -152,7 +152,7 @@ public sealed class BackupService(
 
         if (request.IncludeCredentials &&
             !request.AllowWeakPassphrase &&
-            !IsStrongPassphrase(request.CredentialPassphrase.Span))
+            !PassphrasePolicy.IsStrong(request.CredentialPassphrase.Span))
         {
             throw new BackupCredentialException(
                 "Use a passphrase of at least 12 characters with upper, lower, number, and symbol characters, or explicitly allow a weak passphrase.");
@@ -413,27 +413,5 @@ public sealed class BackupService(
             archive.Connections,
             checkedPassphrase,
             cancellationToken).ConfigureAwait(false);
-    }
-
-    private static bool IsStrongPassphrase(ReadOnlySpan<char> passphrase)
-    {
-        if (passphrase.Length < 12)
-        {
-            return false;
-        }
-
-        var categories = 0;
-        categories += passphrase.ContainsAnyInRange('a', 'z') ? 1 : 0;
-        categories += passphrase.ContainsAnyInRange('A', 'Z') ? 1 : 0;
-        categories += passphrase.ContainsAnyInRange('0', '9') ? 1 : 0;
-        foreach (var character in passphrase)
-        {
-            if (!char.IsLetterOrDigit(character))
-            {
-                categories++;
-                break;
-            }
-        }
-        return categories >= 3;
     }
 }

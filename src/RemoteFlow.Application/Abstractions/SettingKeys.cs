@@ -1,3 +1,4 @@
+using RemoteFlow.Application.Abstractions.Backup;
 using RemoteFlow.Domain.Enums;
 
 namespace RemoteFlow.Application.Abstractions;
@@ -141,6 +142,13 @@ public static class SettingKeys
     /// display preference, remembered because it is set once and then lived with.</summary>
     public static SettingKey<bool> ShowConnectionDetailLine { get; } = new("ShowConnectionDetailLine", true);
 
+    /// <summary>How automatic backup is configured: whether it runs, how many archives to keep, and where
+    /// they go. One key rather than several so the runner can never read a half-changed configuration.
+    /// Note that settings travel inside backup archives, so importing one can point this machine at a
+    /// destination that does not exist here — the runner re-validates on every run and reports rather than
+    /// throws, and a passphrase it cannot find blocks the run outright.</summary>
+    public static SettingKey<AutoBackupOptions> AutoBackup { get; } = new("AutoBackup", AutoBackupOptions.Disabled);
+
     /// <summary>Where a local browser pane was last pointed. Shared by the Storage and SFTP pages, so the
     /// two land in the same folder rather than each keeping its own idea of where you were.</summary>
     public static SettingKey<string?> LastLocalFolder { get; } = new("LastLocalFolder", null);
@@ -184,5 +192,6 @@ public static class SettingKeys
         StorageConflictDefault,
         LastLocalFolder,
         ShowConnectionDetailLine,
+        AutoBackup,
     ];
 }

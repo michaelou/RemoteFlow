@@ -6,7 +6,7 @@ using RemoteFlow.Infrastructure.Security.Crypto;
 
 namespace RemoteFlow.Infrastructure.Security;
 
-public sealed class EncryptedFileVaultProvider : ICredentialProvider, IDisposable
+public sealed class EncryptedFileVaultProvider : ICredentialProvider, ICredentialVault, IDisposable
 {
     private const int _formatVersion = 1;
     private const int _saltSize = 32;
@@ -47,6 +47,10 @@ public sealed class EncryptedFileVaultProvider : ICredentialProvider, IDisposabl
 
     public bool IsUnlocked => _derivedKey is not null;
 
+    /// <summary>Whether a vault file has been written yet. Unlocking a vault that does not exist creates it,
+    /// so this is what separates "invent a passphrase" from "recall one".</summary>
+    public bool Exists => File.Exists(VaultPath);
+
     internal ReadOnlyMemory<byte> KeyMemoryForTesting => _derivedKey ?? ReadOnlyMemory<byte>.Empty;
 
     public async Task UnlockAsync(
@@ -69,6 +73,35 @@ public sealed class EncryptedFileVaultProvider : ICredentialProvider, IDisposabl
         {
             CryptographicOperations.ZeroMemory(MemoryMarshal.AsBytes(passphraseCopy.AsSpan()));
             _ = _gate.Release();
+        }
+    }
+
+    /// <summary>The result-returning face of <see cref="UnlockAsync"/>, for callers in a layer that cannot
+    /// name <see cref="VaultUnlockException"/>. A wrong passphrase is an ordinary thing for a person to do
+    /// and should not travel as an exception.</summary>
+    public async Task<VaultUnlockOutcome> TryUnlockAsync(
+        ReadOnlyMemory<char> passphrase,
+        CancellationToken cancellationToken = default)
+    {
+        if (passphrase.IsEmpty)
+        {
+            return VaultUnlockOutcome.IncorrectPassphrase;
+        }
+
+        try
+        {
+            await UnlockAsync(passphrase, cancellationToken).ConfigureAwait(false);
+            return VaultUnlockOutcome.Unlocked;
+        }
+        catch (VaultUnlockException)
+        {
+            // Deliberately not separated from a corrupt or truncated vault file: authenticated decryption
+            // cannot tell the two apart, and inventing a distinction would be a guess presented as fact.
+            return VaultUnlockOutcome.IncorrectPassphrase;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return VaultUnlockOutcome.Failed;
         }
     }
 

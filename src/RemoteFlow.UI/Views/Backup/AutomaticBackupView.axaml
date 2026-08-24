@@ -1,0 +1,215 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Backup.AutomaticBackupView"
+    x:DataType="viewModels:AutomaticBackupSettingsViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Backup">
+  <ScrollViewer>
+    <StackPanel Margin="8" MaxWidth="720" HorizontalAlignment="Left" Spacing="16">
+      <TextBlock FontSize="28" FontWeight="SemiBold" Text="Automatic backup" />
+      <TextBlock
+          Foreground="{DynamicResource Brush.Text.Secondary}"
+          Text="A backup runs about 30 seconds after the last change to a connection, folder or tag, so a burst of edits produces one archive rather than a dozen."
+          TextWrapping="Wrap" />
+
+      <TextBlock
+          Foreground="{DynamicResource Brush.Warning}"
+          IsVisible="{Binding !IsAvailable}"
+          Text="{Binding UnavailableMessage}"
+          TextWrapping="Wrap" />
+
+      <StackPanel IsVisible="{Binding IsAvailable}" Spacing="16">
+        <!-- Encryption passphrase first: nothing else can be turned on until it exists. -->
+        <Border Classes="panel" Padding="16">
+          <StackPanel Spacing="12">
+            <TextBlock FontWeight="SemiBold" Text="Encryption passphrase" />
+            <TextBlock
+                Foreground="{DynamicResource Brush.Warning}"
+                Text="{Binding PassphraseWarning}"
+                TextWrapping="Wrap" />
+            <TextBlock Text="{Binding PassphraseStatus}" TextWrapping="Wrap" />
+
+            <StackPanel IsVisible="{Binding IsEditingPassphrase}" Spacing="8">
+              <TextBox
+                  AutomationProperties.Name="Automatic backup passphrase"
+                  PasswordChar="•"
+                  PlaceholderText="Passphrase"
+                  Text="{Binding NewPassphrase}" />
+              <TextBox
+                  AutomationProperties.Name="Confirm automatic backup passphrase"
+                  PasswordChar="•"
+                  PlaceholderText="Confirm passphrase"
+                  Text="{Binding ConfirmPassphrase}" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Content="Save passphrase" Command="{Binding SavePassphraseCommand}" />
+                <Button Content="Cancel" Command="{Binding CancelPassphraseEditCommand}" />
+              </StackPanel>
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding !IsEditingPassphrase}" Orientation="Horizontal" Spacing="8">
+              <Button
+                  Content="{Binding EditPassphraseLabel}"
+                  Command="{Binding EditPassphraseCommand}"
+                  IsVisible="{Binding CanEditPassphrase}" />
+              <Button
+                  AutomationProperties.Name="Unlock the credential store"
+                  Content="Unlock…"
+                  Command="{Binding UnlockVaultCommand}"
+                  IsVisible="{Binding CanUnlockVault}" />
+              <Button
+                  Content="Clear passphrase"
+                  Command="{Binding ClearPassphraseCommand}"
+                  IsVisible="{Binding HasStoredPassphrase}" />
+            </StackPanel>
+
+            <TextBlock
+                Foreground="{DynamicResource Brush.Text.Secondary}"
+                IsVisible="{Binding PassphraseMessage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                Text="{Binding PassphraseMessage}"
+                TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="16">
+          <StackPanel Spacing="12">
+            <TextBlock FontWeight="SemiBold" Text="Destination" />
+            <ComboBox
+                AutomationProperties.Name="Backup destination kind"
+                HorizontalAlignment="Stretch"
+                ItemsSource="{Binding DestinationKinds}"
+                SelectedItem="{Binding SelectedDestinationKind}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="viewModels:AutoBackupDestinationOption">
+                  <StackPanel Spacing="2">
+                    <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                    <TextBlock
+                        Foreground="{DynamicResource Brush.Text.Secondary}"
+                        Text="{Binding Description}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <!-- Local folder. The box stays editable: network shares the native picker will not traverse
+                 are real, and typing one has to remain possible. -->
+            <StackPanel IsVisible="{Binding IsLocalDestination}" Spacing="8">
+              <TextBlock Text="Folder" />
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox
+                    AutomationProperties.Name="Automatic backup folder"
+                    Grid.Column="0"
+                    PlaceholderText="/home/you/RemoteFlow backups"
+                    Text="{Binding LocalFolder, UpdateSourceTrigger=LostFocus}" />
+                <Button
+                    AutomationProperties.Name="Browse for a backup folder"
+                    Grid.Column="1"
+                    Margin="8,0,0,0"
+                    Content="Browse…"
+                    Command="{Binding BrowseForFolderCommand}" />
+              </Grid>
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding IsConnectionDestination}" Spacing="8">
+              <TextBlock Text="{Binding ConnectionLabel}" />
+              <ComboBox
+                  AutomationProperties.Name="Backup destination connection"
+                  HorizontalAlignment="Stretch"
+                  IsVisible="{Binding HasConnectionChoices}"
+                  ItemsSource="{Binding AvailableConnections}"
+                  SelectedItem="{Binding SelectedConnection}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="viewModels:AutoBackupConnectionChoice">
+                    <StackPanel Spacing="2">
+                      <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                      <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Detail}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock
+                  Foreground="{DynamicResource Brush.Text.Secondary}"
+                  IsVisible="{Binding !HasConnectionChoices}"
+                  Text="{Binding NoConnectionMessage}"
+                  TextWrapping="Wrap" />
+
+              <TextBlock Text="{Binding RemotePathLabel}" />
+              <TextBox
+                  AutomationProperties.Name="Remote path for automatic backups"
+                  PlaceholderText="{Binding RemotePathWatermark}"
+                  Text="{Binding RemotePath, UpdateSourceTrigger=LostFocus}" />
+              <TextBlock
+                  Foreground="{DynamicResource Brush.Text.Secondary}"
+                  Text="{Binding RemotePathHint}"
+                  TextWrapping="Wrap" />
+            </StackPanel>
+
+            <TextBlock FontWeight="SemiBold" Text="Backups will be written to" />
+            <TextBlock Text="{Binding DestinationSummary}" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="16">
+          <StackPanel Spacing="12">
+            <TextBlock FontWeight="SemiBold" Text="How many to keep" />
+            <NumericUpDown
+                AutomationProperties.Name="Number of backups to keep"
+                FormatString="0"
+                HorizontalAlignment="Left"
+                Increment="1"
+                Maximum="365"
+                Minimum="1"
+                Value="{Binding RetainedCopies}"
+                Width="160" />
+            <TextBlock
+                Foreground="{DynamicResource Brush.Text.Secondary}"
+                Text="{Binding RetentionHint}"
+                TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <CheckBox
+            AutomationProperties.Name="Back up automatically when connections change"
+            Content="Back up automatically when connections, folders or tags change"
+            IsChecked="{Binding IsEnabled}"
+            IsEnabled="{Binding CanEnable}" />
+        <TextBlock
+            Foreground="{DynamicResource Brush.Warning}"
+            IsVisible="{Binding HasValidationMessage}"
+            Text="{Binding ValidationMessage}"
+            TextWrapping="Wrap" />
+
+        <Border Classes="panel" Padding="16">
+          <StackPanel Spacing="8">
+            <TextBlock FontWeight="SemiBold" Text="Last run" />
+            <TextBlock Text="{Binding LastRunHeadline}" TextWrapping="Wrap" />
+            <TextBlock
+                Foreground="{DynamicResource Brush.Text.Secondary}"
+                IsVisible="{Binding HasLastRun}"
+                Text="{Binding LastRunDestination}"
+                TextWrapping="Wrap" />
+            <TextBlock
+                Foreground="{DynamicResource Brush.Warning}"
+                IsVisible="{Binding LastRunFailed}"
+                Text="{Binding LastRunMessage}"
+                TextWrapping="Wrap" />
+            <TextBlock
+                Foreground="{DynamicResource Brush.Warning}"
+                IsVisible="{Binding LastRunBlocked}"
+                Text="{Binding LastRunMessage}"
+                TextWrapping="Wrap" />
+            <TextBlock
+                Foreground="{DynamicResource Brush.Text.Secondary}"
+                IsVisible="{Binding LastRunSucceeded}"
+                Text="{Binding LastRunMessage}"
+                TextWrapping="Wrap" />
+            <!-- The only way to prove a typed remote path works without waiting for a real edit. -->
+            <Button
+                Content="Back up now"
+                Command="{Binding RunNowCommand}"
+                HorizontalAlignment="Left" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

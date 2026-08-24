@@ -87,6 +87,10 @@ public static class DependencyInjection
         services.TryAddSingleton<EncryptedFileVaultProvider>();
         _ = services.AddSingleton<ICredentialProvider>(provider =>
             provider.GetRequiredService<EncryptedFileVaultProvider>());
+        // The same instance again under its unlockable face, so whatever opens the vault at startup opens
+        // the one the credential providers actually read from.
+        _ = services.AddSingleton<ICredentialVault>(provider =>
+            provider.GetRequiredService<EncryptedFileVaultProvider>());
         services.TryAddSingleton<LibSecretProvider>();
         _ = services.AddSingleton<ICredentialProvider>(provider =>
             provider.GetRequiredService<LibSecretProvider>());

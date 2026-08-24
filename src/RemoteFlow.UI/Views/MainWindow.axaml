@@ -39,6 +39,9 @@
         <TabItem Header="Import">
           <backupViews:ImportPreview DataContext="{Binding Import}" />
         </TabItem>
+        <TabItem Header="Automatic">
+          <backupViews:AutomaticBackupView DataContext="{Binding Automatic}" />
+        </TabItem>
       </TabControl>
     </DataTemplate>
     <DataTemplate DataType="{x:Type terminalViewModels:TerminalsPageViewModel}" x:DataType="terminalViewModels:TerminalsPageViewModel">

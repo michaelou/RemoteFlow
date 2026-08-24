@@ -31,35 +31,42 @@ public sealed class TagService(
     IConnectionRepository connections,
     IUnitOfWork unitOfWork,
     IGuidProvider guidProvider,
-    IClock clock) : ITagService
+    IClock clock,
+    IWorkspaceChangeNotifier? changeNotifier = null) : ITagService
 {
     public Task<Result<Tag>> CreateAsync(
         string name,
         string? colorHex = null,
         CancellationToken cancellationToken = default)
     {
-        return unitOfWork.ExecuteAsync(async token =>
-        {
-            var created = Tag.Create(guidProvider, name, colorHex, clock.UtcNow);
-            if (created.IsFailure)
+        var added = false;
+        return NotifyAfterAsync(
+            unitOfWork.ExecuteAsync(async token =>
             {
+                var created = Tag.Create(guidProvider, name, colorHex, clock.UtcNow);
+                if (created.IsFailure)
+                {
+                    return created;
+                }
+
+                var existing = await tags.GetByNameAsync(created.Value.Name, token).ConfigureAwait(false);
+                if (existing is not null)
+                {
+                    // Reusing a tag that already exists writes nothing, so there is nothing to announce.
+                    return Result<Tag>.Success(existing);
+                }
+
+                await tags.AddAsync(created.Value, token).ConfigureAwait(false);
+                added = true;
                 return created;
-            }
-
-            var existing = await tags.GetByNameAsync(created.Value.Name, token).ConfigureAwait(false);
-            if (existing is not null)
-            {
-                return Result<Tag>.Success(existing);
-            }
-
-            await tags.AddAsync(created.Value, token).ConfigureAwait(false);
-            return created;
-        }, cancellationToken);
+            }, cancellationToken),
+            WorkspaceChangeKind.Created,
+            () => added);
     }
 
     public Task<Result<Tag>> RenameAsync(Guid id, string name, CancellationToken cancellationToken = default)
     {
-        return unitOfWork.ExecuteAsync(async token =>
+        return NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var tag = await tags.GetByIdAsync(id, token).ConfigureAwait(false);
             if (tag is null)
@@ -87,12 +94,12 @@ public sealed class TagService(
             }
 
             return renamed;
-        }, cancellationToken);
+        }, cancellationToken), WorkspaceChangeKind.Updated);
     }
 
     public Task<Result<Tag>> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        return unitOfWork.ExecuteAsync(async token =>
+        return NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var tag = await tags.GetByIdAsync(id, token).ConfigureAwait(false);
             if (tag is null)
@@ -102,7 +109,7 @@ public sealed class TagService(
 
             await tags.DeleteAsync(id, token).ConfigureAwait(false);
             return Result<Tag>.Success(tag);
-        }, cancellationToken);
+        }, cancellationToken), WorkspaceChangeKind.Deleted);
     }
 
     public Task<Result<Tag>> MergeAsync(
@@ -114,7 +121,7 @@ public sealed class TagService(
             ? Task.FromResult(Result<Tag>.Failure(RemoteFlowError.Validation(
                 "tag.merge_same",
                 "Choose two different tags to merge.")))
-            : unitOfWork.ExecuteAsync(async token =>
+            : NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var source = await tags.GetByIdAsync(sourceId, token).ConfigureAwait(false);
             if (source is null)
@@ -142,7 +149,7 @@ public sealed class TagService(
 
             await tags.DeleteAsync(sourceId, token).ConfigureAwait(false);
             return Result<Tag>.Success(target);
-        }, cancellationToken);
+        }, cancellationToken), WorkspaceChangeKind.Deleted);
     }
 
     public Task<Result<Connection>> AssignAsync(
@@ -161,9 +168,9 @@ public sealed class TagService(
         return ChangeAssignmentAsync(connectionId, tagId, assign: false, cancellationToken);
     }
 
-    public Task<int> CleanupOrphansAsync(CancellationToken cancellationToken = default)
+    public async Task<int> CleanupOrphansAsync(CancellationToken cancellationToken = default)
     {
-        return unitOfWork.ExecuteAsync(async token =>
+        var deletedCount = await unitOfWork.ExecuteAsync(async token =>
         {
             var allTags = await tags.ListAsync(token).ConfigureAwait(false);
             var deleted = 0;
@@ -177,7 +184,14 @@ public sealed class TagService(
             }
 
             return deleted;
-        }, cancellationToken);
+        }, cancellationToken).ConfigureAwait(false);
+        if (deletedCount > 0)
+        {
+            // One signal for the sweep as a whole: no single ID describes which tags went.
+            changeNotifier?.Notify(WorkspaceEntityKind.Tag, Guid.Empty, WorkspaceChangeKind.Deleted);
+        }
+
+        return deletedCount;
     }
 
     public async Task<IReadOnlyList<TagUsage>> GetUsageCountsAsync(
@@ -200,7 +214,7 @@ public sealed class TagService(
         bool assign,
         CancellationToken cancellationToken)
     {
-        return unitOfWork.ExecuteAsync(async token =>
+        return NotifyAssignmentAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var connection = await connections.GetByIdAsync(connectionId, token).ConfigureAwait(false);
             if (connection is null)
@@ -220,11 +234,43 @@ public sealed class TagService(
                 : await connections.RemoveTagAsync(connectionId, tagId, token).ConfigureAwait(false);
 
             return Result<Connection>.Success(connection);
-        }, cancellationToken);
+        }, cancellationToken), tagId);
     }
 
     private static Result<Tag> MissingTag(Guid id)
     {
         return Result<Tag>.Failure(RemoteFlowError.NotFound("tag.not_found", $"Tag '{id}' was not found."));
+    }
+
+    /// <summary>Signals only after <paramref name="operation"/> has committed, and only when it succeeded.
+    /// Raising from inside the unit-of-work lambda would announce writes a later failure rolls back, and
+    /// would fire while the SQLite write transaction is still open.</summary>
+    private async Task<Result<Tag>> NotifyAfterAsync(
+        Task<Result<Tag>> operation,
+        WorkspaceChangeKind kind,
+        Func<bool>? wroteSomething = null)
+    {
+        var result = await operation.ConfigureAwait(false);
+        if (result.IsSuccess && (wroteSomething is null || wroteSomething()))
+        {
+            changeNotifier?.Notify(WorkspaceEntityKind.Tag, result.Value.Id, kind);
+        }
+
+        return result;
+    }
+
+    /// <summary>Assigning and unassigning return the connection, but what changed is the tag link — which
+    /// is its own entry in a backup archive, so it has to be announced.</summary>
+    private async Task<Result<Connection>> NotifyAssignmentAfterAsync(
+        Task<Result<Connection>> operation,
+        Guid tagId)
+    {
+        var result = await operation.ConfigureAwait(false);
+        if (result.IsSuccess)
+        {
+            changeNotifier?.Notify(WorkspaceEntityKind.Tag, tagId, WorkspaceChangeKind.Updated);
+        }
+
+        return result;
     }
 }

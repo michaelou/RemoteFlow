@@ -11,11 +11,14 @@ namespace RemoteFlow.UI.ViewModels.Backup;
 
 public sealed class BackupPageViewModel(
     BackupExportViewModel export,
-    BackupImportPreviewViewModel import) : PageViewModel("Backup")
+    BackupImportPreviewViewModel import,
+    AutomaticBackupSettingsViewModel automatic) : PageViewModel("Backup")
 {
     public BackupExportViewModel Export { get; } = export ?? throw new ArgumentNullException(nameof(export));
 
     public BackupImportPreviewViewModel Import { get; } = import ?? throw new ArgumentNullException(nameof(import));
+
+    public AutomaticBackupSettingsViewModel Automatic { get; } = automatic ?? throw new ArgumentNullException(nameof(automatic));
 }
 
 public sealed partial class BackupImportPreviewViewModel(

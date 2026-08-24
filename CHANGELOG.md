@@ -7,6 +7,36 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **RemoteFlow can now back itself up on its own.** Turn it on under Backup → Automatic and every change to
+  a connection, folder or tag writes a fresh archive about thirty seconds after you stop editing — so a
+  rename, a retag and a move produce one backup rather than three. Backups can go to a folder on this
+  computer, or to an SFTP connection or storage account you have already saved, which means the place your
+  backups live is configured once, in the same list as everything else. You choose how many to keep and
+  older ones are removed after each successful run; files RemoteFlow did not write are never touched, so a
+  manual export sitting in the same folder is safe.
+- **Automatic backups always include your saved credentials**, encrypted with a passphrase you set once and
+  which is kept in your system credential store, never in RemoteFlow's database. Without it a restored
+  backup would give you back a list of hostnames and nothing you could sign in with. If no passphrase is
+  set, RemoteFlow writes nothing and says so rather than quietly making an archive you cannot restore from.
+- **The Backup page reports how the last automatic run went** — when, where to, and what went wrong if
+  anything did. A failed upload never interrupts what you are doing; it waits for you there, and retries at
+  the next change and the next launch.
+- **RemoteFlow can now open its own credential vault.** On a computer with no system keyring it can use —
+  most often Linux without libsecret — RemoteFlow keeps saved passwords and keys in an encrypted file of its
+  own. Nothing ever opened that file, so on those machines credentials silently could not be saved or read
+  at all. RemoteFlow now asks for the vault passphrase when it starts: once to choose one the first time,
+  with a confirmation box and a warning that nothing else holds a copy, and once to recall it thereafter. A
+  wrong passphrase can be retyped; declining leaves RemoteFlow running without saved secrets rather than
+  failing to start, and the Backup page offers a way back in without restarting. Machines with a working
+  keyring are untouched and see no prompt.
+
+### Changed
+
+- Folder and tag edits now announce themselves internally, the way connection edits already did. Without
+  that, an automatic backup would have gone stale after a folder rename with nothing to show for it.
+
 ## [0.5.0] - 2026-08-24
 
 ### Added

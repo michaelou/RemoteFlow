@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RemoteFlow.Application.Abstractions;
+using RemoteFlow.Application.Abstractions.Backup;
+using RemoteFlow.Application.Services;
 using RemoteFlow.Application.Abstractions.Ssh;
 using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.UI.Navigation;
@@ -28,6 +30,7 @@ public static class DependencyInjection
         services.TryAddSingleton<ConnectionsPageViewModel>();
         services.TryAddSingleton<BackupExportViewModel>();
         services.TryAddSingleton<BackupImportPreviewViewModel>();
+        services.TryAddSingleton<AutomaticBackupSettingsViewModel>();
         services.TryAddSingleton<BackupPageViewModel>();
         services.TryAddSingleton<ConnectionEditorViewModelFactory>();
         services.TryAddSingleton<CommandPaletteViewModel>();
@@ -106,6 +109,7 @@ public static class DependencyInjection
         _ = services.Replace(ServiceDescriptor.Singleton<IHostKeyPrompt, HostKeyPromptService>());
         services.TryAddSingleton<IKeyboardInteractivePrompt, KeyboardInteractivePromptService>();
         services.TryAddSingleton<ISshCredentialPrompt, SshCredentialPromptService>();
+        services.TryAddSingleton<IVaultUnlockPrompt, VaultUnlockPromptService>();
         services.TryAddSingleton<IConnectionSessionOpener, DeferredConnectionSessionOpener>();
         _ = services.Replace(ServiceDescriptor.Singleton<IConnectionSessionOpener, SshConnectionSessionOpener>());
         services.TryAddSingleton<IThemeService>(provider => new ThemeService(
@@ -118,6 +122,12 @@ public static class DependencyInjection
             {
                 await provider.GetRequiredService<IDbInitializer>().InitializeAsync().ConfigureAwait(true);
                 await provider.GetRequiredService<IThemeService>().InitializeAsync().ConfigureAwait(true);
+                // Before anything reads a credential. On Windows and macOS, and on Linux with a working
+                // keyring, this asks nothing and returns immediately; it only prompts when the selected
+                // store is RemoteFlow's own encrypted file, which nothing else opens. Declining is allowed
+                // and leaves the session running without saved secrets.
+                _ = await provider.GetRequiredService<IVaultUnlockService>()
+                    .EnsureUnlockedAsync().ConfigureAwait(true);
                 await provider.GetRequiredService<IRemoteEditServiceFactory>()
                     .SweepStaleFilesAsync().ConfigureAwait(true);
                 await provider.GetRequiredService<IRdpLauncher>()
@@ -126,6 +136,12 @@ public static class DependencyInjection
                 // installer is the only way back from one that destroyed what it was replacing.
                 await provider.GetRequiredService<IUpdateInstaller>()
                     .SweepStaleFilesAsync().ConfigureAwait(true);
+                // Subscribes to change signals and, if the last run never finished, arms a catch-up. Reads
+                // one setting and one small file; it must never await a backup, or the first paint would
+                // wait on an SSH handshake.
+                var autoBackup = provider.GetRequiredService<IAutoBackupRunner>();
+                await autoBackup.SweepStaleFilesAsync().ConfigureAwait(true);
+                await autoBackup.InitializeAsync().ConfigureAwait(true);
                 // Reads the update opt-in and, only if it is on, starts one check. Also reports an update
                 // that was started and never arrived, which is a thing only the next launch can notice.
                 await provider.GetRequiredService<AboutViewModel>()

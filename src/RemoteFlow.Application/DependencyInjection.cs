@@ -6,6 +6,7 @@ using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Application.Abstractions.Backup;
 using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Application.Services;
+using RemoteFlow.Application.Services.Backup;
 using RemoteFlow.Domain.Abstractions;
 
 namespace RemoteFlow.Application;
@@ -18,6 +19,12 @@ public static class DependencyInjection
         services.TryAddSingleton<IClock>(SystemClock.Instance);
         services.TryAddSingleton<IGuidProvider>(SystemGuidProvider.Instance);
         services.TryAddSingleton<IConnectionChangeNotifier, ConnectionChangeNotifier>();
+        services.TryAddSingleton<IWorkspaceChangeNotifier, WorkspaceChangeNotifier>();
+        services.TryAddSingleton<IVaultUnlockService, VaultUnlockService>();
+        services.TryAddSingleton<IAutoBackupPassphraseStore, AutoBackupPassphraseStore>();
+        services.TryAddSingleton<IAutoBackupStatusStore, FileAutoBackupStatusStore>();
+        services.TryAddSingleton<IAutoBackupDestinationFactory, AutoBackupDestinationFactory>();
+        services.TryAddSingleton<IAutoBackupRunner, AutoBackupRunner>();
         services.TryAddSingleton<IBackupService, BackupService>();
         services.TryAddSingleton<IConnectionService, ConnectionService>();
         services.TryAddSingleton<IConnectionCredentialService, ConnectionCredentialService>();

@@ -35,7 +35,8 @@ public sealed class FolderService(
     IConnectionService connectionService,
     IUnitOfWork unitOfWork,
     IGuidProvider guidProvider,
-    IClock clock) : IFolderService
+    IClock clock,
+    IWorkspaceChangeNotifier? changeNotifier = null) : IFolderService
 {
     public const int MaximumDepth = 16;
 
@@ -44,7 +45,7 @@ public sealed class FolderService(
         Guid? parentId = null,
         CancellationToken cancellationToken = default)
     {
-        return unitOfWork.ExecuteAsync(async token =>
+        return NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var allFolders = await folders.ListAsync(token).ConfigureAwait(false);
             var parent = parentId is null
@@ -74,7 +75,7 @@ public sealed class FolderService(
 
             await folders.AddAsync(created.Value, token).ConfigureAwait(false);
             return created;
-        }, cancellationToken);
+        }, cancellationToken), WorkspaceChangeKind.Created);
     }
 
     public Task<Result<Folder>> RenameAsync(
@@ -82,7 +83,7 @@ public sealed class FolderService(
         string name,
         CancellationToken cancellationToken = default)
     {
-        return unitOfWork.ExecuteAsync(async token =>
+        return NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var allFolders = await folders.ListAsync(token).ConfigureAwait(false);
             var folder = allFolders.SingleOrDefault(candidate => candidate.Id == id);
@@ -110,7 +111,7 @@ public sealed class FolderService(
             }
 
             return renamed;
-        }, cancellationToken);
+        }, cancellationToken), WorkspaceChangeKind.Updated);
     }
 
     public Task<Result<Folder>> MoveAsync(
@@ -118,7 +119,7 @@ public sealed class FolderService(
         Guid? parentId,
         CancellationToken cancellationToken = default)
     {
-        return unitOfWork.ExecuteAsync(async token =>
+        return NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var allFolders = await folders.ListAsync(token).ConfigureAwait(false);
             var folder = allFolders.SingleOrDefault(candidate => candidate.Id == id);
@@ -162,7 +163,7 @@ public sealed class FolderService(
             }
 
             return moved;
-        }, cancellationToken);
+        }, cancellationToken), WorkspaceChangeKind.Updated);
     }
 
     public Task<Result<Folder>> DeleteAsync(
@@ -174,7 +175,7 @@ public sealed class FolderService(
             ? Task.FromResult(Result<Folder>.Failure(RemoteFlowError.Validation(
                 "folder.delete_mode",
                 "Choose a supported folder delete option.")))
-            : unitOfWork.ExecuteAsync(async token =>
+            : NotifyAfterAsync(unitOfWork.ExecuteAsync(async token =>
         {
             var allFolders = await folders.ListAsync(token).ConfigureAwait(false);
             var folder = allFolders.SingleOrDefault(candidate => candidate.Id == id);
@@ -262,7 +263,7 @@ public sealed class FolderService(
             return consistency is null
                 ? Result<Folder>.Success(folder)
                 : Result<Folder>.Failure(consistency);
-        }, cancellationToken);
+        }, cancellationToken), WorkspaceChangeKind.Deleted);
     }
 
     private static IReadOnlyList<Folder> GetSubtree(IEnumerable<Folder> allFolders, string rootPath)
@@ -315,5 +316,21 @@ public sealed class FolderService(
         return RemoteFlowError.Validation(
             "folder.inconsistent_tree",
             "The folder tree is inconsistent and the operation could not be completed.");
+    }
+
+    /// <summary>Signals only after <paramref name="operation"/> has committed, and only when it succeeded.
+    /// Raising from inside the unit-of-work lambda would announce writes a later validation failure rolls
+    /// back, and would fire while the SQLite write transaction is still open.</summary>
+    private async Task<Result<Folder>> NotifyAfterAsync(
+        Task<Result<Folder>> operation,
+        WorkspaceChangeKind kind)
+    {
+        var result = await operation.ConfigureAwait(false);
+        if (result.IsSuccess)
+        {
+            changeNotifier?.Notify(WorkspaceEntityKind.Folder, result.Value.Id, kind);
+        }
+
+        return result;
     }
 }
