@@ -7,6 +7,36 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-24
+
+### Added
+
+- **The connection explorer's toolbar gained two buttons.** One closes every folder — including folders
+  nested inside closed ones — and opens them all again once they are shut; its glyph and its tooltip say
+  which way it will go, and what it does is remembered the same way collapsing one folder by hand is. The
+  other drops the `host:port` line from under every name, which takes a row from 45 pixels to 26 and shows
+  about seventy per cent more of the tree. That choice is remembered between sessions.
+- **Each protocol has its own glyph and its own colour** in the explorer: a shell, a file browser, a
+  screen, a bucket and now a cloud, in green, blue, violet, amber and cyan. An S3 bucket and an Azure
+  container used to share the storage glyph and were told apart only by reading the row. The shape carries
+  the difference as well as the colour does, both palettes clear the contrast floor for a meaningful
+  graphic in light and dark, and the colours follow a theme switch rather than freezing at the one they
+  were first drawn in.
+
+### Changed
+
+- **New folder and Clear recent are glyph buttons**, as are the two new ones beside them: five worded
+  buttons on one line crowded out the search box above them. Each names itself with a tooltip and to a
+  screen reader — the primary **New connection** button keeps its words.
+- **File and folder listings are compact.** Smaller type and a 24-pixel row instead of a 30- or 32-pixel
+  one, on the local, remote and SFTP browsers alike, so a folder shows about a third more of itself before
+  you scroll. The size and date columns narrowed to match, which gives the width back to the file name.
+- **The SFTP page's two column-heading strips line up.** The remote half used to hang its toolbar in a card
+  of its own with different padding, which left its headings roughly a row and a half below the local
+  pane's; it now mirrors the pane row for row. Its "Hidden files" box reads **Hidden**, as the local one
+  does, and its error banner uses the same colour token as the rest of the app rather than a hard-coded red.
+- **Transfers sits below Storage in the sidebar**, under the two pages whose work it queues.
+
 ## [0.4.0] - 2026-08-23
 
 ### Added
@@ -469,7 +499,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/michaelou/RemoteFlow/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/michaelou/RemoteFlow/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/michaelou/RemoteFlow/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/michaelou/RemoteFlow/compare/v0.2.5...v0.2.6
