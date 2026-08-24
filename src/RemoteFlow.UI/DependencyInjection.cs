@@ -45,6 +45,9 @@ public static class DependencyInjection
         services.TryAddSingleton<AboutViewModel>();
         services.TryAddSingleton<SettingsPageViewModel>();
         services.TryAddSingleton<TrustedKeysViewModel>();
+        // The sidebar is these registrations in order. Transfers comes after SFTP and Storage because it
+        // is where those two pages send their work: the queue reads as the tail of the file pages rather
+        // than as a third way to move a file.
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "connections",
             "Connections",
@@ -56,11 +59,6 @@ public static class DependencyInjection
             "Icon.Terminals",
             provider.GetRequiredService<TerminalsPageViewModel>));
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
-            "transfers",
-            "Transfers",
-            "Icon.Transfers",
-            provider.GetRequiredService<TransfersPageViewModel>));
-        _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "sftp",
             "SFTP",
             "Icon.Sftp",
@@ -70,6 +68,11 @@ public static class DependencyInjection
             "Storage",
             "Icon.Storage",
             provider.GetRequiredService<StoragePageViewModel>));
+        _ = services.AddSingleton(provider => new NavigationPageRegistration(
+            "transfers",
+            "Transfers",
+            "Icon.Transfers",
+            provider.GetRequiredService<TransfersPageViewModel>));
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "backup",
             "Backup",
