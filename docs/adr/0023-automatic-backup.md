@@ -143,7 +143,12 @@ launch will make another; holding process exit open on an SSH handshake is the w
   broadly — `Exception when (not OperationCanceledException)`, the same shape `ConnectionCredentialService`
   uses — because providers throw types declared in the infrastructure layer that Application cannot name.
   `InspectAsync` distinguishes "no passphrase set" from "the store will not open": only the first is fixed
-  by typing a new one, and offering that to somebody with a locked vault wastes their time. This matters on
+  by typing a new one, and offering that to somebody with a locked vault wastes their time. That distinction
+  is read from the selected provider's own state — `ICredentialVault.IsUnlocked` — and never inferred from a
+  failed lookup. Inferring it was a bug: the passphrase is searched for across every provider, so a Windows
+  machine with a perfectly good credential manager was told the idle, permanently locked file vault further
+  down the list was its problem. A provider that fails a read is now skipped silently, and a locked vault is
+  never read at all. This matters on
   Linux without libsecret, where the selector falls back to `EncryptedFileVaultProvider` — which reports
   itself available and then refuses every read until something opens it. [ADR-0024](0024-credential-vault-unlock.md)
   adds the flow that does; automatic backup still reports the situation rather than assuming it.

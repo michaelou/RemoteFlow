@@ -38,28 +38,43 @@ public sealed class AutoBackupPassphraseStore(
 
     public async Task<AutoBackupPassphraseState> InspectAsync(CancellationToken cancellationToken = default)
     {
-        var (handle, problem) = await LookUpAsync(cancellationToken).ConfigureAwait(false);
-        using (handle)
+        ICredentialProvider selected;
+        try
         {
-            return problem is not null
-                ? new AutoBackupPassphraseState(false, problem)
-                : handle is not null
-                    ? AutoBackupPassphraseState.Present
-                    : AutoBackupPassphraseState.Missing;
+            selected = await _selector.SelectAsync(cancellationToken).ConfigureAwait(false);
         }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return new AutoBackupPassphraseState(false, Describe(exception));
+        }
+
+        // Whether the store is usable is read as a fact, not inferred from a failed lookup. A read can fail
+        // for reasons that say nothing about the store's health, and reporting every one of those as
+        // "unusable" is how a perfectly good Windows credential manager got blamed for a locked file vault
+        // sitting unused further down the provider list.
+        if (selected is ICredentialVault { IsUnlocked: false })
+        {
+            return new AutoBackupPassphraseState(false, "The credential vault is locked.");
+        }
+
+        using var handle = await LookUpAsync(cancellationToken).ConfigureAwait(false);
+        return handle is not null ? AutoBackupPassphraseState.Present : AutoBackupPassphraseState.Missing;
     }
 
-    public async Task<SecretHandle?> GetAsync(CancellationToken cancellationToken = default)
+    public Task<SecretHandle?> GetAsync(CancellationToken cancellationToken = default)
     {
-        var (handle, _) = await LookUpAsync(cancellationToken).ConfigureAwait(false);
-        return handle;
+        return LookUpAsync(cancellationToken);
     }
 
-    /// <summary>Finds the passphrase, or explains why it could not look. The selected provider is tried
-    /// first, then anything else available: unlike a connection credential there is no stored provider name
-    /// to look up — putting one in the settings row would leak a machine-local fact into every exported
-    /// archive — and flipping ForceFileVault changes the selection without moving what is already stored.</summary>
-    private async Task<(SecretHandle? Handle, string? Problem)> LookUpAsync(CancellationToken cancellationToken)
+    /// <summary>Finds the passphrase, or returns null. The selected provider is tried first, then anything
+    /// else that could hold one: unlike a connection credential there is no stored provider name to look up
+    /// — putting one in the settings row would leak a machine-local fact into every exported archive — and
+    /// flipping ForceFileVault changes the selection without moving what is already stored.
+    ///
+    /// A provider that fails is skipped rather than reported. Only the selected provider's own state says
+    /// anything about whether the credential store works, and that is read directly in
+    /// <see cref="InspectAsync"/>.</summary>
+    private async Task<SecretHandle?> LookUpAsync(CancellationToken cancellationToken)
     {
         ICredentialProvider selected;
         try
@@ -68,32 +83,30 @@ public sealed class AutoBackupPassphraseStore(
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            return (null, Describe(exception));
+            return null;
         }
 
-        var (handle, problem) = await TryGetAsync(selected, cancellationToken).ConfigureAwait(false);
+        var handle = await TryGetAsync(selected, cancellationToken).ConfigureAwait(false);
         if (handle is not null)
         {
-            return (handle, null);
+            return handle;
         }
 
         foreach (var provider in _providers)
         {
-            if (!IsUsable(provider) || ReferenceEquals(provider, selected))
+            if (ReferenceEquals(provider, selected) || !CanHoldASecret(provider))
             {
                 continue;
             }
 
-            var (fallback, fallbackProblem) = await TryGetAsync(provider, cancellationToken).ConfigureAwait(false);
-            if (fallback is not null)
+            handle = await TryGetAsync(provider, cancellationToken).ConfigureAwait(false);
+            if (handle is not null)
             {
-                return (fallback, null);
+                return handle;
             }
-
-            problem ??= fallbackProblem;
         }
 
-        return (null, problem);
+        return null;
     }
 
     public async Task<Result<bool>> SetAsync(
@@ -145,25 +158,31 @@ public sealed class AutoBackupPassphraseStore(
         }
     }
 
-    private static async Task<(SecretHandle? Handle, string? Problem)> TryGetAsync(
+    private static async Task<SecretHandle?> TryGetAsync(
         ICredentialProvider provider,
         CancellationToken cancellationToken)
     {
-        if (!IsUsable(provider))
+        if (!CanHoldASecret(provider))
         {
-            return (null, null);
+            return null;
         }
 
         try
         {
-            return (await provider.GetAsync(StoreKey, cancellationToken).ConfigureAwait(false), null);
+            return await provider.GetAsync(StoreKey, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Reported rather than swallowed: a store that will not open is a different problem from one
-            // that simply holds no passphrase, and only one of the two is fixed by typing a new one.
-            return (null, Describe(exception));
+            return null;
         }
+    }
+
+    /// <summary>Whether it is worth asking this provider anything. A locked vault answers every read with an
+    /// exception, and <see cref="ICredentialProvider.IsAvailable"/> does not say so — the file vault reports
+    /// itself available on every platform, including ones where nothing will ever open it.</summary>
+    private static bool CanHoldASecret(ICredentialProvider provider)
+    {
+        return IsUsable(provider) && provider is not ICredentialVault { IsUnlocked: false };
     }
 
     private static bool IsUsable(ICredentialProvider provider)

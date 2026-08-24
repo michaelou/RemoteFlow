@@ -95,11 +95,66 @@ public sealed class AutoBackupPassphraseTests
         Assert.False((await store.InspectAsync(token)).HasPassphrase);
     }
 
-    /// <summary>A locked vault used to throw straight through this store and out of the Backup page. It has
-    /// to come back as a reported problem instead — credential providers are platform integrations that
-    /// throw types declared in a layer this one cannot even reference, so the catch must be broad.</summary>
+    /// <summary>The Windows report: a perfectly good credential manager blamed for a locked file vault that
+    /// was merely sitting in the provider list. EncryptedFileVaultProvider reports IsAvailable on every
+    /// platform, including ones where nothing ever opens it, so scanning "other providers" for a passphrase
+    /// reached it and turned its lock into the selected store's problem.</summary>
     [Fact]
-    public async Task ALockedCredentialStoreIsReportedRatherThanThrown()
+    public async Task ALockedVaultElsewhereInTheListIsNotTheSelectedStoresProblem()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var windows = new RecordingCredentialProvider("windows-credman");
+        var lockedVault = new LockedVaultProvider();
+        var store = new AutoBackupPassphraseStore(new FixedSelector(windows), [windows, lockedVault]);
+
+        var state = await store.InspectAsync(token);
+
+        Assert.True(state.IsUsable);
+        Assert.Null(state.Problem);
+        Assert.False(state.HasPassphrase);
+        // Never even asked: reading a locked vault can only throw.
+        Assert.False(lockedVault.WasRead);
+    }
+
+    [Fact]
+    public async Task AWorkingStoreStillFindsItsPassphraseAlongsideALockedVault()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var windows = new RecordingCredentialProvider("windows-credman");
+        await windows.SetAsync(AutoBackupPassphraseStore.StoreKey, "correct-horse-Battery9!".AsMemory(), "x", token);
+        var store = new AutoBackupPassphraseStore(
+            new FixedSelector(windows), [windows, new LockedVaultProvider()]);
+
+        var state = await store.InspectAsync(token);
+        using var handle = await store.GetAsync(token);
+
+        Assert.True(state.HasPassphrase);
+        Assert.True(state.IsUsable);
+        Assert.NotNull(handle);
+    }
+
+    /// <summary>When the locked vault IS the selected store, its state is read directly rather than inferred
+    /// from a failed lookup — which is both more reliable and the only case that should report a problem.</summary>
+    [Fact]
+    public async Task ALockedVaultThatIsTheSelectedStoreIsReportedWithoutBeingRead()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var lockedVault = new LockedVaultProvider();
+        var store = new AutoBackupPassphraseStore(new FixedSelector(lockedVault), [lockedVault]);
+
+        var state = await store.InspectAsync(token);
+
+        Assert.False(state.IsUsable);
+        Assert.Equal("The credential vault is locked.", state.Problem);
+        Assert.False(lockedVault.WasRead);
+    }
+
+    /// <summary>A provider throwing on read used to travel out of this store and out of the Backup page.
+    /// Credential providers are platform integrations that throw types declared in a layer this one cannot
+    /// reference, so the catch has to be broad — and the failure is not evidence about the store's health,
+    /// only about that one read, so it reads as "nothing stored" rather than "store broken".</summary>
+    [Fact]
+    public async Task AProviderThatThrowsOnReadNeverThrowsOutOfTheStore()
     {
         var token = TestContext.Current.CancellationToken;
         var provider = new RecordingCredentialProvider { ThrowOnGet = new VaultIsLockedException() };
@@ -110,27 +165,28 @@ public sealed class AutoBackupPassphraseTests
         var state = await store.InspectAsync(token);
 
         Assert.False(state.HasPassphrase);
-        Assert.False(state.IsUsable);
-        Assert.Equal("The credential vault is locked.", state.Problem);
+        Assert.True(state.IsUsable);
     }
 
     /// <summary>"Locked" and "not set" must not collapse into one answer: only one of them is fixed by
-    /// typing a new passphrase, and offering that to somebody with a locked vault wastes their time.</summary>
+    /// typing a new passphrase, and offering that to somebody with a locked vault wastes their time. The
+    /// difference is read from the vault's own state, never guessed from a failed lookup.</summary>
     [Fact]
-    public async Task AnEmptyStoreAndAnUnreadableOneAreDifferentAnswers()
+    public async Task AnEmptyStoreAndALockedVaultAreDifferentAnswers()
     {
         var token = TestContext.Current.CancellationToken;
-        var empty = new AutoBackupPassphraseStore(
-            new FixedSelector(new RecordingCredentialProvider()), [new RecordingCredentialProvider()]);
-        var locked = new RecordingCredentialProvider { ThrowOnGet = new VaultIsLockedException() };
+        var plain = new RecordingCredentialProvider();
+        var locked = new LockedVaultProvider();
 
-        var emptyState = await empty.InspectAsync(token);
+        var emptyState = await new AutoBackupPassphraseStore(new FixedSelector(plain), [plain])
+            .InspectAsync(token);
         var lockedState = await new AutoBackupPassphraseStore(new FixedSelector(locked), [locked])
             .InspectAsync(token);
 
         Assert.True(emptyState.IsUsable);
         Assert.False(emptyState.HasPassphrase);
         Assert.False(lockedState.IsUsable);
+        Assert.NotEqual(emptyState.Problem, lockedState.Problem);
     }
 
     [Fact]
@@ -168,6 +224,48 @@ public sealed class AutoBackupPassphraseTests
         public VaultIsLockedException()
             : base("The credential vault is locked.")
         {
+        }
+    }
+
+    /// <summary>Stands in for EncryptedFileVaultProvider: available on every platform, and throwing on every
+    /// read until something unlocks it.</summary>
+    private sealed class LockedVaultProvider : ICredentialProvider, ICredentialVault
+    {
+        public bool WasRead { get; private set; }
+
+        public string Name => "file-vault";
+
+        public bool IsAvailable => true;
+
+        public bool IsUnlocked => false;
+
+        public bool Exists => true;
+
+        public Task<VaultUnlockOutcome> TryUnlockAsync(
+            ReadOnlyMemory<char> passphrase,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(VaultUnlockOutcome.IncorrectPassphrase);
+        }
+
+        public Task<SecretHandle?> GetAsync(string storeKey, CancellationToken cancellationToken = default)
+        {
+            WasRead = true;
+            throw new InvalidOperationException("The credential vault is locked.");
+        }
+
+        public Task SetAsync(
+            string storeKey,
+            ReadOnlyMemory<char> secret,
+            string displayName,
+            CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("The credential vault is locked.");
+        }
+
+        public Task DeleteAsync(string storeKey, CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("The credential vault is locked.");
         }
     }
 

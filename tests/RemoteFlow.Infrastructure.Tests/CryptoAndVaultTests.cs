@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using RemoteFlow.Application;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Services;
 using RemoteFlow.Application.Services.Backup;
@@ -354,6 +356,78 @@ public sealed class CryptoAndVaultTests
 
         Assert.False(state.IsUsable);
         Assert.Equal("The credential vault is locked.", state.Problem);
+    }
+
+    /// <summary>The vault is registered twice — once as a credential provider, once as the unlockable thing
+    /// the startup flow opens. If those ever resolve to different objects, startup unlocks one and the
+    /// credential providers keep reading the other, and nothing else in the suite would notice.</summary>
+    [Fact]
+    public void TheVaultIsRegisteredOnceAndResolvesToOneObject()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var paths = TestAppPaths.Under(directory.Path);
+        paths.EnsureDirectories();
+        var services = new ServiceCollection()
+            .AddLogging()
+            .AddRemoteFlowApplication()
+            .AddRemoteFlowInfrastructure(paths);
+        using var provider = services.BuildServiceProvider();
+
+        var asVault = provider.GetRequiredService<ICredentialVault>();
+        var asProvider = provider.GetServices<ICredentialProvider>()
+            .Single(candidate => candidate.Name == "file-vault");
+
+        Assert.Same(asVault, asProvider);
+        Assert.Same(asVault, provider.GetRequiredService<EncryptedFileVaultProvider>());
+    }
+
+    /// <summary>The Windows report, against real registrations: the file vault is registered and locked on
+    /// every platform. A machine whose selected store is the platform credential manager must not be told
+    /// the idle vault's lock is its problem.</summary>
+    [Fact]
+    public async Task AWorkingPlatformStoreIsNotBlamedForTheIdleFileVault()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var directory = TemporaryDirectory.Create();
+        using var vault = CreateVault(TestAppPaths.Under(directory.Path));
+        var platformStore = new AlwaysEmptyProvider();
+        var settings = new InMemorySettingsStore();
+        var store = new AutoBackupPassphraseStore(
+            new CredentialProviderSelector(settings, [platformStore, vault], CredentialPlatform.Windows),
+            [platformStore, vault]);
+
+        var state = await store.InspectAsync(cancellationToken);
+
+        Assert.False(vault.IsUnlocked);
+        Assert.True(state.IsUsable);
+        Assert.Null(state.Problem);
+        Assert.False(state.HasPassphrase);
+    }
+
+    private sealed class AlwaysEmptyProvider : ICredentialProvider
+    {
+        public string Name => "windows-credman";
+
+        public bool IsAvailable => true;
+
+        public Task<SecretHandle?> GetAsync(string storeKey, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<SecretHandle?>(null);
+        }
+
+        public Task SetAsync(
+            string storeKey,
+            ReadOnlyMemory<char> secret,
+            string displayName,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(string storeKey, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class ScriptedPrompt(params string[] answers) : IVaultUnlockPrompt
