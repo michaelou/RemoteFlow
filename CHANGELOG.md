@@ -7,6 +7,8 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-26
+
 ### Fixed
 
 - **Every terminal in the tab layout works again, not just the last one.** A session that is not the one on
@@ -552,7 +554,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/michaelou/RemoteFlow/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/michaelou/RemoteFlow/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/michaelou/RemoteFlow/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/michaelou/RemoteFlow/compare/v0.3.0...v0.4.0
