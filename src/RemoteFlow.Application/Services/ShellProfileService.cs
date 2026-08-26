@@ -184,6 +184,17 @@ public sealed class ShellProfileService(ISettingsStore settings, ISystemPlatform
             : _platform.FindExecutable("cmd.exe");
     }
 
+    /// <summary>
+    /// What the detected shell is started with.
+    /// </summary>
+    /// <remarks>
+    /// bash is given nothing. On a PTY it is interactive and reads the user's <c>~/.bashrc</c>, which is where
+    /// the prompt, the aliases and <c>dircolors</c> live — the same shell a terminal emulator gives you.
+    /// <c>--noprofile --norc</c> suppressed all of it, so on Linux the terminal opened on a bare
+    /// <c>bash-5.3$</c> with no colour and misaligned <c>ls</c> output, while PowerShell on Windows kept its
+    /// profile and looked right. Only Windows shells need arguments: cmd.exe to stay open and quiet, and
+    /// PowerShell to skip its banner and stay open.
+    /// </remarks>
     private static string[] DefaultArguments(string shell)
     {
         var fileName = Path.GetFileName(shell);
@@ -192,9 +203,7 @@ public sealed class ShellProfileService(ISettingsStore settings, ISystemPlatform
             : fileName.StartsWith("powershell", StringComparison.OrdinalIgnoreCase) ||
                 fileName.Equals("pwsh.exe", StringComparison.OrdinalIgnoreCase)
                 ? ["-NoLogo", "-NoExit"]
-                : fileName.Equals("bash", StringComparison.OrdinalIgnoreCase)
-                    ? ["--noprofile", "--norc"]
-                    : [];
+                : [];
     }
 
     private static ShellProfile ValidateAndNormalize(ShellProfile profile)

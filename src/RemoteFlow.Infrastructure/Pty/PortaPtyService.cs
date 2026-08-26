@@ -26,6 +26,9 @@ public sealed class PortaPtyService : IPtyService
                 Rows = options.Rows,
             }, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
+            // Before anything is read: the shell's first prompt is already on its way, and every byte of it
+            // that arrives before the terminal post-processes output again lands on the wrong column.
+            _ = PtyOutputPostProcessing.TryEnable(connection.WriterStream);
             var session = new PortaPtySession(connection);
             connection = null;
             return session;

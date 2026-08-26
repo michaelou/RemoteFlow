@@ -466,11 +466,10 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         var shell = OperatingSystem.IsWindows()
             ? Environment.GetEnvironmentVariable("ComSpec") ?? Path.Combine(Environment.SystemDirectory, "cmd.exe")
             : Environment.GetEnvironmentVariable("SHELL") ?? (File.Exists("/bin/bash") ? "/bin/bash" : "/bin/sh");
-        IReadOnlyList<string> arguments = OperatingSystem.IsWindows()
-            ? ["/Q", "/D", "/K"]
-            : Path.GetFileName(shell).Equals("bash", StringComparison.OrdinalIgnoreCase)
-                ? ["--noprofile", "--norc"]
-                : [];
+        // A POSIX shell is given nothing: on a PTY it is interactive and reads the user's own configuration,
+        // which is where the prompt, the aliases and dircolors live. Suppressing that was why the Linux
+        // terminal opened on a bare uncoloured prompt while PowerShell on Windows looked right.
+        IReadOnlyList<string> arguments = OperatingSystem.IsWindows() ? ["/Q", "/D", "/K"] : [];
         return new PtySpawnOptions
         {
             ShellPath = shell,

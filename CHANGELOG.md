@@ -7,6 +7,27 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Fixed
+
+- **Every terminal in the tab layout works again, not just the last one.** A session that is not the one on
+  screen keeps its place in the workspace, at full size, because a remote desktop cannot survive being
+  re-hosted — but its tile also kept painting its own background over the whole area and swallowing clicks.
+  The tiles stacked in the order the tabs are in, so the last session covered all the others: selecting any
+  earlier tab left a blank panel that could not be typed into. Switching to the grid and back made it
+  obvious, because a new terminal is added at the end and selected, so it always looked right until you went
+  back to an older tab.
+- **Output on Linux no longer walks off to the right.** RemoteFlow's terminal was built with newline
+  translation switched off, so a line feed from the shell moved the cursor down a row without returning it to
+  the first column, and every line of `ls` started where the previous one ended. It also left the shell's own
+  line editor counting columns that did not match the screen, which is what redrew the line you were typing
+  over the wrong one and repeated characters as you typed or pasted. Windows was unaffected because its
+  console renders the screen itself, and macOS was already configured correctly.
+- **A new terminal on Linux and macOS now starts your own shell, not a stripped one.** bash was launched with
+  `--noprofile --norc`, which suppressed the prompt, the aliases and the colours from your own
+  configuration, while PowerShell on Windows kept its profile — so the same application looked configured on
+  one platform and bare on the other. A shell profile you have already saved keeps the arguments it was
+  created with; clear it under Settings → Terminal to pick up the new default.
+
 ## [0.6.0] - 2026-08-24
 
 ### Added

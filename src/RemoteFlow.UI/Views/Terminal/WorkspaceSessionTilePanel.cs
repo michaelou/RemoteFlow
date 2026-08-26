@@ -36,6 +36,17 @@ public sealed class WorkspaceSessionTilePanel : Panel
             "IsTileShown",
             defaultValue: true);
 
+    /// <summary>
+    /// A child that holds no cell is still arranged over the whole area, so in the tab layout every session's
+    /// container covers the one the user is looking at. A container always paints its own tile chrome and
+    /// always answers a hit test — only its content honours <c>IsContentVisible</c> — so without a z-order the
+    /// last session in the list buries every other one: the selected terminal was neither drawn nor clickable
+    /// unless it happened to be the last tab. The tile being shown is therefore lifted above the rest.
+    /// </summary>
+    private const int _tileZIndex = 1;
+
+    private const int _hiddenZIndex = 0;
+
     private readonly HashSet<Control> _observedChildren = [];
 
     static WorkspaceSessionTilePanel()
@@ -157,6 +168,7 @@ public sealed class WorkspaceSessionTilePanel : Panel
         {
             if (!IsTile(child))
             {
+                child.ZIndex = _hiddenZIndex;
                 child.Arrange(whole);
             }
         }
@@ -171,7 +183,9 @@ public sealed class WorkspaceSessionTilePanel : Panel
             for (var column = 0; column < rows[row]; column++)
             {
                 var (left, width) = Slice(finalSize.Width, rows[row], spacing, column);
-                visible[index++].Arrange(new Rect(left, top, width, height));
+                var child = visible[index++];
+                child.ZIndex = _tileZIndex;
+                child.Arrange(new Rect(left, top, width, height));
             }
         }
 

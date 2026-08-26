@@ -111,6 +111,51 @@ public sealed class WorkspaceSessionTilePanelTests
         Assert.Equal(new Rect(0, 0, 900, 600), offScreen.Bounds);
     }
 
+    /// <summary>
+    /// The tile being shown paints and answers a hit test above every session that holds no cell.
+    /// </summary>
+    /// <remarks>
+    /// A container that is not a tile still covers the whole area, and it always paints its own tile chrome —
+    /// only its content honours <c>IsContentVisible</c>. Without a z-order the containers stack in list order,
+    /// so the last session buried every other one: in the tab layout the selected terminal was drawn over by
+    /// an unselected session's opaque chrome, and clicks landed on it, unless the last tab happened to be the
+    /// one selected. That is why only the last terminal worked.
+    /// </remarks>
+    [AvaloniaFact]
+    public void TheShownTileSitsAboveEverySessionThatHoldsNoCell()
+    {
+        var panel = new WorkspaceSessionTilePanel { MaxColumns = 3, TileSpacing = 6 };
+        var first = new Border();
+        var shown = new Border();
+        var last = new Border();
+        WorkspaceSessionTilePanel.SetIsTileShown(first, false);
+        WorkspaceSessionTilePanel.SetIsTileShown(last, false);
+        panel.Children.Add(first);
+        panel.Children.Add(shown);
+        panel.Children.Add(last);
+
+        Layout(panel, 900, 600);
+
+        Assert.True(shown.ZIndex > first.ZIndex);
+        Assert.True(shown.ZIndex > last.ZIndex);
+    }
+
+    /// <summary>Every tile of a grid is equal, so none of them may cover a neighbour.</summary>
+    [AvaloniaFact]
+    public void EveryTileOfAGridSharesOneZOrder()
+    {
+        var panel = new WorkspaceSessionTilePanel { MaxColumns = 3, TileSpacing = 6 };
+        var tiles = new[] { new Border(), new Border(), new Border() };
+        foreach (var tile in tiles)
+        {
+            panel.Children.Add(tile);
+        }
+
+        Layout(panel, 900, 600);
+
+        _ = Assert.Single(tiles.Select(tile => tile.ZIndex).Distinct());
+    }
+
     [AvaloniaFact]
     public void TilingASessionThatWasOffScreenResizesTheRest()
     {

@@ -30,6 +30,42 @@ public sealed partial class PortaPtyServiceTests
         Assert.Contains("REMOTEFLOW_PTY_OK", Encoding.UTF8.GetString(output), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A line feed written by the child arrives as a carriage return and a line feed.
+    /// </summary>
+    /// <remarks>
+    /// Porta.Pty 1.0.7 builds the Linux terminal with <c>TermOutputFlag.NONE</c>, so the kernel passed a
+    /// child's <c>\n</c> through untranslated. A terminal answers a bare line feed by staying in the same
+    /// column, so every line of output began where the previous one ended — the staircase that made bash
+    /// unreadable — and readline, which counts columns itself, redrew the edited line over the wrong ones and
+    /// smeared characters while typing or pasting. The library's macOS provider passes <c>OPOST | ONLCR</c>
+    /// and Windows renders through ConPTY, so Linux was the only platform that showed it.
+    /// </remarks>
+    [Fact]
+    public async Task ALineFeedFromTheChildReachesTheTerminalAsCarriageReturnLineFeed()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Only the Linux PTY loses output post-processing.");
+        var token = TestContext.Current.CancellationToken;
+        var service = new PortaPtyService();
+        await using var session = await service.SpawnAsync(InteractiveShell(), token);
+
+        await session.WriteAsync(
+            // The marker is assembled by printf so that the echo of the command does not contain it, and
+            // the read waits for the output rather than for the line the user typed.
+            Encoding.UTF8.GetBytes("printf 'RF_ONE\\nRF_TWO\\nRF_%s\\n' DONE\n"),
+            token);
+        var output = await ReadUntilAsync(
+            session.Output,
+            bytes => Encoding.UTF8.GetString(bytes).Contains("RF_DONE", StringComparison.Ordinal),
+            token);
+        var text = Encoding.UTF8.GetString(output);
+
+        Assert.Contains("RF_ONE\r\nRF_TWO\r\n", text, StringComparison.Ordinal);
+        // The staircase is a line feed that no carriage return precedes; the echo of the command carries one
+        // of its own, so every line feed in the stream has to be paired.
+        Assert.DoesNotContain('\n', text.Replace("\r\n", string.Empty, StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task KeymapCtrlCBytesInterruptARunawayPtyCommand()
     {
