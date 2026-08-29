@@ -153,7 +153,10 @@
       </StackPanel>
     </Border>
 
-    <Grid Grid.Row="2" ColumnDefinitions="*,500" ColumnSpacing="8">
+    <!-- The pane's column is sized by what is in it rather than pinned at 500, and the gap between the two
+         is the pane's own margin rather than the grid's spacing. Both so that closing the pane leaves the
+         list the full width of the page instead of a 500-pixel hole and an 8-pixel gutter beside it. -->
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
       <!-- Both halves of the page sit on their own card, so the tree and whatever is open beside it read
            as two panels rather than as content poured straight onto the window. -->
       <!-- No horizontal padding, and clipped: the rows run to the card's edges so the rules between them
@@ -282,6 +285,40 @@
               <Setter Property="Foreground" Value="{DynamicResource Brush.Protocol.AzureBlob}" />
             </Style>
 
+            <!-- The environment chip, coloured the same way and for the same reason: one fill per
+                 environment, named by the tag the row carries, so PROD is sorted from STAGE from DEV before
+                 a word is read — and so both the fill and the ink on it follow a light-dark switch. The
+                 word inside the chip stays the thing that actually says which environment; the colour only
+                 finds it faster. The ink is the environment's own colour, the same one the swatch beside the
+                 Environment picker shows, so the two can never disagree about what green means. -->
+            <Style Selector="TreeView.explorer Border.env-chip[Tag=prod]">
+              <Setter Property="Background" Value="{DynamicResource Brush.Badge.Prod.Background}" />
+            </Style>
+            <Style Selector="TreeView.explorer Border.env-chip[Tag=prod] TextBlock">
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Badge.Prod.Text}" />
+            </Style>
+            <Style Selector="TreeView.explorer Border.env-chip[Tag=stage]">
+              <Setter Property="Background" Value="{DynamicResource Brush.Badge.Stage.Background}" />
+            </Style>
+            <Style Selector="TreeView.explorer Border.env-chip[Tag=stage] TextBlock">
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Badge.Stage.Text}" />
+            </Style>
+            <Style Selector="TreeView.explorer Border.env-chip[Tag=dev]">
+              <Setter Property="Background" Value="{DynamicResource Brush.Badge.Dev.Background}" />
+            </Style>
+            <Style Selector="TreeView.explorer Border.env-chip[Tag=dev] TextBlock">
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Badge.Dev.Text}" />
+            </Style>
+            <!-- A connection with no environment but a colour of its own still earns a chip, because the
+                 colour would otherwise be the whole message on its session tab. It gets the neutral badge
+                 palette: the chip says which environment, and this one has none to say. -->
+            <Style Selector="TreeView.explorer Border.env-chip[Tag=custom]">
+              <Setter Property="Background" Value="{DynamicResource Brush.Badge.Background}" />
+            </Style>
+            <Style Selector="TreeView.explorer Border.env-chip[Tag=custom] TextBlock">
+              <Setter Property="Foreground" Value="{DynamicResource Brush.Badge.Text}" />
+            </Style>
+
             <!-- Favorites and Recent are headings for the rows underneath them, not rows in their own right. -->
             <Style Selector="TreeView.explorer Grid.group TextBlock">
               <Setter Property="FontSize" Value="11" />
@@ -353,16 +390,17 @@
                      own column instead of starting at a different place on every row. -->
                 <Border
                     Grid.Column="2"
-                    Margin="0,0,4,0"
+                    Classes="env-chip"
+                    Margin="0,0,10,0"
                     Padding="5,1"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Center"
-                    Background="{DynamicResource Brush.Badge.Background}"
                     CornerRadius="{DynamicResource Radius.Small}"
-                    IsVisible="{Binding Badge, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    IsVisible="{Binding Badge, Converter={x:Static ObjectConverters.IsNotNull}}"
+                    Tag="{Binding Badge.Tag}">
                   <StackPanel Orientation="Horizontal" Spacing="3">
-                    <TextBlock FontSize="9" FontWeight="Bold" Foreground="{DynamicResource Brush.Badge.Text}" Text="{Binding Badge.Icon}" />
-                    <TextBlock FontSize="9" FontWeight="Bold" Foreground="{DynamicResource Brush.Badge.Text}" Text="{Binding Badge.Text}" />
+                    <TextBlock FontSize="9" FontWeight="Bold" Text="{Binding Badge.Icon}" />
+                    <TextBlock FontSize="9" FontWeight="Bold" Text="{Binding Badge.Text}" />
                   </StackPanel>
                 </Border>
                 <Grid.ContextMenu>
@@ -402,8 +440,14 @@
         </StackPanel>
       </Border>
 
-      <ContentControl Grid.Column="1" Content="{Binding Details}" IsVisible="{Binding !IsEditorOpen}" />
-      <ContentControl Grid.Column="1" Content="{Binding Editor}" IsVisible="{Binding IsEditorOpen}" />
+      <Panel
+          Grid.Column="1"
+          Width="500"
+          Margin="8,0,0,0"
+          IsVisible="{Binding IsWorkspaceOpen}">
+        <ContentControl Content="{Binding Details}" IsVisible="{Binding !IsEditorOpen}" />
+        <ContentControl Content="{Binding Editor}" IsVisible="{Binding IsEditorOpen}" />
+      </Panel>
     </Grid>
   </Grid>
 </UserControl>

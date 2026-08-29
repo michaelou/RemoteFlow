@@ -1,6 +1,9 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
+using RemoteFlow.Domain.Enums;
+using RemoteFlow.UI.ViewModels.Connections;
+using RemoteFlow.UI.ViewModels.Terminal;
 using Xunit;
 
 namespace RemoteFlow.UI.Tests;
@@ -82,6 +85,62 @@ public sealed class DarkPaletteContrastTests
         var ratio = Contrast(GetColor(app, "Color.Badge.Text"), GetColor(app, "Color.Badge.Background"));
 
         Assert.True(ratio >= _textMinimum, $"Badge text is {ratio:F2}:1 on its badge.");
+    }
+
+    /// <summary>
+    /// A chip writes its word in that environment's own colour on a fill made for it, so the pair is
+    /// measured against each other rather than against the page. Both themes: the chip is one of the few
+    /// things on the page whose background is not a shared surface. The fills also have to differ from one
+    /// another, because telling PROD from STAGE at a glance is the whole point of them.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public void EveryEnvironmentChipReadsOnItsOwnFill(string variantName)
+    {
+        var app = global::Avalonia.Application.Current!;
+        var variant = variantName == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+        (string Chip, string Environment)[] environments =
+            [("Prod", "Production"), ("Stage", "Staging"), ("Dev", "Dev")];
+
+        foreach (var (chip, environment) in environments)
+        {
+            var ratio = Contrast(
+                GetColor(app, $"Color.Environment.{environment}", variant),
+                GetColor(app, $"Color.Badge.{chip}.Background", variant));
+            Assert.True(
+                ratio >= _textMinimum,
+                $"The {variantName} {chip} chip reads {ratio:F2}:1 on its own fill.");
+        }
+
+        var fills = environments
+            .Select(pair => GetColor(app, $"Color.Badge.{pair.Chip}.Background", variant))
+            .ToArray();
+        Assert.Equal(fills.Length, fills.Distinct().Count());
+    }
+
+    /// <summary>
+    /// The chip's ink, the swatch beside the Environment picker and a session tab's accent all have to be
+    /// the same colour for the same word, or the list and the tab disagree about which box you are on.
+    /// The tokens and the two resolvers that hand a hex to a session are separate declarations of one
+    /// palette, so this is what stops them drifting.
+    /// </summary>
+    [AvaloniaFact]
+    public void EveryEnvironmentIsOneColourWhereverItIsNamed()
+    {
+        var app = global::Avalonia.Application.Current!;
+
+        foreach (var (environment, key) in new[]
+                 {
+                     (EnvironmentKind.Development, "Color.Environment.Dev"),
+                     (EnvironmentKind.Staging, "Color.Environment.Staging"),
+                     (EnvironmentKind.Production, "Color.Environment.Production"),
+                 })
+        {
+            var token = GetColor(app, key);
+            Assert.Equal(token, Color.Parse(WorkspaceSessionAppearance.ResolveAccentColor(environment, null)));
+            Assert.Equal(token, Color.Parse(ConnectionEditorViewModel.EnvironmentFallbackHex(environment)));
+        }
     }
 
     /// <summary>

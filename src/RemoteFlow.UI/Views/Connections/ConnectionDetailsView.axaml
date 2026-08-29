@@ -7,7 +7,25 @@
   <Border Classes="panel" Padding="20">
     <ScrollViewer>
       <StackPanel Spacing="12">
-        <TextBlock FontSize="22" FontWeight="SemiBold" Text="{Binding Name}" />
+        <!-- The pane costs the list half the page, so the way out of it sits where it was opened rather
+             than only on the Escape key. -->
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock
+              FontSize="22"
+              FontWeight="SemiBold"
+              Text="{Binding Name}"
+              TextTrimming="CharacterEllipsis"
+              VerticalAlignment="Center" />
+          <Button
+              Grid.Column="1"
+              AutomationProperties.Name="Close the connection pane"
+              Classes="icon"
+              Click="Close_OnClick"
+              ToolTip.Tip="Close this pane (Esc)"
+              VerticalAlignment="Center">
+            <PathIcon Data="{DynamicResource Icon.Cancel}" />
+          </Button>
+        </Grid>
         <WrapPanel>
           <Button Margin="0,0,8,8" Command="{Binding ConnectCommand}" Content="Connect" />
           <Button Margin="0,0,8,8" Command="{Binding OpenSftpCommand}" Content="Open SFTP" />

@@ -67,6 +67,17 @@ public sealed partial class ConnectionEditorView : UserControl
         }
     }
 
+    /// <summary>Distinct from Cancel: cancelling abandons the edit and drops back to the details for the
+    /// same connection, while this shuts the pane outright and gives the page back to the list. Unsaved
+    /// work is still only discarded on the same prompt.</summary>
+    private async void Close_OnClick(object? sender, RoutedEventArgs e)
+    {
+        if (FindOwner() is { } owner)
+        {
+            _ = await owner.CloseWorkspaceAsync().ConfigureAwait(true);
+        }
+    }
+
     private async void ClearCredential_OnClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is ConnectionEditorViewModel editor)

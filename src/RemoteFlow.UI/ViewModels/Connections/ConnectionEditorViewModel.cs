@@ -307,6 +307,10 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsStorageSectionVisible { get; private set; }
 
+    /// <summary>Whether the protocol-options panel holds anything. Three protocols bring extra fields and
+    /// the other two bring none, so without this the panel would show as an empty card with a heading.</summary>
+    public bool IsProtocolOptionsVisible => IsSftpSectionVisible || IsRdpSectionVisible || IsStorageSectionVisible;
+
     /// <summary>Only S3 carries a region; Azure's is implied by the account.</summary>
     [ObservableProperty]
     public partial bool IsStorageRegionVisible { get; private set; }
@@ -873,6 +877,7 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
         IsSftpSectionVisible = Protocol == ProtocolType.Sftp;
         IsRdpSectionVisible = Protocol == ProtocolType.Rdp;
         IsStorageSectionVisible = Protocol.IsObjectStorage();
+        OnPropertyChanged(nameof(IsProtocolOptionsVisible));
         IsStorageRegionVisible = Protocol == ProtocolType.S3;
         IsStorageEndpointVisible = Protocol == ProtocolType.S3;
         IsAuthMethodVisible = !Protocol.IsObjectStorage();
@@ -960,18 +965,27 @@ public sealed partial class ConnectionEditorViewModel : ObservableObject
             : $"'{StorageRegion.Trim()}' is not an AWS region. Did you mean {string.Join(", ", near)}?";
     }
 
-    private void UpdateEnvironmentPreview()
+    /// <summary>The colour the swatch shows for an environment nobody has overridden. Named rather than
+    /// inlined because it is one of three places that state the same palette — the design tokens and the
+    /// session accent are the others — and a test holds all three to the same answer.</summary>
+    internal static string EnvironmentFallbackHex(EnvironmentKind environment)
     {
-        var fallback = Environment switch
+        return environment switch
         {
             EnvironmentKind.Unspecified => "#6CB6FF",
-            EnvironmentKind.Development => "#5DE28C",
+            EnvironmentKind.Development => "#FF7B72",
             EnvironmentKind.Staging => "#FFCA58",
-            EnvironmentKind.Production => "#FF7B72",
-            _ => throw new ArgumentOutOfRangeException(nameof(Environment)),
+            EnvironmentKind.Production => "#5DE28C",
+            _ => throw new ArgumentOutOfRangeException(nameof(environment)),
         };
+    }
+
+    private void UpdateEnvironmentPreview()
+    {
         EnvironmentPreviewBrush = new SolidColorBrush(
-            Color.TryParse(ColorOverrideHex, out var color) ? color : Color.Parse(fallback));
+            Color.TryParse(ColorOverrideHex, out var color)
+                ? color
+                : Color.Parse(EnvironmentFallbackHex(Environment)));
     }
 
     private void UpdateCredentialPresentation()

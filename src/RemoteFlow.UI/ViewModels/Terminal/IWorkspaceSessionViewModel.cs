@@ -84,9 +84,9 @@ public static class WorkspaceSessionAppearance
             ? colorOverrideHex.ToUpperInvariant()
             : environment switch
             {
-                EnvironmentKind.Development => "#5DE28C",
+                EnvironmentKind.Development => "#FF7B72",
                 EnvironmentKind.Staging => "#FFCA58",
-                EnvironmentKind.Production => "#FF7B72",
+                EnvironmentKind.Production => "#5DE28C",
                 EnvironmentKind.Unspecified => "#7E8998",
                 _ => throw new ArgumentOutOfRangeException(nameof(environment)),
             };

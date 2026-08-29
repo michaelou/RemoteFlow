@@ -7,6 +7,34 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Changed
+
+- **Production is green and development is red.** The two were the other way round. Green is the
+  environment you are allowed to be in and red the one you are not, so the colours now say that. Staging is
+  unchanged. This is one palette rather than three: the chip in the list, the swatch beside the Environment
+  picker and the accent on a session tab all resolve to the same value for the same word, and a test holds
+  them there.
+- **The environment chip carries its environment's colour.** PROD, STAGE and DEV were three words on the
+  same pale blue chip, so the environment of a row was only known once it had been read. Each now writes its
+  word in that environment's own colour, on a fill made for it — muted rather than loud, because a chip is a
+  small block of solid colour repeated down the whole list — and sits a few pixels further off the edge of
+  the card. The word inside the chip is unchanged and is still what actually says which environment; the
+  colour only finds it faster. A colour override moves the connection's session tab and leaves the chip
+  alone, so a production box painted purple still shows PROD in production's green.
+- **The connection editor is a stack of cards rather than one long form.** A connection is several unrelated
+  decisions — where the host is and how to authenticate to it, which options its protocol brings, where it
+  files, and what you wrote about it — and on a single surface all of it read as one list of thirty fields.
+  Those are four cards now, separated by six pixels, with the heading and the buttons on cards of their own
+  so they stay put while the middle scrolls. The protocol card is absent rather than empty for the protocols
+  that bring no extra options.
+
+### Added
+
+- **The pane beside the connection list can be closed, and the list takes the whole page when it is.** Both
+  the details and the editor carry a close button, and Escape does the same from either; the pane's column
+  collapses with it rather than leaving a 500-pixel hole. Clicking a connection opens it again — including
+  the row it was closed from, which raises no selection change of its own.
+
 ## [0.6.1] - 2026-08-26
 
 ### Fixed

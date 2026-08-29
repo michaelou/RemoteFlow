@@ -31,305 +31,354 @@
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Margin" Value="0,4,0,0" />
     </Style>
+    <!-- The name of a card, not of a group inside one: quieter and smaller than the field labels'
+         own headings so that the card's edge does the separating and the word only says which card
+         this is. -->
+    <Style Selector="TextBlock.panel-title">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Muted}" />
+    </Style>
   </UserControl.Styles>
 
-  <Border Classes="panel" Padding="20">
-    <Grid RowDefinitions="Auto,*,Auto">
-      <Grid ColumnDefinitions="*,Auto">
-        <TextBlock FontSize="22" FontWeight="SemiBold" Text="{Binding Title}" />
+  <!-- The editor is a stack of cards rather than one long card, because a connection is four unrelated
+       decisions — where the host is, which protocol options it wants, where it files, and what you wrote
+       about it — and a single surface made them read as one list of thirty fields. The gaps are kept at
+       six pixels: enough for the edges to separate the groups, not so much that the stack stops reading
+       as one form. The heading and the buttons are cards of their own so they stay put while the middle
+       scrolls. -->
+  <Grid RowDefinitions="Auto,*,Auto">
+    <Border Classes="panel" Padding="16,12">
+      <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+        <TextBlock
+            FontSize="22"
+            FontWeight="SemiBold"
+            Text="{Binding Title}"
+            TextTrimming="CharacterEllipsis"
+            VerticalAlignment="Center" />
         <TextBlock
             Grid.Column="1"
             VerticalAlignment="Center"
             Foreground="{DynamicResource Brush.Warning}"
             IsVisible="{Binding IsDirty}"
             Text="Unsaved changes" />
+        <Button
+            Grid.Column="2"
+            AutomationProperties.Name="Close the connection pane"
+            Classes="icon"
+            Click="Close_OnClick"
+            ToolTip.Tip="Close this pane"
+            VerticalAlignment="Center">
+          <PathIcon Data="{DynamicResource Icon.Cancel}" />
+        </Button>
       </Grid>
+    </Border>
 
-      <!-- The right padding is the gutter for the overlay scrollbar; without it the thumb sits on
-           top of the right edge of every text box. -->
-      <ScrollViewer
-          Grid.Row="1"
-          Margin="0,14,0,12"
-          Padding="0,0,14,0"
-          HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Spacing="12">
-          <StackPanel>
-            <TextBlock Classes="label" Text="Name" />
-            <TextBox x:Name="NameBox" AutomationProperties.Name="Name" TabIndex="1" Text="{Binding Name, Mode=TwoWay}" />
-            <TextBlock
-                Classes="error"
-                IsVisible="{Binding NameError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                Text="{Binding NameError}" />
-          </StackPanel>
-
-          <Grid ColumnDefinitions="*,110" ColumnSpacing="10">
+    <!-- The right padding is the gutter for the overlay scrollbar; without it the thumb sits on
+         top of the right edge of every text box. -->
+    <ScrollViewer
+        Grid.Row="1"
+        Margin="0,6,0,6"
+        Padding="0,0,14,0"
+        HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="6">
+        <Border Classes="panel" Padding="16">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="panel-title" Text="CONNECTION" />
             <StackPanel>
-              <TextBlock Classes="label" Text="Host" />
-              <TextBox AutomationProperties.Name="Host" TabIndex="2" Text="{Binding Host, Mode=TwoWay}" />
+              <TextBlock Classes="label" Text="Name" />
+              <TextBox x:Name="NameBox" AutomationProperties.Name="Name" TabIndex="1" Text="{Binding Name, Mode=TwoWay}" />
               <TextBlock
                   Classes="error"
-                  IsVisible="{Binding HostError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                  Text="{Binding HostError}" />
+                  IsVisible="{Binding NameError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                  Text="{Binding NameError}" />
             </StackPanel>
-            <StackPanel Grid.Column="1">
-              <TextBlock Classes="label" Text="Port" />
-              <NumericUpDown AutomationProperties.Name="Port" TabIndex="4" Minimum="1" Maximum="65535" Value="{Binding Port, Mode=TwoWay}" />
-              <TextBlock
-                  Classes="error"
-                  IsVisible="{Binding PortError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                  Text="{Binding PortError}" />
-            </StackPanel>
-          </Grid>
 
-          <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-            <StackPanel>
-              <TextBlock Classes="label" Text="Protocol" />
+            <Grid ColumnDefinitions="*,110" ColumnSpacing="10">
+              <StackPanel>
+                <TextBlock Classes="label" Text="Host" />
+                <TextBox AutomationProperties.Name="Host" TabIndex="2" Text="{Binding Host, Mode=TwoWay}" />
+                <TextBlock
+                    Classes="error"
+                    IsVisible="{Binding HostError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    Text="{Binding HostError}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1">
+                <TextBlock Classes="label" Text="Port" />
+                <NumericUpDown AutomationProperties.Name="Port" TabIndex="4" Minimum="1" Maximum="65535" Value="{Binding Port, Mode=TwoWay}" />
+                <TextBlock
+                    Classes="error"
+                    IsVisible="{Binding PortError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    Text="{Binding PortError}" />
+              </StackPanel>
+            </Grid>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+              <StackPanel>
+                <TextBlock Classes="label" Text="Protocol" />
+                <ComboBox
+                    AutomationProperties.Name="Protocol"
+                    TabIndex="3"
+                    HorizontalAlignment="Stretch"
+                    ItemsSource="{Binding Protocols}"
+                    SelectedItem="{Binding Protocol, Mode=TwoWay}">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                      <TextBlock Text="{Binding Converter={x:Static converters:ProtocolDisplayNameConverter.Instance}}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+              <StackPanel Grid.Column="1">
+                <TextBlock Classes="label" Text="{Binding UsernameLabel}" />
+                <TextBox AutomationProperties.Name="{Binding UsernameLabel}" TabIndex="5" Text="{Binding Username, Mode=TwoWay}" />
+                <TextBlock
+                    Classes="error"
+                    IsVisible="{Binding UsernameError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    Text="{Binding UsernameError}" />
+              </StackPanel>
+            </Grid>
+
+            <StackPanel IsVisible="{Binding IsAuthMethodVisible}">
+              <TextBlock Classes="label" Text="Authentication" />
               <ComboBox
-                  AutomationProperties.Name="Protocol"
-                  TabIndex="3"
+                  AutomationProperties.Name="Authentication"
+                  TabIndex="6"
                   HorizontalAlignment="Stretch"
-                  ItemsSource="{Binding Protocols}"
-                  SelectedItem="{Binding Protocol, Mode=TwoWay}">
+                  ItemsSource="{Binding AuthMethods}"
+                  SelectedItem="{Binding AuthMethod, Mode=TwoWay}" />
+              <TextBlock
+                  Classes="error"
+                  IsVisible="{Binding AuthMethodError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                  Text="{Binding AuthMethodError}" />
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding IsPrivateKeySectionVisible}">
+              <TextBlock Classes="label" Text="Private key" />
+              <connectionViews:SshKeyPicker DataContext="{Binding KeyPicker}" />
+              <TextBlock
+                  Classes="error"
+                  IsVisible="{Binding PrivateKeyPathError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                  Text="{Binding PrivateKeyPathError}" />
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding IsSshSectionVisible}">
+              <TextBlock Classes="label" Text="Host key policy" />
+              <ComboBox
+                  AutomationProperties.Name="Host key policy"
+                  TabIndex="7"
+                  HorizontalAlignment="Stretch"
+                  ItemsSource="{Binding HostKeyPolicies}"
+                  SelectedItem="{Binding HostKeyPolicy, Mode=TwoWay}" />
+              <TextBlock Classes="hint" Text="{Binding HostKeyPolicyHint}" />
+            </StackPanel>
+
+            <StackPanel>
+              <TextBlock Classes="label" Text="Credential" />
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                <TextBlock VerticalAlignment="Center" Text="{Binding CredentialStatusText}" />
+                <TextBlock
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Foreground="{DynamicResource Brush.Text.Secondary}"
+                    Text="{Binding CredentialProviderName}"
+                    TextTrimming="CharacterEllipsis" />
+                <Button
+                    Grid.Column="2"
+                    Click="ClearCredential_OnClick"
+                    Content="Clear"
+                    IsEnabled="{Binding CanClearCredential}" />
+              </Grid>
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding !IsPrivateKeyPassphraseVisible}">
+              <TextBlock Classes="label" Text="{Binding CredentialCaptureLabel}" />
+              <TextBox x:Name="PasswordCapture" AutomationProperties.Name="{Binding CredentialCaptureLabel}" TabIndex="8" PasswordChar="●" />
+              <TextBlock Classes="hint" Text="Leave blank to keep the current credential." />
+              <TextBlock Classes="hint" Text="{Binding CredentialActionLabel}" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding IsPrivateKeyPassphraseVisible}">
+              <TextBlock Classes="label" Text="Private-key passphrase" />
+              <TextBox x:Name="PassphraseCapture" AutomationProperties.Name="Private-key passphrase" TabIndex="8" PasswordChar="●" />
+              <TextBlock Classes="hint" Text="Leave blank to keep the current credential." />
+              <TextBlock Classes="hint" Text="{Binding CredentialActionLabel}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <!-- Only three of the five protocols bring extra fields, so this card is absent rather than empty
+             for the other two. -->
+        <Border Classes="panel" Padding="16" IsVisible="{Binding IsProtocolOptionsVisible}">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="panel-title" Text="PROTOCOL OPTIONS" />
+
+            <StackPanel IsVisible="{Binding IsSftpSectionVisible}">
+              <TextBlock Classes="section" Text="SFTP options" />
+              <TextBlock Classes="hint" Text="SFTP transfer settings use their defaults." />
+            </StackPanel>
+
+            <StackPanel IsVisible="{Binding IsStorageSectionVisible}" Spacing="12">
+              <TextBlock Classes="section" Text="Object storage" />
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                <StackPanel IsVisible="{Binding IsStorageRegionVisible}">
+                  <TextBlock Classes="label" Text="Region" />
+                  <!-- Suggestions, not a closed set: the same field serves S3-compatible services, where the
+                       region is whatever that deployment calls it. Typing is still allowed; the list is
+                       there because "eu-west" is otherwise only refuted by a DNS failure at connect time. -->
+                  <AutoCompleteBox
+                      AutomationProperties.Name="Region"
+                      FilterMode="Contains"
+                      ItemsSource="{Binding StorageRegionChoices}"
+                      MinimumPrefixLength="0"
+                      TabIndex="9"
+                      Text="{Binding StorageRegion, Mode=TwoWay}"
+                      ValueMemberBinding="{Binding Code}"
+                      Watermark="eu-west-1">
+                    <AutoCompleteBox.ItemTemplate>
+                      <DataTemplate x:DataType="storage:S3Region">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </AutoCompleteBox.ItemTemplate>
+                  </AutoCompleteBox>
+                  <TextBlock
+                      Classes="hint"
+                      Foreground="{DynamicResource Brush.Warning}"
+                      IsVisible="{Binding StorageRegionWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                      Text="{Binding StorageRegionWarning}"
+                      TextWrapping="Wrap" />
+                  <TextBlock
+                      Classes="error"
+                      IsVisible="{Binding StorageRegionError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                      Text="{Binding StorageRegionError}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                  <TextBlock Classes="label" Text="Bucket or container (optional)" />
+                  <TextBox AutomationProperties.Name="Bucket or container" TabIndex="10" Text="{Binding StorageContainer, Mode=TwoWay}" />
+                  <TextBlock Classes="hint" Text="Leave blank to browse the whole account. A key that cannot list buckets needs one." />
+                  <TextBlock
+                      Classes="error"
+                      IsVisible="{Binding StorageContainerError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                      Text="{Binding StorageContainerError}" />
+                </StackPanel>
+              </Grid>
+              <StackPanel IsVisible="{Binding IsStorageEndpointVisible}">
+                <TextBlock Classes="label" Text="Custom endpoint (optional)" />
+                <TextBox AutomationProperties.Name="Custom endpoint" TabIndex="11" Text="{Binding StorageServiceUrl, Mode=TwoWay}" />
+                <TextBlock Classes="hint" Text="For MinIO, Ceph, Backblaze B2, Cloudflare R2 or Wasabi. Leave blank for AWS." />
+                <TextBlock
+                    Classes="error"
+                    IsVisible="{Binding StorageServiceUrlError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    Text="{Binding StorageServiceUrlError}" />
+              </StackPanel>
+              <CheckBox
+                  AutomationProperties.Name="Use path-style addressing"
+                  Content="Use path-style addressing"
+                  IsVisible="{Binding IsStorageEndpointVisible}"
+                  TabIndex="12"
+                  IsChecked="{Binding StorageUsePathStyleAddressing, Mode=TwoWay}" />
+              <StackPanel>
+                <TextBlock Classes="label" Text="Prefix (optional)" />
+                <TextBox AutomationProperties.Name="Prefix" TabIndex="13" Text="{Binding StorageRootPrefix, Mode=TwoWay}" />
+                <TextBlock Classes="hint" Text="Browsing starts inside this key prefix." />
+              </StackPanel>
+            </StackPanel>
+
+            <connectionViews:RdpOptionsSection IsVisible="{Binding IsRdpSectionVisible}" />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="16">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="panel-title" Text="ORGANIZE" />
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+              <StackPanel>
+                <TextBlock Classes="label" Text="Folder" />
+                <ComboBox
+                    AutomationProperties.Name="Folder"
+                    TabIndex="17"
+                    DisplayMemberBinding="{Binding Path}"
+                    HorizontalAlignment="Stretch"
+                    ItemsSource="{Binding FolderChoices}"
+                    SelectedItem="{Binding SelectedFolder, Mode=TwoWay}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1">
+                <TextBlock Classes="label" Text="Environment" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <ComboBox
+                      AutomationProperties.Name="Environment"
+                      TabIndex="19"
+                      HorizontalAlignment="Stretch"
+                      ItemsSource="{Binding Environments}"
+                      SelectedItem="{Binding Environment, Mode=TwoWay}" />
+                  <Border
+                      Grid.Column="1"
+                      Width="32"
+                      Background="{Binding EnvironmentPreviewBrush}"
+                      CornerRadius="{DynamicResource Radius.Control}" />
+                </Grid>
+                <TextBlock
+                    Classes="error"
+                    IsVisible="{Binding EnvironmentError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                    Text="{Binding EnvironmentError}" />
+              </StackPanel>
+            </Grid>
+
+            <StackPanel>
+              <TextBlock Classes="label" Text="Environment colour override" />
+              <ComboBox
+                  AutomationProperties.Name="Environment colour override"
+                  TabIndex="20"
+                  HorizontalAlignment="Stretch"
+                  ItemsSource="{x:Static connectionViewModels:ConnectionEditorViewModel.ColorOverrideChoices}"
+                  SelectedItem="{Binding SelectedColorOverride, Mode=TwoWay}">
                 <ComboBox.ItemTemplate>
-                  <DataTemplate>
-                    <TextBlock Text="{Binding Converter={x:Static converters:ProtocolDisplayNameConverter.Instance}}" />
+                  <DataTemplate x:DataType="connectionViewModels:ColorOverrideChoiceViewModel">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Border
+                          Width="14"
+                          Height="14"
+                          VerticalAlignment="Center"
+                          Background="{Binding Swatch}"
+                          CornerRadius="3"
+                          IsVisible="{Binding HasSwatch}" />
+                      <TextBlock VerticalAlignment="Center" Text="{Binding Label}" />
+                    </StackPanel>
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
               </ComboBox>
-            </StackPanel>
-            <StackPanel Grid.Column="1">
-              <TextBlock Classes="label" Text="{Binding UsernameLabel}" />
-              <TextBox AutomationProperties.Name="{Binding UsernameLabel}" TabIndex="5" Text="{Binding Username, Mode=TwoWay}" />
+              <TextBox
+                  AutomationProperties.Name="Custom environment colour, as a hex value"
+                  Margin="0,6,0,0"
+                  IsVisible="{Binding IsCustomColorVisible}"
+                  PlaceholderText="#RRGGBB"
+                  Text="{Binding ColorOverrideHex, Mode=TwoWay}" />
               <TextBlock
                   Classes="error"
-                  IsVisible="{Binding UsernameError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                  Text="{Binding UsernameError}" />
+                  IsVisible="{Binding ColorOverrideError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                  Text="{Binding ColorOverrideError}" />
             </StackPanel>
-          </Grid>
 
-          <StackPanel IsVisible="{Binding IsAuthMethodVisible}">
-            <TextBlock Classes="label" Text="Authentication" />
-            <ComboBox
-                AutomationProperties.Name="Authentication"
-                TabIndex="6"
-                HorizontalAlignment="Stretch"
-                ItemsSource="{Binding AuthMethods}"
-                SelectedItem="{Binding AuthMethod, Mode=TwoWay}" />
-            <TextBlock
-                Classes="error"
-                IsVisible="{Binding AuthMethodError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                Text="{Binding AuthMethodError}" />
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding IsPrivateKeySectionVisible}">
-            <TextBlock Classes="label" Text="Private key" />
-            <connectionViews:SshKeyPicker DataContext="{Binding KeyPicker}" />
-            <TextBlock
-                Classes="error"
-                IsVisible="{Binding PrivateKeyPathError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                Text="{Binding PrivateKeyPathError}" />
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding IsSshSectionVisible}">
-            <TextBlock Classes="label" Text="Host key policy" />
-            <ComboBox
-                AutomationProperties.Name="Host key policy"
-                TabIndex="7"
-                HorizontalAlignment="Stretch"
-                ItemsSource="{Binding HostKeyPolicies}"
-                SelectedItem="{Binding HostKeyPolicy, Mode=TwoWay}" />
-            <TextBlock Classes="hint" Text="{Binding HostKeyPolicyHint}" />
-          </StackPanel>
-
-          <StackPanel>
-            <TextBlock Classes="label" Text="Credential" />
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
-              <TextBlock VerticalAlignment="Center" Text="{Binding CredentialStatusText}" />
-              <TextBlock
-                  Grid.Column="1"
-                  VerticalAlignment="Center"
-                  Foreground="{DynamicResource Brush.Text.Secondary}"
-                  Text="{Binding CredentialProviderName}"
-                  TextTrimming="CharacterEllipsis" />
-              <Button
-                  Grid.Column="2"
-                  Click="ClearCredential_OnClick"
-                  Content="Clear"
-                  IsEnabled="{Binding CanClearCredential}" />
-            </Grid>
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding !IsPrivateKeyPassphraseVisible}">
-            <TextBlock Classes="label" Text="{Binding CredentialCaptureLabel}" />
-            <TextBox x:Name="PasswordCapture" AutomationProperties.Name="{Binding CredentialCaptureLabel}" TabIndex="8" PasswordChar="●" />
-            <TextBlock Classes="hint" Text="Leave blank to keep the current credential." />
-            <TextBlock Classes="hint" Text="{Binding CredentialActionLabel}" />
-          </StackPanel>
-          <StackPanel IsVisible="{Binding IsPrivateKeyPassphraseVisible}">
-            <TextBlock Classes="label" Text="Private-key passphrase" />
-            <TextBox x:Name="PassphraseCapture" AutomationProperties.Name="Private-key passphrase" TabIndex="8" PasswordChar="●" />
-            <TextBlock Classes="hint" Text="Leave blank to keep the current credential." />
-            <TextBlock Classes="hint" Text="{Binding CredentialActionLabel}" />
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding IsSftpSectionVisible}">
-            <TextBlock Classes="section" Text="SFTP options" />
-            <TextBlock Classes="hint" Text="SFTP transfer settings use their defaults." />
-          </StackPanel>
-
-          <StackPanel IsVisible="{Binding IsStorageSectionVisible}" Spacing="12">
-            <TextBlock Classes="section" Text="Object storage" />
-            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-              <StackPanel IsVisible="{Binding IsStorageRegionVisible}">
-                <TextBlock Classes="label" Text="Region" />
-                <!-- Suggestions, not a closed set: the same field serves S3-compatible services, where the
-                     region is whatever that deployment calls it. Typing is still allowed; the list is
-                     there because "eu-west" is otherwise only refuted by a DNS failure at connect time. -->
-                <AutoCompleteBox
-                    AutomationProperties.Name="Region"
-                    FilterMode="Contains"
-                    ItemsSource="{Binding StorageRegionChoices}"
-                    MinimumPrefixLength="0"
-                    TabIndex="9"
-                    Text="{Binding StorageRegion, Mode=TwoWay}"
-                    ValueMemberBinding="{Binding Code}"
-                    Watermark="eu-west-1">
-                  <AutoCompleteBox.ItemTemplate>
-                    <DataTemplate x:DataType="storage:S3Region">
-                      <TextBlock Text="{Binding Label}" />
-                    </DataTemplate>
-                  </AutoCompleteBox.ItemTemplate>
-                </AutoCompleteBox>
-                <TextBlock
-                    Classes="hint"
-                    Foreground="{DynamicResource Brush.Warning}"
-                    IsVisible="{Binding StorageRegionWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                    Text="{Binding StorageRegionWarning}"
-                    TextWrapping="Wrap" />
-                <TextBlock
-                    Classes="error"
-                    IsVisible="{Binding StorageRegionError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                    Text="{Binding StorageRegionError}" />
-              </StackPanel>
-              <StackPanel Grid.Column="1">
-                <TextBlock Classes="label" Text="Bucket or container (optional)" />
-                <TextBox AutomationProperties.Name="Bucket or container" TabIndex="10" Text="{Binding StorageContainer, Mode=TwoWay}" />
-                <TextBlock Classes="hint" Text="Leave blank to browse the whole account. A key that cannot list buckets needs one." />
-                <TextBlock
-                    Classes="error"
-                    IsVisible="{Binding StorageContainerError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                    Text="{Binding StorageContainerError}" />
-              </StackPanel>
-            </Grid>
-            <StackPanel IsVisible="{Binding IsStorageEndpointVisible}">
-              <TextBlock Classes="label" Text="Custom endpoint (optional)" />
-              <TextBox AutomationProperties.Name="Custom endpoint" TabIndex="11" Text="{Binding StorageServiceUrl, Mode=TwoWay}" />
-              <TextBlock Classes="hint" Text="For MinIO, Ceph, Backblaze B2, Cloudflare R2 or Wasabi. Leave blank for AWS." />
-              <TextBlock
-                  Classes="error"
-                  IsVisible="{Binding StorageServiceUrlError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                  Text="{Binding StorageServiceUrlError}" />
-            </StackPanel>
-            <CheckBox
-                AutomationProperties.Name="Use path-style addressing"
-                Content="Use path-style addressing"
-                IsVisible="{Binding IsStorageEndpointVisible}"
-                TabIndex="12"
-                IsChecked="{Binding StorageUsePathStyleAddressing, Mode=TwoWay}" />
             <StackPanel>
-              <TextBlock Classes="label" Text="Prefix (optional)" />
-              <TextBox AutomationProperties.Name="Prefix" TabIndex="13" Text="{Binding StorageRootPrefix, Mode=TwoWay}" />
-              <TextBlock Classes="hint" Text="Browsing starts inside this key prefix." />
+              <TextBlock Classes="label" Text="Tags" />
+              <TextBox AutomationProperties.Name="Tags" TabIndex="18" PlaceholderText="Add tags, separated by commas" Text="{Binding TagInput, Mode=TwoWay}" />
+              <ItemsControl ItemsSource="{Binding TagChoices}" Margin="0,6,0,0">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="connectionViewModels:TagChoiceViewModel">
+                    <CheckBox Margin="0,0,8,4" Content="{Binding Name}" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
             </StackPanel>
+
+            <CheckBox TabIndex="21" Content="Favorite" IsChecked="{Binding IsFavorite, Mode=TwoWay}" />
           </StackPanel>
+        </Border>
 
-          <connectionViews:RdpOptionsSection IsVisible="{Binding IsRdpSectionVisible}" />
-
-          <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
-            <StackPanel>
-              <TextBlock Classes="label" Text="Folder" />
-              <ComboBox
-                  AutomationProperties.Name="Folder"
-                  TabIndex="17"
-                  DisplayMemberBinding="{Binding Path}"
-                  HorizontalAlignment="Stretch"
-                  ItemsSource="{Binding FolderChoices}"
-                  SelectedItem="{Binding SelectedFolder, Mode=TwoWay}" />
-            </StackPanel>
-            <StackPanel Grid.Column="1">
-              <TextBlock Classes="label" Text="Environment" />
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <ComboBox
-                    AutomationProperties.Name="Environment"
-                    TabIndex="19"
-                    HorizontalAlignment="Stretch"
-                    ItemsSource="{Binding Environments}"
-                    SelectedItem="{Binding Environment, Mode=TwoWay}" />
-                <Border
-                    Grid.Column="1"
-                    Width="32"
-                    Background="{Binding EnvironmentPreviewBrush}"
-                    CornerRadius="{DynamicResource Radius.Control}" />
-              </Grid>
-              <TextBlock
-                  Classes="error"
-                  IsVisible="{Binding EnvironmentError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                  Text="{Binding EnvironmentError}" />
-            </StackPanel>
-          </Grid>
-
-          <StackPanel>
-            <TextBlock Classes="label" Text="Environment colour override" />
-            <ComboBox
-                AutomationProperties.Name="Environment colour override"
-                TabIndex="20"
-                HorizontalAlignment="Stretch"
-                ItemsSource="{x:Static connectionViewModels:ConnectionEditorViewModel.ColorOverrideChoices}"
-                SelectedItem="{Binding SelectedColorOverride, Mode=TwoWay}">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="connectionViewModels:ColorOverrideChoiceViewModel">
-                  <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Border
-                        Width="14"
-                        Height="14"
-                        VerticalAlignment="Center"
-                        Background="{Binding Swatch}"
-                        CornerRadius="3"
-                        IsVisible="{Binding HasSwatch}" />
-                    <TextBlock VerticalAlignment="Center" Text="{Binding Label}" />
-                  </StackPanel>
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBox
-                AutomationProperties.Name="Custom environment colour, as a hex value"
-                Margin="0,6,0,0"
-                IsVisible="{Binding IsCustomColorVisible}"
-                PlaceholderText="#RRGGBB"
-                Text="{Binding ColorOverrideHex, Mode=TwoWay}" />
-            <TextBlock
-                Classes="error"
-                IsVisible="{Binding ColorOverrideError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                Text="{Binding ColorOverrideError}" />
-          </StackPanel>
-
-          <StackPanel>
-            <TextBlock Classes="label" Text="Tags" />
-            <TextBox AutomationProperties.Name="Tags" TabIndex="18" PlaceholderText="Add tags, separated by commas" Text="{Binding TagInput, Mode=TwoWay}" />
-            <ItemsControl ItemsSource="{Binding TagChoices}" Margin="0,6,0,0">
-              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="connectionViewModels:TagChoiceViewModel">
-                  <CheckBox Margin="0,0,8,4" Content="{Binding Name}" IsChecked="{Binding IsSelected, Mode=TwoWay}" />
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-
-          <CheckBox TabIndex="21" Content="Favorite" IsChecked="{Binding IsFavorite, Mode=TwoWay}" />
-
-          <StackPanel>
-            <TextBlock Classes="label" Text="Notes" />
+        <Border Classes="panel" Padding="16">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="panel-title" Text="NOTES" />
             <TextBox
                 AutomationProperties.Name="Notes"
                 TabIndex="22"
@@ -338,18 +387,20 @@
                 TextWrapping="Wrap"
                 Text="{Binding Notes, Mode=TwoWay}" />
           </StackPanel>
+        </Border>
 
-          <TextBlock
-              Classes="error"
-              IsVisible="{Binding SaveError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-              Text="{Binding SaveError}" />
-        </StackPanel>
-      </ScrollViewer>
+        <TextBlock
+            Classes="error"
+            IsVisible="{Binding SaveError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+            Text="{Binding SaveError}" />
+      </StackPanel>
+    </ScrollViewer>
 
-      <StackPanel Grid.Row="2" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
+    <Border Grid.Row="2" Classes="panel" Padding="16,12">
+      <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
         <Button TabIndex="24" Click="Cancel_OnClick" Content="Cancel" />
         <Button TabIndex="23" Click="Save_OnClick" Content="Save" IsEnabled="{Binding !IsSaving}" />
       </StackPanel>
-    </Grid>
-  </Border>
+    </Border>
+  </Grid>
 </UserControl>

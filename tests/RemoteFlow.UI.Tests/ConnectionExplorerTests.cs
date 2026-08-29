@@ -137,6 +137,9 @@ public sealed class ConnectionExplorerTests
         Assert.Contains("Azure Blob", viewModel.ActiveFilterSummary, StringComparison.Ordinal);
     }
 
+    /// <summary>A colour override moves the connection's session tab, not its chip. The chip is the one
+    /// place the environment is stated plainly, so it goes on saying PROD in production's colour however
+    /// the connection has been painted everywhere else.</summary>
     [AvaloniaFact]
     public async Task BuildsVirtualRootsAndColorSafeProductionBadgeWithOverride()
     {
@@ -162,8 +165,7 @@ public sealed class ConnectionExplorerTests
         var node = FindRealConnection(viewModel, connection.Id);
         Assert.Equal("PROD", node.Badge!.Text);
         Assert.Equal("⚠", node.Badge.Icon);
-        var brush = Assert.IsType<SolidColorBrush>(node.Badge.Background);
-        Assert.Equal(Color.Parse("#123456"), brush.Color);
+        Assert.Equal("prod", node.Badge.Tag);
     }
 
     [Fact]

@@ -85,6 +85,9 @@ public sealed partial class ConnectionsView : UserControl
             return;
         }
 
+        // A press on the row that is already selected raises no selection change, so this is the only
+        // place that can bring a pane the user closed back for the connection they are looking at.
+        viewModel.RequestReopenWorkspace(node);
         _draggedNodes = viewModel.SelectedNodes.Contains(node)
             ? [.. viewModel.SelectedNodes]
             : [node];

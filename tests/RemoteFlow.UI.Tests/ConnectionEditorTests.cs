@@ -380,6 +380,101 @@ public sealed class ConnectionEditorTests
         Assert.DoesNotContain(page.RootNodes, node => !node.IsVirtual);
     }
 
+    /// <summary>The pane costs the list half the page. Closing it has to leave nothing behind — not the
+    /// details under a closed editor either — and clicking the row it was opened from has to bring it back,
+    /// which is the case a selection change cannot cover because the row is already the selected one.</summary>
+    [Fact]
+    public async Task ClosingThePaneLeavesNothingOpenAndClickingTheSameRowBringsItBack()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var connection = Connection.Create(
+            SystemGuidProvider.Instance,
+            "Room for the list",
+            "wide.test",
+            createdUtc: fixture.Clock.UtcNow).Value;
+        await fixture.Connections.AddAsync(connection, token);
+        using var page = fixture.CreatePage(new RecordingConfirmation());
+        await page.InitializeAsync(token);
+        var node = NodeFor(page, connection.Id);
+        page.SelectNode(node, false);
+        await page.WorkspaceChangesSettled;
+        Assert.True(page.IsWorkspaceOpen);
+
+        Assert.True(await page.CloseWorkspaceAsync(token));
+
+        Assert.Null(page.Details);
+        Assert.Null(page.Editor);
+        Assert.False(page.IsWorkspaceOpen);
+
+        page.RequestReopenWorkspace(node);
+        await page.WorkspaceChangesSettled;
+
+        Assert.Equal(connection.Id, page.Details!.Connection.Id);
+        Assert.True(page.IsWorkspaceOpen);
+    }
+
+    /// <summary>Reopening is only for a pane that is shut. A click on the row an open editor belongs to
+    /// must not throw that editor away and drop back to the details behind it.</summary>
+    [Fact]
+    public async Task ClickingTheRowOfAnOpenEditorLeavesTheEditorAlone()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var connection = Connection.Create(
+            SystemGuidProvider.Instance,
+            "Still editing",
+            "busy.test",
+            createdUtc: fixture.Clock.UtcNow).Value;
+        await fixture.Connections.AddAsync(connection, token);
+        using var page = fixture.CreatePage(new RecordingConfirmation());
+        await page.InitializeAsync(token);
+        var node = NodeFor(page, connection.Id);
+        page.SelectNode(node, false);
+        await page.WorkspaceChangesSettled;
+        await page.Details!.EditCommand.ExecuteAsync(null);
+        page.Editor!.Name = "Half typed";
+
+        page.RequestReopenWorkspace(node);
+        await page.WorkspaceChangesSettled;
+
+        Assert.Equal("Half typed", page.Editor!.Name);
+    }
+
+    /// <summary>Closing the pane discards an open editor, so it asks on the same terms cancelling does:
+    /// a declined prompt leaves the pane exactly where it was.</summary>
+    [Fact]
+    public async Task ClosingThePaneOverAnUnsavedEditorAsksBeforeDiscarding()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await EditorFixture.CreateAsync(token);
+        var connection = Connection.Create(
+            SystemGuidProvider.Instance,
+            "Unsaved work",
+            "draft.test",
+            createdUtc: fixture.Clock.UtcNow).Value;
+        await fixture.Connections.AddAsync(connection, token);
+        var confirmation = new RecordingConfirmation(false, true);
+        using var page = fixture.CreatePage(confirmation);
+        await page.InitializeAsync(token);
+        page.SelectNode(NodeFor(page, connection.Id), false);
+        await page.WorkspaceChangesSettled;
+        await page.Details!.EditCommand.ExecuteAsync(null);
+        page.Editor!.Name = "Renamed but not saved";
+
+        Assert.False(await page.CloseWorkspaceAsync(token));
+
+        Assert.NotNull(page.Editor);
+        Assert.True(page.IsWorkspaceOpen);
+        Assert.Contains("Renamed but not saved", confirmation.LastMessage, StringComparison.Ordinal);
+
+        Assert.True(await page.CloseWorkspaceAsync(token));
+
+        Assert.Null(page.Editor);
+        Assert.Null(page.Details);
+        Assert.False(page.IsWorkspaceOpen);
+    }
+
     [Theory]
     [InlineData(ProtocolType.Ssh, true, false)]
     [InlineData(ProtocolType.Sftp, true, false)]

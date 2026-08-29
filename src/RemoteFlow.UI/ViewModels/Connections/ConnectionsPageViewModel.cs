@@ -187,6 +187,10 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
 
     public bool IsEditorOpen => Editor is not null;
 
+    /// <summary>Whether the right-hand pane is showing anything at all. The list gives up half the page for
+    /// it, so with both the editor and the details closed there is nothing there to give the room to.</summary>
+    public bool IsWorkspaceOpen => Editor is not null || Details is not null;
+
     [ObservableProperty]
     public partial string? SearchText { get; set; }
 
@@ -242,6 +246,16 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     partial void OnFeedbackMessageChanged(string? value)
     {
         ClearFeedbackAction();
+    }
+
+    partial void OnEditorChanged(ConnectionEditorViewModel? value)
+    {
+        OnPropertyChanged(nameof(IsWorkspaceOpen));
+    }
+
+    partial void OnDetailsChanged(ConnectionDetailsViewModel? value)
+    {
+        OnPropertyChanged(nameof(IsWorkspaceOpen));
     }
 
     partial void OnShowSecondaryTextChanged(bool value)
@@ -538,12 +552,7 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
             return true;
         }
 
-        if (Editor.IsDirty && _confirmation is not null &&
-            !await _confirmation.ConfirmAsync(
-                "Discard unsaved changes?",
-                $"Discard the unsaved changes to '{Editor.Name}'?",
-                "Discard",
-                cancellationToken).ConfigureAwait(true))
+        if (!await ConfirmDiscardAsync(cancellationToken).ConfigureAwait(true))
         {
             return false;
         }
@@ -559,9 +568,54 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         return true;
     }
 
+    /// <summary>Shuts the right-hand pane outright rather than falling back from the editor to the details
+    /// the way <see cref="CloseEditorAsync"/> does, so the list takes the whole page. Unsaved work is still
+    /// only discarded on the same explicit answer, and a declined prompt leaves the pane where it was.</summary>
+    public async Task<bool> CloseWorkspaceAsync(CancellationToken cancellationToken = default)
+    {
+        if (Editor is not null && !await ConfirmDiscardAsync(cancellationToken).ConfigureAwait(true))
+        {
+            return false;
+        }
+
+        Editor = null;
+        Details = null;
+        OnPropertyChanged(nameof(IsEditorOpen));
+        return true;
+    }
+
+    /// <summary>Re-opens the pane for a row that is already the selected one. Clicking it again raises no
+    /// selection change, so without this a pane the user closed would stay shut until they had been to some
+    /// other connection and back.</summary>
+    public void RequestReopenWorkspace(ExplorerNodeViewModel node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+
+        // Only for the row that is already selected. Any other row is about to raise a selection change of
+        // its own, and answering here as well would load the same pane twice.
+        if (IsWorkspaceOpen || !node.IsSelected || node.Kind != ExplorerNodeKind.Connection ||
+            node.Id is not { } connectionId)
+        {
+            return;
+        }
+
+        WorkspaceChangesSettled = ShowDetailsAsync(connectionId);
+    }
+
     public Task<bool> CanNavigateAwayAsync(CancellationToken cancellationToken = default)
     {
         return CloseEditorAsync(cancellationToken);
+    }
+
+    private async Task<bool> ConfirmDiscardAsync(CancellationToken cancellationToken)
+    {
+        return Editor is not { IsDirty: true } dirty ||
+            _confirmation is null ||
+            await _confirmation.ConfirmAsync(
+                "Discard unsaved changes?",
+                $"Discard the unsaved changes to '{dirty.Name}'?",
+                "Discard",
+                cancellationToken).ConfigureAwait(true);
     }
 
     public void Dispose()

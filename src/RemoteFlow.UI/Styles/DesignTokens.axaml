@@ -15,6 +15,15 @@
       <Color x:Key="Color.Text.Muted">#8D97A5</Color>
       <Color x:Key="Color.Badge.Background">#A6D4F7</Color>
       <Color x:Key="Color.Badge.Text">#0B2032</Color>
+      <!-- The chip at the end of a connection row writes its word in that environment's own colour, so the
+           chip and the swatch beside the Environment picker are never two different greens. Only the fill
+           behind it is a token of its own: a chip is a small block of solid colour repeated down the whole
+           list, and at that size and that count the environment colour used as a fill turns the list into a
+           christmas tree. Each is the environment's hue taken down to where its own colour clears 4.5:1 on
+           it. -->
+      <Color x:Key="Color.Badge.Prod.Background">#1B4630</Color>
+      <Color x:Key="Color.Badge.Stage.Background">#4B3C14</Color>
+      <Color x:Key="Color.Badge.Dev.Background">#512823</Color>
       <Color x:Key="Color.Accent">#6CB6FF</Color>
       <!-- The keyboard focus ring, deliberately not the accent: a blue ring on the accent-blue primary
            button is 2.1:1 and effectively invisible. Near-white clears 3:1 against every surface *and*
@@ -36,9 +45,13 @@
       <Color x:Key="Color.Protocol.Rdp">#D2A8FF</Color>
       <Color x:Key="Color.Protocol.S3">#FFA657</Color>
       <Color x:Key="Color.Protocol.AzureBlob">#56D4DD</Color>
-      <Color x:Key="Color.Environment.Dev">#5DE28C</Color>
+      <!-- Green is the environment you are allowed to be in, red the one you are not: production reads as
+           settled and development as the loud one, which is the way round this project wants them. Every
+           surface that names an environment — the chip in the list, the swatch in the editor, the accent on
+           a session tab — resolves to these three, so the same word is never two colours. -->
+      <Color x:Key="Color.Environment.Dev">#FF7B72</Color>
       <Color x:Key="Color.Environment.Staging">#FFCA58</Color>
-      <Color x:Key="Color.Environment.Production">#FF7B72</Color>
+      <Color x:Key="Color.Environment.Production">#5DE28C</Color>
       <SolidColorBrush x:Key="Brush.Surface.0" Color="{DynamicResource Color.Surface.0}" />
       <SolidColorBrush x:Key="Brush.Surface.1" Color="{DynamicResource Color.Surface.1}" />
       <SolidColorBrush x:Key="Brush.Surface.2" Color="{DynamicResource Color.Surface.2}" />
@@ -49,6 +62,14 @@
       <SolidColorBrush x:Key="Brush.Text.Muted" Color="{DynamicResource Color.Text.Muted}" />
       <SolidColorBrush x:Key="Brush.Badge.Background" Color="{DynamicResource Color.Badge.Background}" />
       <SolidColorBrush x:Key="Brush.Badge.Text" Color="{DynamicResource Color.Badge.Text}" />
+      <SolidColorBrush x:Key="Brush.Badge.Prod.Background" Color="{DynamicResource Color.Badge.Prod.Background}" />
+      <SolidColorBrush x:Key="Brush.Badge.Stage.Background" Color="{DynamicResource Color.Badge.Stage.Background}" />
+      <SolidColorBrush x:Key="Brush.Badge.Dev.Background" Color="{DynamicResource Color.Badge.Dev.Background}" />
+      <!-- The chip's ink is the environment's own colour rather than a second token beside it, so the two
+           cannot drift apart. -->
+      <SolidColorBrush x:Key="Brush.Badge.Prod.Text" Color="{DynamicResource Color.Environment.Production}" />
+      <SolidColorBrush x:Key="Brush.Badge.Stage.Text" Color="{DynamicResource Color.Environment.Staging}" />
+      <SolidColorBrush x:Key="Brush.Badge.Dev.Text" Color="{DynamicResource Color.Environment.Dev}" />
       <SolidColorBrush x:Key="Brush.Accent" Color="{DynamicResource Color.Accent}" />
       <SolidColorBrush x:Key="Brush.Focus" Color="{DynamicResource Color.Focus}" />
       <SolidColorBrush x:Key="Brush.Success" Color="{DynamicResource Color.Success}" />
@@ -75,6 +96,11 @@
       <Color x:Key="Color.Text.Muted">#6B7A8C</Color>
       <Color x:Key="Color.Badge.Background">#D7EBFB</Color>
       <Color x:Key="Color.Badge.Text">#134A75</Color>
+      <!-- The same three, as tints rather than shades: on white a dark fill would be the loudest thing
+           on the row. -->
+      <Color x:Key="Color.Badge.Prod.Background">#D6F2E1</Color>
+      <Color x:Key="Color.Badge.Stage.Background">#FAEDC8</Color>
+      <Color x:Key="Color.Badge.Dev.Background">#FBE0DD</Color>
       <Color x:Key="Color.Accent">#0969DA</Color>
       <Color x:Key="Color.Focus">#0B1017</Color>
       <Color x:Key="Color.Success">#137333</Color>
@@ -87,9 +113,9 @@
       <Color x:Key="Color.Protocol.Rdp">#8250DF</Color>
       <Color x:Key="Color.Protocol.S3">#BC4C00</Color>
       <Color x:Key="Color.Protocol.AzureBlob">#0F6D75</Color>
-      <Color x:Key="Color.Environment.Dev">#137333</Color>
+      <Color x:Key="Color.Environment.Dev">#B42318</Color>
       <Color x:Key="Color.Environment.Staging">#8A5A00</Color>
-      <Color x:Key="Color.Environment.Production">#B42318</Color>
+      <Color x:Key="Color.Environment.Production">#137333</Color>
       <SolidColorBrush x:Key="Brush.Surface.0" Color="{DynamicResource Color.Surface.0}" />
       <SolidColorBrush x:Key="Brush.Surface.1" Color="{DynamicResource Color.Surface.1}" />
       <SolidColorBrush x:Key="Brush.Surface.2" Color="{DynamicResource Color.Surface.2}" />
@@ -100,6 +126,14 @@
       <SolidColorBrush x:Key="Brush.Text.Muted" Color="{DynamicResource Color.Text.Muted}" />
       <SolidColorBrush x:Key="Brush.Badge.Background" Color="{DynamicResource Color.Badge.Background}" />
       <SolidColorBrush x:Key="Brush.Badge.Text" Color="{DynamicResource Color.Badge.Text}" />
+      <SolidColorBrush x:Key="Brush.Badge.Prod.Background" Color="{DynamicResource Color.Badge.Prod.Background}" />
+      <SolidColorBrush x:Key="Brush.Badge.Stage.Background" Color="{DynamicResource Color.Badge.Stage.Background}" />
+      <SolidColorBrush x:Key="Brush.Badge.Dev.Background" Color="{DynamicResource Color.Badge.Dev.Background}" />
+      <!-- The chip's ink is the environment's own colour rather than a second token beside it, so the two
+           cannot drift apart. -->
+      <SolidColorBrush x:Key="Brush.Badge.Prod.Text" Color="{DynamicResource Color.Environment.Production}" />
+      <SolidColorBrush x:Key="Brush.Badge.Stage.Text" Color="{DynamicResource Color.Environment.Staging}" />
+      <SolidColorBrush x:Key="Brush.Badge.Dev.Text" Color="{DynamicResource Color.Environment.Dev}" />
       <SolidColorBrush x:Key="Brush.Accent" Color="{DynamicResource Color.Accent}" />
       <SolidColorBrush x:Key="Brush.Focus" Color="{DynamicResource Color.Focus}" />
       <SolidColorBrush x:Key="Brush.Success" Color="{DynamicResource Color.Success}" />

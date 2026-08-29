@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Queries;
@@ -27,7 +26,12 @@ public enum ExplorerAction
     NewFolder = 7,
 }
 
-public sealed record EnvironmentBadgeViewModel(string Icon, string Text, IBrush Background);
+/// <summary>
+/// The chip at the end of a connection row. <paramref name="Tag"/> is the word the view selects a fill and
+/// an ink on, so both stay in XAML behind theme dictionaries and follow a light-dark switch. The chip is
+/// the environment and nothing else: a connection's colour override moves its session tab, not this.
+/// </summary>
+public sealed record EnvironmentBadgeViewModel(string Icon, string Text, string Tag);
 
 public sealed partial class ExplorerNodeViewModel : ObservableObject
 {
@@ -154,18 +158,16 @@ public sealed partial class ExplorerNodeViewModel : ObservableObject
             return null;
         }
 
-        var (icon, text, fallback) = environment switch
+        var (icon, text, tag) = environment switch
         {
-            EnvironmentKind.Unspecified => ("●", "CUSTOM", "#6CB6FF"),
-            EnvironmentKind.Development => ("●", "DEV", "#5DE28C"),
-            EnvironmentKind.Staging => ("◆", "STAGE", "#FFCA58"),
-            EnvironmentKind.Production => ("⚠", "PROD", "#FF7B72"),
+            EnvironmentKind.Unspecified => ("●", "CUSTOM", "custom"),
+            EnvironmentKind.Development => ("●", "DEV", "dev"),
+            EnvironmentKind.Staging => ("◆", "STAGE", "stage"),
+            EnvironmentKind.Production => ("⚠", "PROD", "prod"),
             _ => throw new ArgumentOutOfRangeException(nameof(environment)),
         };
-        var color = Color.TryParse(colorOverrideHex, out var customColor)
-            ? customColor
-            : Color.Parse(fallback);
-        return new EnvironmentBadgeViewModel(icon, text, new SolidColorBrush(color));
+
+        return new EnvironmentBadgeViewModel(icon, text, tag);
     }
 
     private Task ExecuteAsync(ExplorerAction action)
