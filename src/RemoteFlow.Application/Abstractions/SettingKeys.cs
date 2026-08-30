@@ -128,7 +128,11 @@ public static class SettingKeys
     public static SettingKey<WorkspaceLayoutMode> WorkspaceLayout { get; } =
         new("WorkspaceLayout", WorkspaceLayoutMode.Tabs);
     public static SettingKey<int> WorkspaceGridMaxColumns { get; } = new("WorkspaceGridMaxColumns", 3);
-    public static SettingKey<int> RecentLimit { get; } = new("RecentLimit", 20);
+    /// <summary>How many connections the explorer's Recent heading lists. Zero is a real answer rather
+    /// than a degenerate one: it means the heading is not drawn at all, for people who navigate by folder
+    /// and read Recent as noise. History is still recorded either way — raising the number back up shows
+    /// what was opened while it was zero.</summary>
+    public static SettingKey<int> RecentLimit { get; } = new("RecentLimit", 10);
     public static SettingKey<string?> WindowLayout { get; } = new("WindowLayout", null);
     public static SettingKey<int> SchemaVersion { get; } = new("SchemaVersion", 1);
     public static SettingKey<bool> ForceFileVault { get; } = new("ForceFileVault", false);

@@ -326,6 +326,38 @@ public sealed class ConnectionExplorerTests
         Assert.Equal(3, stored.Count);
     }
 
+    [Fact]
+    public async Task ARecentLimitOfZeroDropsTheHeadingAndComingBackToThePagePicksTheChangeUp()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = await ExplorerFixture.CreateAsync(token);
+        var connection = await fixture.AddConnectionAsync("Opened", cancellationToken: token);
+        fixture.SessionOpener.Results.Enqueue(true);
+        using var viewModel = fixture.CreateViewModel();
+        await viewModel.InitializeAsync(token);
+        await FindRealConnection(viewModel, connection.Id).ConnectCommand.ExecuteAsync(null);
+
+        Assert.True(viewModel.IsRecentVisible);
+        Assert.Contains(viewModel.RootNodes, node => node.Kind == ExplorerNodeKind.Recent);
+
+        // The Preferences tab writes the limit; this page finds out when it is next opened.
+        await fixture.Settings.Set(SettingKeys.RecentLimit, 0, token);
+        await viewModel.InitializeAsync(token);
+
+        Assert.False(viewModel.IsRecentVisible);
+        Assert.DoesNotContain(viewModel.RootNodes, node => node.Kind == ExplorerNodeKind.Recent);
+        Assert.Contains(viewModel.RootNodes, node => node.Kind == ExplorerNodeKind.Favorites);
+        // History is kept while the list is hidden, so putting the limit back shows what happened meanwhile.
+        _ = Assert.Single(await fixture.Recent.ListAsync(10, token));
+
+        await fixture.Settings.Set(SettingKeys.RecentLimit, 5, token);
+        await viewModel.InitializeAsync(token);
+
+        Assert.True(viewModel.IsRecentVisible);
+        var recentRoot = viewModel.RootNodes.Single(node => node.Kind == ExplorerNodeKind.Recent);
+        Assert.Equal([connection.Id], [.. recentRoot.Children.Select(node => node.Id!.Value)]);
+    }
+
     [AvaloniaFact]
     public async Task ThousandConnectionsKeepTheRealizedTreeRowsBounded()
     {

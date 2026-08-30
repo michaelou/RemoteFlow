@@ -45,6 +45,9 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     private bool _suppressExpansionEvent;
     private bool _suppressFilterChanges;
     private bool _tagsLoaded;
+    // What the last rebuild was drawn for, so returning to the page after the preference changed can tell
+    // that the tree is stale. -1 is "never built", which no stored limit can be.
+    private int _builtForRecentLimit = -1;
     private Guid? _feedbackConnectionId;
     private ConnectionOpenMode? _feedbackRecoveryMode;
 
@@ -179,6 +182,11 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     /// has to be able to wait for the store rather than for a repaint.</summary>
     public Task PreferenceChangesSettled { get; private set; } = Task.CompletedTask;
 
+    /// <summary>Whether the Recent heading is part of the tree. Preferences can set the limit to zero, and
+    /// with no Recent list on screen the toolbar's clear-recent button has nothing to point at.</summary>
+    [ObservableProperty]
+    public partial bool IsRecentVisible { get; private set; } = true;
+
     [ObservableProperty]
     public partial ConnectionEditorViewModel? Editor { get; private set; }
 
@@ -272,7 +280,10 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
             .Get(SettingKeys.ShowConnectionDetailLine, cancellationToken)
             .ConfigureAwait(true);
         await EnsureTagFiltersAsync(cancellationToken).ConfigureAwait(true);
-        if (RootNodes.Count == 0)
+        // The Recent limit is set on the Preferences tab rather than here, so coming back to this page is
+        // where a change to it lands: rebuild when the tree was drawn for a different number.
+        var recentLimit = await _settings.Get(SettingKeys.RecentLimit, cancellationToken).ConfigureAwait(true);
+        if (RootNodes.Count == 0 || recentLimit != _builtForRecentLimit)
         {
             await RefreshAsync(cancellationToken).ConfigureAwait(true);
         }
@@ -288,8 +299,14 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
             var items = await _queries.QueryAsync(BuildFilter(), cancellationToken).ConfigureAwait(true);
             var folders = await _folders.ListAsync(cancellationToken).ConfigureAwait(true);
             var recentLimit = await _settings.Get(SettingKeys.RecentLimit, cancellationToken).ConfigureAwait(true);
-            var recent = await _recent.ListAsync(recentLimit, cancellationToken).ConfigureAwait(true);
-            RebuildTree(items, folders, recent);
+            // A limit of zero is "do not show Recent at all", so there is nothing to read either: the
+            // heading is left out of the tree rather than drawn empty.
+            var recent = recentLimit > 0
+                ? await _recent.ListAsync(recentLimit, cancellationToken).ConfigureAwait(true)
+                : [];
+            IsRecentVisible = recentLimit > 0;
+            _builtForRecentLimit = recentLimit;
+            RebuildTree(items, folders, recent, IsRecentVisible);
             FeedbackMessage = null;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -748,7 +765,8 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
     private void RebuildTree(
         IReadOnlyList<ConnectionListItem> items,
         IReadOnlyList<Folder> folders,
-        IReadOnlyList<RecentConnection> recent)
+        IReadOnlyList<RecentConnection> recent,
+        bool showRecent)
     {
         RootNodes.Clear();
         SelectedNodes.Clear();
@@ -759,17 +777,21 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
         }
 
         var itemById = items.ToDictionary(item => item.Id);
-        var recentRoot = CreateNode(ExplorerNodeKind.Recent, "Recent", iconKey: "Icon.Recent");
-        foreach (var recentItem in recent)
+        RootNodes.Add(favoriteRoot);
+        if (showRecent)
         {
-            if (itemById.TryGetValue(recentItem.ConnectionId, out var item))
+            var recentRoot = CreateNode(ExplorerNodeKind.Recent, "Recent", iconKey: "Icon.Recent");
+            foreach (var recentItem in recent)
             {
-                recentRoot.Children.Add(CreateConnectionNode(item));
+                if (itemById.TryGetValue(recentItem.ConnectionId, out var item))
+                {
+                    recentRoot.Children.Add(CreateConnectionNode(item));
+                }
             }
+
+            RootNodes.Add(recentRoot);
         }
 
-        RootNodes.Add(favoriteRoot);
-        RootNodes.Add(recentRoot);
         var folderNodes = folders.ToDictionary(
             folder => folder.Id,
             CreateFolderNode);

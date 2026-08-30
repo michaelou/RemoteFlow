@@ -46,6 +46,7 @@ public static class DependencyInjection
         // register its own IAppVersionInfo before calling this.
         services.TryAddSingleton<IAppVersionInfo>(_ => AssemblyVersionInfo.ForEntryAssembly());
         services.TryAddSingleton<AboutViewModel>();
+        services.TryAddSingleton<PreferencesViewModel>();
         services.TryAddSingleton<SettingsPageViewModel>();
         services.TryAddSingleton<TrustedKeysViewModel>();
         // The sidebar is these registrations in order. Transfers comes after SFTP and Storage because it

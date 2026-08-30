@@ -7,6 +7,20 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **Settings opens on a Preferences tab, and Recent is now a number you choose.** The explorer listed the
+  last twenty connections under Recent, which on a short list is most of the list twice. The limit had been
+  a stored setting all along with nothing to set it from; the Preferences tab is that control — anything
+  from 0 to 50, and the default drops to ten. Zero is a real answer rather than a degenerate one: the
+  heading is left out of the tree entirely, and the toolbar's clear-recent button goes with it, for people
+  who navigate by folder and read Recent as noise. History keeps being recorded while the list is hidden, so
+  raising the number back up shows what was opened meanwhile. The Connections page picks up a change the
+  next time it is opened.
+- **The window can be light instead of dark.** Both palettes have been in the app since the beginning and
+  only the dark one was reachable; the Preferences tab now has the switch. The whole window changes as the
+  choice is made rather than at the next start, and the choice is remembered.
+
 ## [0.6.2] - 2026-08-29
 
 ### Changed

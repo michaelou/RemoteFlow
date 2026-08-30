@@ -58,6 +58,9 @@
     </DataTemplate>
     <DataTemplate DataType="{x:Type viewModels:SettingsPageViewModel}" x:DataType="viewModels:SettingsPageViewModel">
       <TabControl>
+        <TabItem Header="Preferences">
+          <settingsViews:PreferencesView DataContext="{Binding Preferences}" />
+        </TabItem>
         <TabItem Header="Terminal">
           <settingsViews:TerminalSettings DataContext="{Binding Terminal}" />
         </TabItem>

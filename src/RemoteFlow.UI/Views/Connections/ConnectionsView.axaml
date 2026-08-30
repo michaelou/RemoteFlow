@@ -50,10 +50,13 @@
                 ToolTip.Tip="Create a top-level folder. Right-click a folder to add one inside it.">
               <PathIcon Data="{DynamicResource Icon.NewFolder}" />
             </Button>
+            <!-- Gone rather than disabled when Preferences sets the Recent limit to zero: with no Recent
+                 list on screen, a button that empties it is a button for something that is not there. -->
             <Button
                 AutomationProperties.Name="Clear recent"
                 Classes="icon"
                 Click="ClearRecent_OnClick"
+                IsVisible="{Binding IsRecentVisible}"
                 ToolTip.Tip="Empty the Recent list">
               <PathIcon Data="{DynamicResource Icon.ClearRecent}" />
             </Button>
