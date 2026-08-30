@@ -8,36 +8,14 @@
     xmlns:converters="using:RemoteFlow.UI.Converters"
     xmlns:storage="using:RemoteFlow.Application.Abstractions.Storage">
   <UserControl.Styles>
-    <!-- A label sits tight against its own control; the gap between fields comes from the
-         section spacing, so related controls read as one unit. -->
-    <Style Selector="TextBlock.label">
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
-      <Setter Property="Margin" Value="0,0,0,3" />
-    </Style>
+    <!-- label, hint, section and panel-title are application-wide now, in Styles/Controls.axaml, so the
+         settings pages and this editor cannot drift apart. Only the one class this view alone uses stays
+         here: an invalid field is a warning rather than a failure, because nothing has been attempted. -->
     <Style Selector="TextBlock.error">
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}" />
       <Setter Property="Margin" Value="0,3,0,0" />
       <Setter Property="TextWrapping" Value="Wrap" />
-    </Style>
-    <Style Selector="TextBlock.hint">
-      <Setter Property="FontSize" Value="12" />
-      <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
-      <Setter Property="Margin" Value="0,3,0,0" />
-      <Setter Property="TextWrapping" Value="Wrap" />
-    </Style>
-    <Style Selector="TextBlock.section">
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Margin" Value="0,4,0,0" />
-    </Style>
-    <!-- The name of a card, not of a group inside one: quieter and smaller than the field labels'
-         own headings so that the card's edge does the separating and the word only says which card
-         this is. -->
-    <Style Selector="TextBlock.panel-title">
-      <Setter Property="FontSize" Value="11" />
-      <Setter Property="FontWeight" Value="SemiBold" />
-      <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Muted}" />
     </Style>
   </UserControl.Styles>
 

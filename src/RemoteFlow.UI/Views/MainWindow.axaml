@@ -64,6 +64,9 @@
         <TabItem Header="Terminal">
           <settingsViews:TerminalSettings DataContext="{Binding Terminal}" />
         </TabItem>
+        <TabItem Header="Shell profiles">
+          <settingsViews:ShellProfilesView DataContext="{Binding ShellProfiles}" />
+        </TabItem>
         <TabItem Header="Remote desktop" IsVisible="{Binding Rdp.IsAvailable}">
           <settingsViews:RdpSettings DataContext="{Binding Rdp}" />
         </TabItem>

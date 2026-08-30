@@ -7,7 +7,19 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-30
+
 ### Added
+
+- **Shell profiles is a tab of its own, and each profile folds away.** It used to be the bottom half of the
+  Terminal tab, under a live preview it had nothing to do with — and it is the only page in Settings with a
+  Save button, so half that tab wrote as you typed and half of it waited. It is now its own tab: a list of
+  cards that start collapsed once there is more than one, each header giving the profile's glyph, its name,
+  whether a new tab opens with it, and what it actually runs. **Executable** and **Working directory** each
+  have a Browse button beside them now, opening at whatever the field already points to; the box still
+  takes a typed path, and dismissing the dialog leaves what was typed. **Duplicate** copies a profile in
+  place under a new identity, which is how a second shell that differs by one argument gets made without
+  retyping an environment block.
 
 - **Settings opens on a Preferences tab, and Recent is now a number you choose.** The explorer listed the
   last twenty connections under Recent, which on a short list is most of the list twice. The limit had been
@@ -20,6 +32,15 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 - **The window can be light instead of dark.** Both palettes have been in the app since the beginning and
   only the dark one was reachable; the Preferences tab now has the switch. The whole window changes as the
   choice is made rather than at the next start, and the choice is remembered.
+
+### Changed
+
+- **The Settings tabs are laid out as cards.** Terminal and About were long single columns of headings at
+  four different sizes; both are now stacks of cards grouped by what they answer, and Terminal puts the
+  live preview beside the choices that change it rather than below them. Preferences and Remote desktop
+  follow the same shape, so the five tabs read as one page. The label, hint and section type styles moved
+  out of the connection editor into the application stylesheet, which is what stops the settings pages and
+  the editor drifting apart.
 
 ## [0.6.2] - 2026-08-29
 
@@ -598,7 +619,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/michaelou/RemoteFlow/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/michaelou/RemoteFlow/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/michaelou/RemoteFlow/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/michaelou/RemoteFlow/compare/v0.5.0...v0.6.0

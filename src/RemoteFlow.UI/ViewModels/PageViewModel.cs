@@ -15,11 +15,14 @@ public sealed class SettingsPageViewModel(
     Security.TrustedKeysViewModel? security = null,
     Settings.AboutViewModel? about = null,
     Settings.RdpSettingsViewModel? rdp = null,
-    Settings.PreferencesViewModel? preferences = null) : PageViewModel("Settings")
+    Settings.PreferencesViewModel? preferences = null,
+    Settings.ShellProfilesViewModel? shellProfiles = null) : PageViewModel("Settings")
 {
     public Settings.PreferencesViewModel? Preferences { get; } = preferences;
 
     public Settings.TerminalSettingsViewModel? Terminal { get; } = terminal;
+
+    public Settings.ShellProfilesViewModel? ShellProfiles { get; } = shellProfiles;
 
     public Security.TrustedKeysViewModel? Security { get; } = security;
 

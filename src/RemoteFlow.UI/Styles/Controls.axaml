@@ -74,6 +74,31 @@
     <Setter Property="CornerRadius" Value="{DynamicResource Radius.Panel}" />
   </Style>
 
+  <!-- The four pieces of type a form is built from. They started inside the connection editor and are
+       here because every settings page wants the same ones: a card whose labels are a different size from
+       the next card's reads as a different application. A label sits tight against its own control, so the
+       gap between two fields is the section's spacing rather than the label's. -->
+  <Style Selector="TextBlock.panel-title">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Muted}" />
+  </Style>
+  <Style Selector="TextBlock.label">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+    <Setter Property="Margin" Value="0,0,0,3" />
+  </Style>
+  <Style Selector="TextBlock.hint">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Secondary}" />
+    <Setter Property="Margin" Value="0,3,0,0" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Margin" Value="0,4,0,0" />
+  </Style>
+
   <!-- A button that carries no chrome until it is pointed at: column headers, breadcrumbs, and other
        places where a full button box would draw more attention than the action deserves. -->
   <Style Selector="Button.flat">

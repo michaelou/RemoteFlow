@@ -1,0 +1,272 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Settings.ShellProfilesView"
+    x:DataType="settingsViewModels:ShellProfilesViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings">
+  <!-- A profile card is an Expander inside the ordinary panel card. The card paints the surface and the
+       corners, exactly as every other card on this page does, and the Expander paints nothing at all.
+
+       That is done here rather than with style setters because Fluent's Expander template does not read
+       its own Background, BorderBrush or Padding properties: the header, the chevron and the content
+       border each resolve a theme resource instead, so setting Background="Transparent" on the control
+       changes nothing visible. Overriding the resources on this view reaches the parts that actually
+       paint, and reaches only the expanders inside it. -->
+  <UserControl.Resources>
+    <SolidColorBrush x:Key="ExpanderHeaderBackground" Color="Transparent" />
+    <SolidColorBrush x:Key="ExpanderHeaderBorderBrush" Color="Transparent" />
+    <SolidColorBrush x:Key="ExpanderContentBackground" Color="Transparent" />
+    <SolidColorBrush x:Key="ExpanderContentBorderBrush" Color="Transparent" />
+    <Thickness x:Key="ExpanderHeaderBorderThickness">0</Thickness>
+    <Thickness x:Key="ExpanderContentDownBorderThickness">0</Thickness>
+    <!-- The header's padding is the card's, so a collapsed profile is inset exactly like the cards above
+         it; the content picks up where the header stops and keeps the same left edge. -->
+    <Thickness x:Key="ExpanderHeaderPadding">16,10</Thickness>
+    <Thickness x:Key="ExpanderContentPadding">16,0,16,16</Thickness>
+    <!-- The header is a name on the left and two buttons on the right, which needs the full width; left
+         is the default and would collapse the row to the width of its text. -->
+    <HorizontalAlignment x:Key="ExpanderHeaderHorizontalContentAlignment">Stretch</HorizontalAlignment>
+    <!-- The chevron is an affordance, not a thing to read: quiet until the row is pointed at, so a list of
+         eight collapsed profiles reads as eight names rather than eight arrows. -->
+    <SolidColorBrush x:Key="ExpanderChevronBackground" Color="Transparent" />
+    <SolidColorBrush x:Key="ExpanderChevronBorderBrush" Color="Transparent" />
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="Expander.profile">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+  </UserControl.Styles>
+
+  <!-- A heading strip that stays put, and a scrolling stack of cards under it: the buttons that add and
+       save a profile have to be reachable from the bottom of a list of six of them, which is exactly where
+       someone who has just edited the last one is. -->
+  <Grid Margin="8" MaxWidth="1040" HorizontalAlignment="Left" RowDefinitions="Auto,*">
+    <Border Classes="panel" Padding="16,14">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+        <StackPanel Spacing="5">
+          <TextBlock FontSize="28" FontWeight="SemiBold" Text="Shell profiles" />
+          <TextBlock
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="The shells the Terminals page can start, and what each one starts with."
+              TextWrapping="Wrap" />
+        </StackPanel>
+        <TextBlock
+            Grid.Column="1"
+            Foreground="{DynamicResource Brush.Warning}"
+            IsVisible="{Binding IsDirty}"
+            Text="Unsaved changes"
+            VerticalAlignment="Center" />
+        <Button
+            Grid.Column="2"
+            Command="{Binding AddProfileCommand}"
+            Content="Add profile"
+            VerticalAlignment="Center" />
+        <Button
+            Grid.Column="3"
+            Classes="accent"
+            Command="{Binding SaveProfilesCommand}"
+            Content="Save profiles"
+            VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+
+    <!-- The right padding is the gutter for the overlay scrollbar; without it the thumb sits on top of
+         the right edge of every text box. -->
+    <ScrollViewer
+        Grid.Row="1"
+        Margin="0,6,0,0"
+        Padding="0,0,14,0"
+        HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="6">
+        <Border Classes="panel" Padding="16">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="panel-title" Text="DEFAULT" />
+            <StackPanel>
+              <TextBlock Classes="label" Text="Profile a new terminal opens with" />
+              <ComboBox
+                  AutomationProperties.Name="Default shell profile"
+                  HorizontalAlignment="Stretch"
+                  ItemsSource="{Binding Profiles}"
+                  SelectedItem="{Binding DefaultProfile}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="settingsViewModels:ShellProfileEditorViewModel">
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock
+                  Classes="hint"
+                  Text="Every other profile stays available from the new-tab menu on the Terminals page." />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <ItemsControl ItemsSource="{Binding Profiles}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Spacing="6" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="settingsViewModels:ShellProfileEditorViewModel">
+              <Border Classes="panel">
+                <Expander Classes="profile" IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
+                <Expander.Header>
+                  <!-- Shut, this row is the whole profile: its glyph, its name, whether a new tab opens
+                       with it, and what it actually runs. Enough to find the one you meant among eight
+                       without opening any of them. -->
+                  <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" ColumnSpacing="10">
+                    <TextBlock
+                        FontFamily="Cascadia Mono,Consolas"
+                        Foreground="{DynamicResource Brush.Text.Secondary}"
+                        Text="{Binding Icon}"
+                        VerticalAlignment="Center" />
+                    <TextBlock
+                        Grid.Column="1"
+                        FontWeight="SemiBold"
+                        Text="{Binding DisplayName}"
+                        TextTrimming="CharacterEllipsis"
+                        VerticalAlignment="Center" />
+                    <Border
+                        Grid.Column="2"
+                        Background="{DynamicResource Brush.Badge.Background}"
+                        CornerRadius="{DynamicResource Radius.Small}"
+                        IsVisible="{Binding IsDefault}"
+                        Padding="6,1"
+                        VerticalAlignment="Center">
+                      <TextBlock
+                          FontSize="10"
+                          FontWeight="SemiBold"
+                          Foreground="{DynamicResource Brush.Badge.Text}"
+                          Text="DEFAULT" />
+                    </Border>
+                    <TextBlock
+                        Grid.Column="3"
+                        FontFamily="Cascadia Mono,Consolas"
+                        FontSize="12"
+                        Foreground="{DynamicResource Brush.Text.Muted}"
+                        Text="{Binding Summary}"
+                        TextTrimming="CharacterEllipsis"
+                        VerticalAlignment="Center" />
+
+                    <!-- Both actions belong to the profile they sit on rather than to a toolbar above the
+                         list, so there is never a question of which of eight identical rows they take. -->
+                    <Button
+                        Grid.Column="4"
+                        AutomationProperties.Name="Duplicate this shell profile"
+                        Classes="icon"
+                        Click="DuplicateProfile_OnClick"
+                        ToolTip.Tip="Duplicate this profile"
+                        VerticalAlignment="Center">
+                      <PathIcon Data="{DynamicResource Icon.Duplicate}" />
+                    </Button>
+                    <Button
+                        Grid.Column="5"
+                        AutomationProperties.Name="Remove this shell profile"
+                        Classes="icon"
+                        Click="RemoveProfile_OnClick"
+                        IsVisible="{Binding $parent[UserControl].((settingsViewModels:ShellProfilesViewModel)DataContext).CanRemoveProfile}"
+                        ToolTip.Tip="Remove this profile"
+                        VerticalAlignment="Center">
+                      <PathIcon Data="{DynamicResource Icon.Delete}" />
+                    </Button>
+                  </Grid>
+                </Expander.Header>
+
+                <StackPanel Spacing="12">
+                  <Grid ColumnDefinitions="*,120" ColumnSpacing="10">
+                    <StackPanel>
+                      <TextBlock Classes="label" Text="Name" />
+                      <TextBox AutomationProperties.Name="Profile name" Text="{Binding DisplayName}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                      <TextBlock Classes="label" Text="Icon" />
+                      <TextBox AutomationProperties.Name="Profile icon" Text="{Binding Icon}" />
+                    </StackPanel>
+                  </Grid>
+
+                  <!-- The path is typed or browsed to, whichever is quicker: a shell on PATH is two
+                       characters to type and a dialog away, and one buried under Program Files is the
+                       other way round. The button is hidden where no dialog can be opened. -->
+                  <StackPanel>
+                    <TextBlock Classes="label" Text="Executable" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <TextBox
+                          AutomationProperties.Name="Profile executable"
+                          Text="{Binding ShellPath}"
+                          PlaceholderText="bash, or the full path to a shell" />
+                      <Button
+                          Grid.Column="1"
+                          AutomationProperties.Name="Browse for the executable"
+                          Command="{Binding BrowseExecutableCommand}"
+                          IsVisible="{Binding CanBrowse}"
+                          ToolTip.Tip="Choose the executable">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.File}" />
+                          <TextBlock Text="Browse" />
+                        </StackPanel>
+                      </Button>
+                    </Grid>
+                  </StackPanel>
+
+                  <StackPanel>
+                    <TextBlock Classes="label" Text="Working directory" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <TextBox
+                          AutomationProperties.Name="Profile working directory"
+                          Text="{Binding WorkingDirectory}"
+                          PlaceholderText="The folder the shell starts in" />
+                      <Button
+                          Grid.Column="1"
+                          AutomationProperties.Name="Browse for the working directory"
+                          Command="{Binding BrowseWorkingDirectoryCommand}"
+                          IsVisible="{Binding CanBrowse}"
+                          ToolTip.Tip="Choose the working directory">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Folder}" />
+                          <TextBlock Text="Browse" />
+                        </StackPanel>
+                      </Button>
+                    </Grid>
+                  </StackPanel>
+
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                    <StackPanel>
+                      <TextBlock Classes="label" Text="Arguments" />
+                      <TextBox
+                          AcceptsReturn="True"
+                          AutomationProperties.Name="Profile arguments, one per line"
+                          Height="74"
+                          Text="{Binding ArgumentsText}"
+                          TextWrapping="NoWrap"
+                          PlaceholderText="One per line" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                      <TextBlock Classes="label" Text="Environment" />
+                      <TextBox
+                          AcceptsReturn="True"
+                          AutomationProperties.Name="Profile environment variables, one per line"
+                          Height="74"
+                          Text="{Binding EnvironmentText}"
+                          TextWrapping="NoWrap"
+                          PlaceholderText="NAME=value, one per line" />
+                    </StackPanel>
+                  </Grid>
+                  </StackPanel>
+                </Expander>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <TextBlock
+            x:Name="StatusText"
+            Classes="hint"
+            IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+            Margin="4,0,0,8"
+            Text="{Binding Status}" />
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

@@ -1,9 +1,6 @@
-using System.Collections.ObjectModel;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
-using RemoteFlow.Application.Services;
 using SvcSystems.UI.Terminal;
 
 namespace RemoteFlow.UI.ViewModels.Settings;
@@ -29,7 +26,6 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
     ];
 
     private readonly ISettingsStore _settings;
-    private readonly IShellProfileService? _shellProfileService;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
     private readonly SemaphoreSlim _saveGate = new(1, 1);
     private bool _initialized;
@@ -40,10 +36,9 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
     private int _fontSize = 13;
     private int _scrollback = 10_000;
 
-    public TerminalSettingsViewModel(ISettingsStore settings, IShellProfileService? shellProfileService = null)
+    public TerminalSettingsViewModel(ISettingsStore settings)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _shellProfileService = shellProfileService;
         FontFamilies = DiscoverMonospaceFonts();
         SelectedFontFamily = ResolveFontFamily(null, FontFamilies);
         SelectedColorScheme = TerminalColorSchemes.Dark;
@@ -76,8 +71,6 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
     ];
 
     public TerminalControlModel PreviewModel { get; }
-
-    public ObservableCollection<ShellProfileEditorViewModel> ShellProfiles { get; } = [];
 
     public string PreviewBackground => SelectedColorScheme.Background;
 
@@ -150,12 +143,6 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
     [ObservableProperty]
     public partial string? ErrorMessage { get; private set; }
 
-    [ObservableProperty]
-    public partial ShellProfileEditorViewModel? DefaultShellProfile { get; set; }
-
-    [ObservableProperty]
-    public partial string? ShellProfilesStatus { get; private set; }
-
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (_initialized)
@@ -186,7 +173,6 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
             SelectedSshTransport = SshTransports.First(option => option.Value == selectedTransport);
             _loading = false;
             ApplyPreview();
-            await LoadShellProfilesAsync(cancellationToken).ConfigureAwait(true);
             _initialized = true;
             SettingsChanged?.Invoke(this, EventArgs.Empty);
 
@@ -207,64 +193,6 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
     public async Task FlushAsync()
     {
         await _pendingSave.ConfigureAwait(false);
-    }
-
-    [RelayCommand]
-    private void AddShellProfile()
-    {
-        var profile = new ShellProfileEditorViewModel
-        {
-            Id = $"profile-{Guid.NewGuid():N}",
-            DisplayName = "New shell",
-            ShellPath = string.Empty,
-            WorkingDirectory = Environment.CurrentDirectory,
-            Icon = ">_",
-        };
-        ShellProfiles.Add(profile);
-        DefaultShellProfile ??= profile;
-        ShellProfilesStatus = "Unsaved changes";
-    }
-
-    [RelayCommand]
-    private void RemoveShellProfile(ShellProfileEditorViewModel profile)
-    {
-        ArgumentNullException.ThrowIfNull(profile);
-        if (ShellProfiles.Count == 1)
-        {
-            ShellProfilesStatus = "At least one shell profile is required.";
-            return;
-        }
-
-        _ = ShellProfiles.Remove(profile);
-        if (ReferenceEquals(DefaultShellProfile, profile))
-        {
-            DefaultShellProfile = ShellProfiles[0];
-        }
-
-        ShellProfilesStatus = "Unsaved changes";
-    }
-
-    [RelayCommand]
-    private async Task SaveShellProfilesAsync(CancellationToken cancellationToken)
-    {
-        if (_shellProfileService is null || DefaultShellProfile is null)
-        {
-            return;
-        }
-
-        try
-        {
-            var profiles = ShellProfiles.Select(profile => profile.ToProfile()).ToArray();
-            await _shellProfileService.SaveProfilesAsync(
-                profiles,
-                DefaultShellProfile.Id,
-                cancellationToken).ConfigureAwait(true);
-            ShellProfilesStatus = "Shell profiles saved.";
-        }
-        catch (Exception exception)
-        {
-            ShellProfilesStatus = $"Shell profiles could not be saved: {exception.Message}";
-        }
     }
 
     partial void OnSelectedColorSchemeChanged(TerminalColorScheme value)
@@ -364,25 +292,6 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
         }
     }
 
-    private async Task LoadShellProfilesAsync(CancellationToken cancellationToken)
-    {
-        if (_shellProfileService is null)
-        {
-            return;
-        }
-
-        var profiles = await _shellProfileService.GetProfilesAsync(cancellationToken).ConfigureAwait(true);
-        var defaultProfile = await _shellProfileService.GetDefaultProfileAsync(cancellationToken).ConfigureAwait(true);
-        ShellProfiles.Clear();
-        foreach (var profile in profiles)
-        {
-            ShellProfiles.Add(ShellProfileEditorViewModel.FromProfile(profile));
-        }
-
-        DefaultShellProfile = ShellProfiles.FirstOrDefault(profile =>
-            string.Equals(profile.Id, defaultProfile.Id, StringComparison.Ordinal)) ?? ShellProfiles.FirstOrDefault();
-    }
-
     private static List<string> DiscoverMonospaceFonts()
     {
         try
@@ -433,67 +342,3 @@ public sealed partial class TerminalSettingsViewModel : ObservableObject, IDispo
 }
 
 public sealed record SshTransportOption(SshTransport Value, string DisplayName);
-
-public sealed partial class ShellProfileEditorViewModel : ObservableObject
-{
-    [ObservableProperty]
-    public partial string Id { get; set; } = string.Empty;
-
-    [ObservableProperty]
-    public partial string DisplayName { get; set; } = string.Empty;
-
-    [ObservableProperty]
-    public partial string ShellPath { get; set; } = string.Empty;
-
-    [ObservableProperty]
-    public partial string ArgumentsText { get; set; } = string.Empty;
-
-    [ObservableProperty]
-    public partial string WorkingDirectory { get; set; } = string.Empty;
-
-    [ObservableProperty]
-    public partial string EnvironmentText { get; set; } = string.Empty;
-
-    [ObservableProperty]
-    public partial string Icon { get; set; } = ">_";
-
-    public ShellProfile ToProfile()
-    {
-        var environment = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var line in EnvironmentText.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var separator = line.IndexOf('=');
-            if (separator <= 0)
-            {
-                throw new FormatException($"Environment entry '{line}' must use NAME=value format.");
-            }
-
-            environment[line[..separator].Trim()] = line[(separator + 1)..];
-        }
-
-        return new ShellProfile
-        {
-            Id = Id,
-            DisplayName = DisplayName,
-            ShellPath = ShellPath,
-            Arguments = ArgumentsText.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-            WorkingDirectory = WorkingDirectory,
-            EnvironmentVariables = environment,
-            Icon = Icon,
-        };
-    }
-
-    public static ShellProfileEditorViewModel FromProfile(ShellProfile profile)
-    {
-        return new ShellProfileEditorViewModel
-        {
-            Id = profile.Id,
-            DisplayName = profile.DisplayName,
-            ShellPath = profile.ShellPath,
-            ArgumentsText = string.Join(Environment.NewLine, profile.Arguments),
-            WorkingDirectory = profile.WorkingDirectory,
-            EnvironmentText = string.Join(Environment.NewLine, profile.EnvironmentVariables.Select(variable => $"{variable.Key}={variable.Value}")),
-            Icon = profile.Icon,
-        };
-    }
-}

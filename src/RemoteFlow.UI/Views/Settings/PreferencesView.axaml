@@ -5,44 +5,60 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings">
   <ScrollViewer>
-    <StackPanel Margin="8" MaxWidth="640" HorizontalAlignment="Left" Spacing="18">
-      <StackPanel Spacing="5">
-        <TextBlock FontSize="28" FontWeight="SemiBold" Text="Preferences" />
-        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="How the app looks and how much of your history it keeps on screen." TextWrapping="Wrap" />
-      </StackPanel>
+    <StackPanel Margin="8" MaxWidth="640" HorizontalAlignment="Left" Spacing="6">
+      <Border Classes="panel" Padding="16,14">
+        <StackPanel Spacing="5">
+          <TextBlock FontSize="28" FontWeight="SemiBold" Text="Preferences" />
+          <TextBlock
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="How the app looks and how much of your history it keeps on screen."
+              TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
 
-      <StackPanel Spacing="5" IsEnabled="{Binding IsThemeAvailable}">
-        <TextBlock FontWeight="SemiBold" Text="Appearance" />
-        <ComboBox
-            AutomationProperties.Name="Appearance"
-            ItemsSource="{Binding Themes}"
-            SelectedItem="{Binding SelectedTheme}">
-          <ComboBox.ItemTemplate>
-            <DataTemplate x:DataType="settingsViewModels:AppThemeOption">
-              <StackPanel Margin="2" Spacing="2">
-                <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                <TextBlock FontSize="11" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Description}" />
-              </StackPanel>
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
-        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="The whole window changes as soon as you pick one." TextWrapping="Wrap" />
-      </StackPanel>
+      <Border Classes="panel" IsEnabled="{Binding IsThemeAvailable}" Padding="16">
+        <StackPanel Spacing="12">
+          <TextBlock Classes="panel-title" Text="APPEARANCE" />
+          <StackPanel>
+            <TextBlock Classes="label" Text="Theme" />
+            <ComboBox
+                AutomationProperties.Name="Appearance"
+                HorizontalAlignment="Stretch"
+                ItemsSource="{Binding Themes}"
+                SelectedItem="{Binding SelectedTheme}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="settingsViewModels:AppThemeOption">
+                  <StackPanel Margin="2" Spacing="2">
+                    <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                    <TextBlock FontSize="11" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Description}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Classes="hint" Text="The whole window changes as soon as you pick one." />
+          </StackPanel>
+        </StackPanel>
+      </Border>
 
-      <StackPanel Spacing="5">
-        <TextBlock FontWeight="SemiBold" Text="Recent connections" />
-        <NumericUpDown
-            AutomationProperties.Name="Recent connections"
-            Minimum="0"
-            Maximum="50"
-            Increment="1"
-            FormatString="0"
-            Width="180"
-            HorizontalAlignment="Left"
-            Value="{Binding RecentLimit}" />
-        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding RecentLimitDescription}" TextWrapping="Wrap" />
-        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="The Connections page picks this up the next time you open it." TextWrapping="Wrap" />
-      </StackPanel>
+      <Border Classes="panel" Margin="0,0,0,8" Padding="16">
+        <StackPanel Spacing="12">
+          <TextBlock Classes="panel-title" Text="CONNECTIONS" />
+          <StackPanel>
+            <TextBlock Classes="label" Text="Recent connections" />
+            <NumericUpDown
+                AutomationProperties.Name="Recent connections"
+                FormatString="0"
+                HorizontalAlignment="Left"
+                Increment="1"
+                Minimum="0"
+                Maximum="50"
+                Width="180"
+                Value="{Binding RecentLimit}" />
+            <TextBlock Classes="hint" Text="{Binding RecentLimitDescription}" />
+            <TextBlock Classes="hint" Text="The Connections page picks this up the next time you open it." />
+          </StackPanel>
+        </StackPanel>
+      </Border>
     </StackPanel>
   </ScrollViewer>
 </UserControl>

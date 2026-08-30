@@ -5,81 +5,152 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings"
     xmlns:terminal="using:SvcSystems.UI.Terminal">
+  <!-- Two columns, because every control on this page changes something the preview shows: putting the
+       preview beside the choices rather than under them means the swatch and the terminal it repaints are
+       both on screen at once, whatever the window height. The cards group by question — how it looks, how
+       it behaves, how it connects — rather than by control type. -->
   <ScrollViewer>
-    <Grid Margin="8" RowDefinitions="Auto,Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
-      <StackPanel Spacing="5">
-        <TextBlock FontSize="28" FontWeight="SemiBold" Text="Terminal appearance" />
-        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Configure every embedded terminal with a live preview." />
+    <!-- Both columns are given a width rather than left to their content: the preview is a terminal, which
+         has no opinion about how wide it should be, and a star column beside a fixed one in a
+         left-aligned grid collapses it to nothing. 600 is eighty columns of the default font with room
+         to spare, so the preview shows a real line rather than a clipped one. -->
+    <Grid Margin="8" MaxWidth="1040" HorizontalAlignment="Left" ColumnDefinitions="380,6,600" RowDefinitions="Auto,Auto">
+      <Border Grid.ColumnSpan="3" Classes="panel" Padding="16,14">
+        <StackPanel Spacing="5">
+          <TextBlock FontSize="28" FontWeight="SemiBold" Text="Terminal" />
+          <TextBlock
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="How every embedded terminal looks and behaves, with a live preview."
+              TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <StackPanel Grid.Row="1" Margin="0,6,0,0" Spacing="6">
+        <Border Classes="panel" Padding="16">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="panel-title" Text="APPEARANCE" />
+            <StackPanel>
+              <TextBlock Classes="label" Text="Monospace font" />
+              <ComboBox
+                  AutomationProperties.Name="Monospace font"
+                  HorizontalAlignment="Stretch"
+                  ItemsSource="{Binding FontFamilies}"
+                  SelectedItem="{Binding SelectedFontFamily}" />
+            </StackPanel>
+
+            <StackPanel>
+              <TextBlock Classes="label" Text="Font size" />
+              <NumericUpDown
+                  AutomationProperties.Name="Font size"
+                  Minimum="6"
+                  Maximum="72"
+                  Value="{Binding FontSize}" />
+            </StackPanel>
+
+            <StackPanel>
+              <TextBlock Classes="label" Text="Colour scheme" />
+              <ComboBox
+                  AutomationProperties.Name="Colour scheme"
+                  HorizontalAlignment="Stretch"
+                  ItemsSource="{Binding ColorSchemes}"
+                  SelectedItem="{Binding SelectedColorScheme}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="settingsViewModels:TerminalColorScheme">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Border
+                          Width="18"
+                          Height="18"
+                          Background="{Binding Background}"
+                          BorderBrush="{Binding Foreground}"
+                          BorderThickness="1"
+                          CornerRadius="{DynamicResource Radius.Small}" />
+                      <TextBlock Text="{Binding DisplayName}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="16">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="panel-title" Text="BEHAVIOUR" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+              <StackPanel>
+                <TextBlock Classes="label" Text="Cursor style" />
+                <ComboBox
+                    AutomationProperties.Name="Cursor style"
+                    HorizontalAlignment="Stretch"
+                    ItemsSource="{Binding CursorStyles}"
+                    SelectedItem="{Binding CursorStyle}" />
+              </StackPanel>
+              <StackPanel Grid.Column="1">
+                <TextBlock Classes="label" Text="Bell" />
+                <ComboBox
+                    AutomationProperties.Name="Bell"
+                    HorizontalAlignment="Stretch"
+                    ItemsSource="{Binding BellModes}"
+                    SelectedItem="{Binding BellMode}" />
+              </StackPanel>
+            </Grid>
+
+            <CheckBox Content="Blink the cursor" IsChecked="{Binding CursorBlink}" />
+
+            <StackPanel>
+              <TextBlock Classes="label" Text="Scrollback lines" />
+              <NumericUpDown
+                  AutomationProperties.Name="Scrollback lines"
+                  Increment="1000"
+                  Minimum="0"
+                  Maximum="100000"
+                  Value="{Binding Scrollback}" />
+              <TextBlock Classes="hint" Text="{Binding ApplyNote}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="panel" Padding="16">
+          <StackPanel Spacing="12">
+            <TextBlock Classes="panel-title" Text="SSH" />
+            <StackPanel>
+              <TextBlock Classes="label" Text="Transport" />
+              <ComboBox
+                  AutomationProperties.Name="SSH transport"
+                  HorizontalAlignment="Stretch"
+                  ItemsSource="{Binding SshTransports}"
+                  SelectedItem="{Binding SelectedSshTransport}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="settingsViewModels:SshTransportOption">
+                    <TextBlock Text="{Binding DisplayName}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Classes="hint" Text="Transport changes apply to new SSH sessions only." />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <TextBlock
+            Foreground="{DynamicResource Brush.Danger}"
+            IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+            Margin="4,0,0,0"
+            Text="{Binding ErrorMessage}"
+            TextWrapping="Wrap" />
       </StackPanel>
 
-      <Grid Grid.Row="1" Margin="0,24,0,0" ColumnDefinitions="360,24,600" RowDefinitions="Auto">
-        <StackPanel Spacing="14">
-          <StackPanel Spacing="5">
-            <TextBlock FontWeight="SemiBold" Text="Monospace font" />
-            <ComboBox AutomationProperties.Name="Monospace font" ItemsSource="{Binding FontFamilies}" SelectedItem="{Binding SelectedFontFamily}" />
-          </StackPanel>
-
-          <Grid ColumnDefinitions="*,16,*">
-            <StackPanel Spacing="5">
-              <TextBlock FontWeight="SemiBold" Text="Font size" />
-              <NumericUpDown AutomationProperties.Name="Font size" Minimum="6" Maximum="72" Value="{Binding FontSize}" />
-            </StackPanel>
-            <StackPanel Grid.Column="2" Spacing="5">
-              <TextBlock FontWeight="SemiBold" Text="Scrollback lines" />
-              <NumericUpDown AutomationProperties.Name="Scrollback lines" Minimum="0" Maximum="100000" Increment="1000" Value="{Binding Scrollback}" />
-            </StackPanel>
-          </Grid>
-
-          <StackPanel Spacing="5">
-            <TextBlock FontWeight="SemiBold" Text="Colour scheme" />
-            <ComboBox AutomationProperties.Name="Colour scheme" ItemsSource="{Binding ColorSchemes}" SelectedItem="{Binding SelectedColorScheme}">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="settingsViewModels:TerminalColorScheme">
-                  <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Border Width="18" Height="18" CornerRadius="3" Background="{Binding Background}" BorderBrush="{Binding Foreground}" BorderThickness="1" />
-                    <TextBlock Text="{Binding DisplayName}" />
-                  </StackPanel>
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-          </StackPanel>
-
-          <Grid ColumnDefinitions="*,16,*">
-            <StackPanel Spacing="5">
-              <TextBlock FontWeight="SemiBold" Text="Cursor style" />
-              <ComboBox AutomationProperties.Name="Cursor style" ItemsSource="{Binding CursorStyles}" SelectedItem="{Binding CursorStyle}" />
-            </StackPanel>
-            <StackPanel Grid.Column="2" Spacing="5">
-              <TextBlock FontWeight="SemiBold" Text="Bell" />
-              <ComboBox AutomationProperties.Name="Bell" ItemsSource="{Binding BellModes}" SelectedItem="{Binding BellMode}" />
-            </StackPanel>
-          </Grid>
-
-          <StackPanel Spacing="5">
-            <TextBlock FontWeight="SemiBold" Text="SSH transport" />
-            <ComboBox AutomationProperties.Name="SSH transport" ItemsSource="{Binding SshTransports}" SelectedItem="{Binding SelectedSshTransport}">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="settingsViewModels:SshTransportOption">
-                  <TextBlock Text="{Binding DisplayName}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Transport changes apply to new SSH sessions only." />
-          </StackPanel>
-
-          <CheckBox Content="Blink cursor" IsChecked="{Binding CursorBlink}" />
-          <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding ApplyNote}" TextWrapping="Wrap" />
-          <TextBlock Foreground="{DynamicResource Brush.Danger}" IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
-        </StackPanel>
-
-        <StackPanel Grid.Column="2" Spacing="8">
-          <TextBlock FontWeight="SemiBold" Text="Live preview" />
+      <!-- The preview takes whatever height the choices beside it end up needing, so the two columns end
+           on the same line instead of leaving a card-shaped hole under a short one. -->
+      <Border Grid.Row="1" Grid.Column="2" Classes="panel" Margin="0,6,0,0" Padding="16">
+        <Grid RowDefinitions="Auto,*" RowSpacing="12">
+          <TextBlock Classes="panel-title" Text="LIVE PREVIEW" />
           <Border
+              Grid.Row="1"
               Background="{Binding PreviewBackground}"
               BorderBrush="{DynamicResource Brush.Border}"
               BorderThickness="1"
-              CornerRadius="8"
-              Height="330"
+              CornerRadius="{DynamicResource Radius.Control}"
+              MinHeight="330"
               Padding="8">
             <terminal:TerminalControl
                 Background="{Binding PreviewBackground}"
@@ -88,58 +159,8 @@
                 IsHitTestVisible="False"
                 Model="{Binding PreviewModel}" />
           </Border>
-        </StackPanel>
-      </Grid>
-
-      <StackPanel Grid.Row="2" Margin="0,30,0,0" Spacing="12">
-        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-          <StackPanel>
-            <TextBlock FontSize="20" FontWeight="SemiBold" Text="Shell profiles" />
-            <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Arguments and environment variables use one entry per line." />
-          </StackPanel>
-          <Button Grid.Column="1" Command="{Binding AddShellProfileCommand}" Content="Add profile" />
-          <Button Grid.Column="2" Command="{Binding SaveShellProfilesCommand}" Content="Save profiles" />
         </Grid>
-        <Grid ColumnDefinitions="180,*" ColumnSpacing="12">
-          <TextBlock FontWeight="SemiBold" Text="Default profile" VerticalAlignment="Center" />
-          <ComboBox Grid.Column="1" AutomationProperties.Name="Default shell profile" ItemsSource="{Binding ShellProfiles}" SelectedItem="{Binding DefaultShellProfile}">
-            <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="settingsViewModels:ShellProfileEditorViewModel">
-                <TextBlock Text="{Binding DisplayName}" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-        </Grid>
-        <ItemsControl ItemsSource="{Binding ShellProfiles}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="settingsViewModels:ShellProfileEditorViewModel">
-              <Border Background="{DynamicResource Brush.Surface.1}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,10" Padding="12">
-                <Grid ColumnDefinitions="90,*,16,90,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="8">
-                  <TextBlock Text="Name" VerticalAlignment="Center" />
-                  <TextBox Grid.Column="1" AutomationProperties.Name="Profile name" Text="{Binding DisplayName}" />
-                  <TextBlock Grid.Column="3" Text="Icon" VerticalAlignment="Center" />
-                  <TextBox Grid.Column="4" AutomationProperties.Name="Profile icon" Text="{Binding Icon}" />
-
-                  <TextBlock Grid.Row="1" Text="Executable" VerticalAlignment="Center" />
-                  <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4" AutomationProperties.Name="Profile executable" Text="{Binding ShellPath}" />
-
-                  <TextBlock Grid.Row="2" Text="Working dir" VerticalAlignment="Center" />
-                  <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="4" AutomationProperties.Name="Profile working directory" Text="{Binding WorkingDirectory}" />
-
-                  <TextBlock Grid.Row="3" Text="Arguments" VerticalAlignment="Top" />
-                  <TextBox Grid.Row="3" Grid.Column="1" AcceptsReturn="True" AutomationProperties.Name="Profile arguments, one per line" Height="74" Text="{Binding ArgumentsText}" TextWrapping="NoWrap" />
-                  <TextBlock Grid.Row="3" Grid.Column="3" Text="Environment" VerticalAlignment="Top" />
-                  <Grid Grid.Row="3" Grid.Column="4" RowDefinitions="*,Auto">
-                    <TextBox AcceptsReturn="True" AutomationProperties.Name="Profile environment variables, one per line" Height="74" Text="{Binding EnvironmentText}" TextWrapping="NoWrap" />
-                    <Button Grid.Row="1" Click="RemoveShellProfile_OnClick" Content="Remove" HorizontalAlignment="Right" Margin="0,8,0,0" />
-                  </Grid>
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding ShellProfilesStatus}" />
-      </StackPanel>
+      </Border>
     </Grid>
   </ScrollViewer>
 </UserControl>

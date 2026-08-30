@@ -5,28 +5,42 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings">
   <ScrollViewer>
-    <StackPanel Margin="8" MaxWidth="640" HorizontalAlignment="Left" Spacing="18">
-      <StackPanel Spacing="5">
-        <TextBlock FontSize="28" FontWeight="SemiBold" Text="Remote desktop" />
-        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Choose where RDP connections open by default on Windows." />
-      </StackPanel>
-      <StackPanel Spacing="5">
-        <TextBlock FontWeight="SemiBold" Text="Default RDP action" />
-        <ComboBox
-            AutomationProperties.Name="Default RDP action"
-            ItemsSource="{Binding OpenModes}"
-            SelectedItem="{Binding SelectedOpenMode}">
-          <ComboBox.ItemTemplate>
-            <DataTemplate x:DataType="settingsViewModels:RdpOpenModeOption">
-              <StackPanel Margin="2" Spacing="2">
-                <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                <TextBlock FontSize="11" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Description}" />
-              </StackPanel>
-            </DataTemplate>
-          </ComboBox.ItemTemplate>
-        </ComboBox>
-        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="This applies to the next RDP connection you open. The connection details always offer the external client too." TextWrapping="Wrap" />
-      </StackPanel>
+    <StackPanel Margin="8" MaxWidth="640" HorizontalAlignment="Left" Spacing="6">
+      <Border Classes="panel" Padding="16,14">
+        <StackPanel Spacing="5">
+          <TextBlock FontSize="28" FontWeight="SemiBold" Text="Remote desktop" />
+          <TextBlock
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="Choose where RDP connections open by default on Windows."
+              TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="panel" Margin="0,0,0,8" Padding="16">
+        <StackPanel Spacing="12">
+          <TextBlock Classes="panel-title" Text="DEFAULT" />
+          <StackPanel>
+            <TextBlock Classes="label" Text="Where an RDP connection opens" />
+            <ComboBox
+                AutomationProperties.Name="Default RDP action"
+                HorizontalAlignment="Stretch"
+                ItemsSource="{Binding OpenModes}"
+                SelectedItem="{Binding SelectedOpenMode}">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="settingsViewModels:RdpOpenModeOption">
+                  <StackPanel Margin="2" Spacing="2">
+                    <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                    <TextBlock FontSize="11" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Description}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock
+                Classes="hint"
+                Text="This applies to the next RDP connection you open. The connection details always offer the external client too." />
+          </StackPanel>
+        </StackPanel>
+      </Border>
     </StackPanel>
   </ScrollViewer>
 </UserControl>

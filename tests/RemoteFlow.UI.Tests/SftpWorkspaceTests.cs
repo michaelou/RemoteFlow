@@ -1062,6 +1062,14 @@ public sealed class SftpWorkspaceTests
         {
             return Task.FromResult<string?>(null);
         }
+
+        public Task<string?> PickFileAsync(
+            string title,
+            string? suggestedPath = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<string?>(null);
+        }
     }
 
     private sealed class RecordingConfirmation(bool result) : IConfirmationDialogService

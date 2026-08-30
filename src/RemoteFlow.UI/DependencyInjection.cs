@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.TryAddSingleton<SftpWorkspaceViewModel>();
         services.TryAddSingleton<StoragePageViewModel>();
         services.TryAddSingleton<TerminalSettingsViewModel>();
+        services.TryAddSingleton<ShellProfilesViewModel>();
         services.TryAddSingleton<RdpSettingsViewModel>();
         services.TryAddSingleton<IEmbeddedRdpWorkspaceSessionFactory>(NoEmbeddedRdpWorkspaceSessionFactory.Instance);
         // The version is stamped into the assembly that started the process; a host that knows better can

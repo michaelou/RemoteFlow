@@ -4,188 +4,191 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:settingsViewModels="using:RemoteFlow.UI.ViewModels.Settings">
+  <UserControl.Styles>
+    <!-- The version, the commit, and the two paths are all things someone reads out loud or pastes into a
+         bug report, and they are all identifiers rather than prose: one class so they are one thing on the
+         page instead of four separately-styled lines. -->
+    <Style Selector="SelectableTextBlock.identifier">
+      <Setter Property="FontFamily" Value="Cascadia Mono,Consolas" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+  </UserControl.Styles>
+
   <ScrollViewer>
-    <Grid Margin="8" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" MaxWidth="1040" HorizontalAlignment="Left">
-      <StackPanel Spacing="5">
-        <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding ProductName}" />
-        <TextBlock
-            Foreground="{DynamicResource Brush.Text.Secondary}"
-            Text="The build on this machine, the commit it was built from, and where it keeps your files." />
-      </StackPanel>
-
-      <StackPanel Grid.Row="1" Margin="0,24,0,0" Spacing="14">
-        <StackPanel Spacing="5">
-          <TextBlock FontWeight="SemiBold" Text="Version" />
-          <!-- Selectable: this and the commit below are what a bug report needs pasted into it. -->
-          <SelectableTextBlock
-              x:Name="VersionText"
-              FontFamily="Cascadia Mono,Consolas"
-              Foreground="{DynamicResource Brush.Text.Primary}"
-              Text="{Binding Version}" />
-        </StackPanel>
-
-        <StackPanel Spacing="5">
-          <TextBlock FontWeight="SemiBold" Text="Commit" />
-          <SelectableTextBlock
-              x:Name="CommitText"
-              FontFamily="Cascadia Mono,Consolas"
-              Foreground="{DynamicResource Brush.Text.Primary}"
-              Text="{Binding Commit}"
-              TextWrapping="Wrap" />
-        </StackPanel>
-
-        <StackPanel Spacing="5">
-          <TextBlock FontWeight="SemiBold" Text="Licence" />
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <SelectableTextBlock
-                x:Name="LicenseText"
-                Foreground="{DynamicResource Brush.Text.Primary}"
-                Text="{Binding License}"
-                VerticalAlignment="Center" />
+    <StackPanel Margin="8" MaxWidth="1040" HorizontalAlignment="Left" Spacing="6">
+      <!-- Identity first, and all of it in one card: the version, what it was built from, and what it is
+           licensed as are the three things this page is opened for. -->
+      <Border Classes="panel" Padding="16,14">
+        <StackPanel Spacing="14">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+            <StackPanel Spacing="5">
+              <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding ProductName}" />
+              <TextBlock
+                  Foreground="{DynamicResource Brush.Text.Secondary}"
+                  Text="The build on this machine, the commit it was built from, and where it keeps your files."
+                  TextWrapping="Wrap" />
+            </StackPanel>
             <Button
+                Grid.Column="1"
                 x:Name="RepositoryButton"
-                Command="{Binding OpenRepositoryCommand}"
                 Content="Open the repository"
-                ToolTip.Tip="{Binding Repository}" />
-          </StackPanel>
+                Command="{Binding OpenRepositoryCommand}"
+                ToolTip.Tip="{Binding Repository}"
+                VerticalAlignment="Center" />
+          </Grid>
+
+          <!-- The three identifiers in one row: they are read out together into a bug report, and stacked
+               vertically they were three separate-looking facts spread over a third of the page. -->
+          <Grid ColumnDefinitions="Auto,24,Auto,24,Auto,*">
+            <StackPanel>
+              <TextBlock Classes="label" Text="Version" />
+              <SelectableTextBlock x:Name="VersionText" Classes="identifier" Text="{Binding Version}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+              <TextBlock Classes="label" Text="Commit" />
+              <SelectableTextBlock x:Name="CommitText" Classes="identifier" Text="{Binding Commit}" />
+            </StackPanel>
+            <StackPanel Grid.Column="4">
+              <TextBlock Classes="label" Text="Licence" />
+              <SelectableTextBlock
+                  x:Name="LicenseText"
+                  Foreground="{DynamicResource Brush.Text.Primary}"
+                  Text="{Binding License}" />
+            </StackPanel>
+          </Grid>
         </StackPanel>
-      </StackPanel>
+      </Border>
 
       <!-- The one place in RemoteFlow that contacts a host the user did not configure, so it says exactly
            what it does before offering to do it, and the button is what starts it. -->
-      <StackPanel Grid.Row="2" IsVisible="{Binding CanCheckForUpdates}" Margin="0,28,0,0" Spacing="12">
-        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Updates" />
-        <TextBlock
-            Foreground="{DynamicResource Brush.Text.Secondary}"
-            Text="A check asks github.com for the version number of the newest release and nothing else: no account, no identifier, nothing about this machine. Nothing is downloaded until you ask for it. If you do, RemoteFlow checks what it downloaded against the SHA-256 the release published, then closes, installs, and opens again."
-            TextWrapping="Wrap" />
-
-        <StackPanel Orientation="Horizontal" Spacing="10">
-          <Button
-              x:Name="CheckForUpdatesButton"
-              Command="{Binding CheckForUpdatesCommand}"
-              Content="Check for updates"
-              IsEnabled="{Binding !IsCheckingForUpdates}" />
-          <!-- A second, separate press, and it opens a dialog before anything is downloaded. Hidden unless
-               there is an installer this machine can both use and verify, so it is never a button that
-               would fail after being pressed. -->
-          <Button
-              x:Name="InstallUpdateButton"
-              Classes="accent"
-              Command="{Binding InstallUpdateCommand}"
-              Content="Download and install"
-              IsVisible="{Binding CanInstallUpdate}" />
-          <Button
-              x:Name="CancelUpdateDownloadButton"
-              Command="{Binding CancelUpdateDownloadCommand}"
-              Content="Cancel the download"
-              IsVisible="{Binding IsInstallingUpdate}" />
-          <!-- Only appears when there is somewhere useful to go. Sending someone who is already current
-               to a download page invites them to reinstall what they are running. -->
-          <Button
-              x:Name="OpenReleasePageButton"
-              Command="{Binding OpenReleasePageCommand}"
-              Content="Open the release page"
-              IsVisible="{Binding IsUpdateAvailable}" />
-        </StackPanel>
-
-        <!-- The percentage lives here and never in the sentence below: a progress bar announces its own
-             value, and a screen reader re-reading a sentence on every buffer would be unusable. -->
-        <ProgressBar
-            x:Name="UpdateDownloadProgress"
-            AutomationProperties.Name="Update download progress"
-            IsVisible="{Binding IsInstallingUpdate}"
-            Maximum="100"
-            Minimum="0"
-            Value="{Binding UpdateDownloadPercent}" />
-
-        <!-- The whole result is in the sentence. Nothing here is carried by a colour or an icon, so it
-             reads the same to a screen reader as it does on screen. -->
-        <SelectableTextBlock
-            x:Name="UpdateStatusText"
-            Foreground="{DynamicResource Brush.Text.Primary}"
-            IsVisible="{Binding HasUpdateStatus}"
-            Text="{Binding UpdateStatus}"
-            TextWrapping="Wrap" />
-
-        <!-- Why there is no install button, said where the button would have been. A portable copy, a build
-             output directory, or a release with no installer this machine can verify. -->
-        <SelectableTextBlock
-            x:Name="InstallObstacleText"
-            Foreground="{DynamicResource Brush.Text.Secondary}"
-            IsVisible="{Binding HasInstallObstacle}"
-            Text="{Binding InstallObstacle}"
-            TextWrapping="Wrap" />
-
-        <CheckBox
-            x:Name="AutomaticUpdateCheckToggle"
-            Content="Check automatically, once each time RemoteFlow starts"
-            IsChecked="{Binding AutomaticUpdateCheckEnabled, Mode=TwoWay}" />
-      </StackPanel>
-
-      <!-- The diagnostics half. Paths are shown as well as opened: a path can be read out over a support
-           conversation, and it is the answer when the file manager itself will not start. -->
-      <StackPanel Grid.Row="3" Margin="0,28,0,0" Spacing="14">
-        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Your files" />
-
-        <StackPanel Spacing="5">
-          <TextBlock FontWeight="SemiBold" Text="Logs" />
-          <SelectableTextBlock
-              x:Name="LogDirectoryText"
-              FontFamily="Cascadia Mono,Consolas"
-              Foreground="{DynamicResource Brush.Text.Secondary}"
-              Text="{Binding LogDirectory}"
-              TextWrapping="Wrap" />
-          <Button
-              x:Name="OpenLogFolderButton"
-              Command="{Binding OpenLogFolderCommand}"
-              Content="Open the log folder"
-              HorizontalAlignment="Left"
-              Margin="0,4,0,0" />
-        </StackPanel>
-
-        <StackPanel Spacing="5">
-          <TextBlock FontWeight="SemiBold" Text="Data" />
+      <Border Classes="panel" IsVisible="{Binding CanCheckForUpdates}" Padding="16">
+        <StackPanel Spacing="12">
+          <TextBlock Classes="panel-title" Text="UPDATES" />
           <TextBlock
               Foreground="{DynamicResource Brush.Text.Secondary}"
-              Text="Connections, settings, trusted host keys, and credential references."
+              Text="A check asks github.com for the version number of the newest release and nothing else: no account, no identifier, nothing about this machine. Nothing is downloaded until you ask for it. If you do, RemoteFlow checks what it downloaded against the SHA-256 the release published, then closes, installs, and opens again."
               TextWrapping="Wrap" />
-          <SelectableTextBlock
-              x:Name="DataDirectoryText"
-              FontFamily="Cascadia Mono,Consolas"
-              Foreground="{DynamicResource Brush.Text.Secondary}"
-              Text="{Binding DataDirectory}"
-              TextWrapping="Wrap" />
-          <Button
-              x:Name="OpenDataFolderButton"
-              Command="{Binding OpenDataFolderCommand}"
-              Content="Open the data folder"
-              HorizontalAlignment="Left"
-              Margin="0,4,0,0" />
-        </StackPanel>
 
-        <TextBlock
-            x:Name="StatusText"
-            Foreground="{DynamicResource Brush.Danger}"
-            IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-            Text="{Binding StatusText}"
-            TextWrapping="Wrap" />
-      </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button
+                x:Name="CheckForUpdatesButton"
+                Command="{Binding CheckForUpdatesCommand}"
+                Content="Check for updates"
+                IsEnabled="{Binding !IsCheckingForUpdates}" />
+            <!-- A second, separate press, and it opens a dialog before anything is downloaded. Hidden unless
+                 there is an installer this machine can both use and verify, so it is never a button that
+                 would fail after being pressed. -->
+            <Button
+                x:Name="InstallUpdateButton"
+                Classes="accent"
+                Command="{Binding InstallUpdateCommand}"
+                Content="Download and install"
+                IsVisible="{Binding CanInstallUpdate}" />
+            <Button
+                x:Name="CancelUpdateDownloadButton"
+                Command="{Binding CancelUpdateDownloadCommand}"
+                Content="Cancel the download"
+                IsVisible="{Binding IsInstallingUpdate}" />
+            <!-- Only appears when there is somewhere useful to go. Sending someone who is already current
+                 to a download page invites them to reinstall what they are running. -->
+            <Button
+                x:Name="OpenReleasePageButton"
+                Command="{Binding OpenReleasePageCommand}"
+                Content="Open the release page"
+                IsVisible="{Binding IsUpdateAvailable}" />
+          </StackPanel>
+
+          <!-- The percentage lives here and never in the sentence below: a progress bar announces its own
+               value, and a screen reader re-reading a sentence on every buffer would be unusable. -->
+          <ProgressBar
+              x:Name="UpdateDownloadProgress"
+              AutomationProperties.Name="Update download progress"
+              IsVisible="{Binding IsInstallingUpdate}"
+              Maximum="100"
+              Minimum="0"
+              Value="{Binding UpdateDownloadPercent}" />
+
+          <!-- The whole result is in the sentence. Nothing here is carried by a colour or an icon, so it
+               reads the same to a screen reader as it does on screen. -->
+          <SelectableTextBlock
+              x:Name="UpdateStatusText"
+              Foreground="{DynamicResource Brush.Text.Primary}"
+              IsVisible="{Binding HasUpdateStatus}"
+              Text="{Binding UpdateStatus}"
+              TextWrapping="Wrap" />
+
+          <!-- Why there is no install button, said where the button would have been. A portable copy, a build
+               output directory, or a release with no installer this machine can verify. -->
+          <SelectableTextBlock
+              x:Name="InstallObstacleText"
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              IsVisible="{Binding HasInstallObstacle}"
+              Text="{Binding InstallObstacle}"
+              TextWrapping="Wrap" />
+
+          <CheckBox
+              x:Name="AutomaticUpdateCheckToggle"
+              Content="Check automatically, once each time RemoteFlow starts"
+              IsChecked="{Binding AutomaticUpdateCheckEnabled, Mode=TwoWay}" />
+        </StackPanel>
+      </Border>
+
+      <!-- The diagnostics half. Paths are shown as well as opened: a path can be read out over a support
+           conversation, and it is the answer when the file manager itself will not start. The two folders
+           sit side by side because they are the same kind of answer, not a sequence. -->
+      <Border Classes="panel" Padding="16">
+        <StackPanel Spacing="12">
+          <TextBlock Classes="panel-title" Text="YOUR FILES" />
+          <Grid ColumnDefinitions="*,16,*" RowDefinitions="*,Auto" RowSpacing="10">
+            <StackPanel>
+              <TextBlock Classes="label" Text="Logs" />
+              <SelectableTextBlock x:Name="LogDirectoryText" Classes="identifier" Text="{Binding LogDirectory}" />
+              <TextBlock Classes="hint" Text="What RemoteFlow wrote down about this session." />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+              <TextBlock Classes="label" Text="Data" />
+              <SelectableTextBlock x:Name="DataDirectoryText" Classes="identifier" Text="{Binding DataDirectory}" />
+              <TextBlock
+                  Classes="hint"
+                  Text="Connections, settings, trusted host keys, and credential references." />
+            </StackPanel>
+            <Button
+                Grid.Row="1"
+                x:Name="OpenLogFolderButton"
+                Command="{Binding OpenLogFolderCommand}"
+                Content="Open the log folder"
+                HorizontalAlignment="Left" />
+            <Button
+                Grid.Row="1"
+                Grid.Column="2"
+                x:Name="OpenDataFolderButton"
+                Command="{Binding OpenDataFolderCommand}"
+                Content="Open the data folder"
+                HorizontalAlignment="Left" />
+          </Grid>
+
+          <TextBlock
+              x:Name="StatusText"
+              Foreground="{DynamicResource Brush.Danger}"
+              IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+              Text="{Binding StatusText}"
+              TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
 
       <!-- Hidden until something goes wrong, which is the normal case. Local only: it names the error and
            opens the folder the logs are already in. Nothing leaves the machine. -->
       <Border
-          Grid.Row="4"
           x:Name="LastErrorPanel"
-          Background="{DynamicResource Brush.Surface.1}"
-          BorderBrush="{DynamicResource Brush.Border}"
+          Classes="panel"
+          BorderBrush="{DynamicResource Brush.Danger}"
           BorderThickness="1"
-          CornerRadius="8"
           IsVisible="{Binding HasLastError}"
-          Margin="0,24,0,0"
-          Padding="14">
-        <StackPanel Spacing="8">
-          <TextBlock FontWeight="SemiBold" Text="Something went wrong this session" />
+          Padding="16">
+        <StackPanel Spacing="12">
+          <TextBlock Classes="panel-title" Text="SOMETHING WENT WRONG THIS SESSION" />
           <SelectableTextBlock
               x:Name="LastErrorText"
               Foreground="{DynamicResource Brush.Text.Primary}"
@@ -208,35 +211,37 @@
         </StackPanel>
       </Border>
 
-      <StackPanel Grid.Row="5" Margin="0,28,0,0" Spacing="8">
-        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Third-party notices" />
-        <TextBlock
-            Foreground="{DynamicResource Brush.Text.Secondary}"
-            Text="Every package inside this build, with its licence. Embedded in the binary, so it is here whether or not the repository is."
-            TextWrapping="Wrap" />
-        <Border
-            Background="{DynamicResource Brush.Surface.1}"
-            BorderBrush="{DynamicResource Brush.Border}"
-            BorderThickness="1"
-            CornerRadius="8"
-            Padding="12">
-          <!-- No wrapping, and a horizontal scrollbar instead. Laying out fifteen kilobytes of text as
-               wrapped paragraphs takes long enough to freeze the window; the same text as fixed lines is
-               instant, and this is a monospaced table that reads better unwrapped anyway. -->
-          <ScrollViewer
-              HorizontalScrollBarVisibility="Auto"
-              MaxHeight="320"
-              VerticalScrollBarVisibility="Auto">
-            <SelectableTextBlock
-                x:Name="NoticesText"
-                FontFamily="Cascadia Mono,Consolas"
-                FontSize="12"
-                Foreground="{DynamicResource Brush.Text.Secondary}"
-                Text="{Binding Notices}"
-                TextWrapping="NoWrap" />
-          </ScrollViewer>
-        </Border>
-      </StackPanel>
-    </Grid>
+      <Border Classes="panel" Margin="0,0,0,8" Padding="16">
+        <StackPanel Spacing="12">
+          <TextBlock Classes="panel-title" Text="THIRD-PARTY NOTICES" />
+          <TextBlock
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="Every package inside this build, with its licence. Embedded in the binary, so it is here whether or not the repository is."
+              TextWrapping="Wrap" />
+          <Border
+              Background="{DynamicResource Brush.Surface.0}"
+              BorderBrush="{DynamicResource Brush.Border}"
+              BorderThickness="1"
+              CornerRadius="{DynamicResource Radius.Control}"
+              Padding="12">
+            <!-- No wrapping, and a horizontal scrollbar instead. Laying out fifteen kilobytes of text as
+                 wrapped paragraphs takes long enough to freeze the window; the same text as fixed lines is
+                 instant, and this is a monospaced table that reads better unwrapped anyway. -->
+            <ScrollViewer
+                HorizontalScrollBarVisibility="Auto"
+                MaxHeight="320"
+                VerticalScrollBarVisibility="Auto">
+              <SelectableTextBlock
+                  x:Name="NoticesText"
+                  FontFamily="Cascadia Mono,Consolas"
+                  FontSize="12"
+                  Foreground="{DynamicResource Brush.Text.Secondary}"
+                  Text="{Binding Notices}"
+                  TextWrapping="NoWrap" />
+            </ScrollViewer>
+          </Border>
+        </StackPanel>
+      </Border>
+    </StackPanel>
   </ScrollViewer>
 </UserControl>
