@@ -32,6 +32,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     public TerminalWorkspaceViewModel()
         : base("Terminals")
     {
+        CommandLibrary = new CommandSnippetPaletteViewModel();
         Sessions.CollectionChanged += OnSessionsChanged;
     }
 
@@ -82,7 +83,8 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         TerminalSettingsViewModel? terminalSettings,
         IShellProfileService? shellProfileService,
         ISystemTerminalLauncher? systemTerminalLauncher,
-        ISessionManager? sessionManager = null)
+        ISessionManager? sessionManager = null,
+        CommandSnippetLibrary? commandSnippets = null)
         : base("Terminals")
     {
         _ptyService = ptyService ?? throw new ArgumentNullException(nameof(ptyService));
@@ -95,6 +97,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         _shellProfileService = shellProfileService;
         _systemTerminalLauncher = systemTerminalLauncher;
         _sessionManager = sessionManager;
+        CommandLibrary = new CommandSnippetPaletteViewModel(commandSnippets ?? new CommandSnippetLibrary());
         Sessions.CollectionChanged += OnSessionsChanged;
         if (_shellProfileService is { } activeProfileService)
         {
@@ -119,6 +122,9 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     public KeymapService Keymap { get; } = new();
 
     public TerminalClipboardController? ClipboardController { get; }
+
+    /// <summary>The searchable library of commands, typed at the prompt of the selected terminal.</summary>
+    public CommandSnippetPaletteViewModel CommandLibrary { get; }
 
     public IWorkspaceSessionViewModel? SelectedSession { get; private set; }
 
@@ -520,6 +526,50 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     public void ReportError(string? message)
     {
         SetError(message);
+    }
+
+    /// <summary>
+    /// Opens the command library over the workspace, for the terminal that has the keyboard.
+    /// </summary>
+    /// <remarks>
+    /// A remote desktop or a file pane has no prompt to type at, so with one of those selected the library
+    /// says so rather than opening onto a list that could go nowhere.
+    /// </remarks>
+    public bool OpenCommandLibrary()
+    {
+        if (SelectedTerminalSession is null)
+        {
+            SetError("Select a terminal to insert a command into.");
+            return false;
+        }
+
+        SetError(null);
+        CommandLibrary.Open();
+        return true;
+    }
+
+    /// <summary>
+    /// Types the highlighted command at the cursor of the selected terminal and closes the library.
+    /// </summary>
+    /// <remarks>
+    /// The command is sent as a bracketed paste and carries no newline: a shell that understands bracketed
+    /// paste will not run it however many lines it has, and the user's own Enter is what runs it. That is
+    /// the whole point of inserting rather than executing — a command with a &lt;placeholder&gt; in it has
+    /// to be edited first.
+    /// </remarks>
+    public async Task<bool> InsertSelectedCommandAsync(CancellationToken cancellationToken = default)
+    {
+        var session = SelectedTerminalSession;
+        var chosen = CommandLibrary.Commit();
+        if (chosen is null || session is null)
+        {
+            return false;
+        }
+
+        await session.SendInputAsync(
+            TerminalClipboardController.CreateBracketedPaste(chosen.Command),
+            cancellationToken).ConfigureAwait(true);
+        return true;
     }
 
     public async Task OpenInSystemTerminalAsync(

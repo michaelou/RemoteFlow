@@ -47,6 +47,13 @@ public sealed class TerminalShortcutsViewModel
                 new("Shift+Enter", "Jump to the previous match"),
                 new("Esc", "Close the find bar"),
             ]),
+            new("Command library",
+            [
+                .. Rows(bindings, KeymapCommand.CommandLibrary, "Open the library of commands"),
+                new("Enter", "Type the highlighted command at the prompt — it is not run for you"),
+                new("↑ / ↓", "Move through the matches"),
+                new("Esc", "Close the library"),
+            ]),
             new("Terminals",
             [
                 .. Rows(bindings, KeymapCommand.NewTerminal),

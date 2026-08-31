@@ -207,7 +207,9 @@ public sealed partial class MainWindow : Window
 
     private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.K && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        // Ctrl+K exactly, not Ctrl and K among others: this handler tunnels from the window, so a
+        // HasFlag test claimed Ctrl+Shift+K — the terminal's command library — before the page saw it.
+        if (e.Key == Key.K && e.KeyModifiers == KeyModifiers.Control)
         {
             if (!_viewModel.Palette.IsOpen)
             {

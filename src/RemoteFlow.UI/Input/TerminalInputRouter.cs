@@ -104,6 +104,11 @@ public sealed class TerminalInputRouter(KeymapService keymap)
             case KeymapCommand.FindTerminal:
                 selectedTerminal?.OpenFind();
                 break;
+            case KeymapCommand.CommandLibrary:
+                // Opening is all that happens here; the view moves the keyboard into the search box, the
+                // same division of labour the find bar above already uses.
+                _ = workspace.OpenCommandLibrary();
+                break;
             case KeymapCommand.LeaveTerminal:
                 // Purely a focus move, which is the view's business; it is handled before the command
                 // ever reaches here. Listed so the switch stays exhaustive rather than throwing.

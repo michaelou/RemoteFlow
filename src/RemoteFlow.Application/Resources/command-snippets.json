@@ -1,0 +1,432 @@
+{
+  "groups": [
+    {
+      "id": "disk",
+      "name": "Disk & Space",
+      "commands": [
+        {
+          "id": "disk-filesystem-usage",
+          "title": "Check disk usage",
+          "command": "df -h",
+          "description": "Show filesystem disk usage and available space in human-readable format.",
+          "tags": ["disk", "space", "filesystem", "storage"],
+          "risk": "safe"
+        },
+        {
+          "id": "disk-inode-usage",
+          "title": "Check inode usage",
+          "command": "df -i",
+          "description": "Show inode usage. Useful when a filesystem appears to have space but cannot create new files.",
+          "tags": ["disk", "inode", "filesystem", "space"],
+          "risk": "safe"
+        },
+        {
+          "id": "disk-directory-sizes",
+          "title": "Directory sizes",
+          "command": "du -sh *",
+          "description": "Show the total size of files and directories in the current directory.",
+          "tags": ["disk", "space", "directory", "size"],
+          "risk": "safe"
+        },
+        {
+          "id": "disk-directory-sizes-sorted",
+          "title": "Directory sizes sorted",
+          "command": "du -sh * | sort -h",
+          "description": "Show files and directories sorted by disk usage.",
+          "tags": ["disk", "space", "directory", "sort"],
+          "risk": "safe"
+        },
+        {
+          "id": "disk-var-usage",
+          "title": "Find large directories under /var",
+          "command": "du -xh /var/* | sort -h",
+          "description": "Show disk usage for directories under /var sorted by size.",
+          "tags": ["disk", "space", "var", "directory"],
+          "risk": "safe"
+        },
+        {
+          "id": "disk-largest-items",
+          "title": "Find largest files and directories",
+          "command": "du -ah <path> | sort -rh | head",
+          "description": "Find the largest files and directories underneath a path.",
+          "tags": ["disk", "space", "large", "files", "directory"],
+          "risk": "safe"
+        },
+        {
+          "id": "disk-list-file-sizes",
+          "title": "List files with sizes",
+          "command": "ls -lh",
+          "description": "List files with human-readable file sizes.",
+          "tags": ["disk", "files", "size", "list"],
+          "risk": "safe"
+        },
+        {
+          "id": "disk-block-devices",
+          "title": "Show disks and partitions",
+          "command": "lsblk",
+          "description": "Show block devices, partitions and mount points.",
+          "tags": ["disk", "partition", "mount", "storage"],
+          "risk": "safe"
+        },
+        {
+          "id": "disk-mounts",
+          "title": "Show mounted filesystems",
+          "command": "mount",
+          "description": "Display currently mounted filesystems and their mount options.",
+          "tags": ["disk", "mount", "filesystem"],
+          "risk": "safe"
+        },
+        {
+          "id": "disk-large-files",
+          "title": "Find files larger than 1 GB",
+          "command": "find / -type f -size +1G 2>/dev/null",
+          "description": "Search the filesystem for files larger than 1 GB.",
+          "tags": ["disk", "space", "large", "files", "find"],
+          "risk": "safe"
+        },
+        {
+          "id": "disk-large-var-files",
+          "title": "Find large files under /var",
+          "command": "find /var -type f -size +1G -exec ls -lh {} \\; 2>/dev/null",
+          "description": "Find files larger than 1 GB under /var and display their sizes.",
+          "tags": ["disk", "space", "large", "files", "var"],
+          "risk": "safe"
+        },
+        {
+          "id": "disk-deleted-open-files",
+          "title": "Find deleted files still using space",
+          "command": "lsof +L1",
+          "description": "Find deleted files still held open by processes. Useful when df reports more usage than du.",
+          "tags": ["disk", "space", "deleted", "lsof", "logs"],
+          "risk": "safe"
+        }
+      ]
+    },
+    {
+      "id": "docker",
+      "name": "Docker & Containers",
+      "commands": [
+        {
+          "id": "docker-running-containers",
+          "title": "Running containers",
+          "command": "docker ps",
+          "description": "Show currently running Docker containers.",
+          "tags": ["docker", "container", "running"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-all-containers",
+          "title": "All containers",
+          "command": "docker ps -a",
+          "description": "Show all Docker containers including stopped containers.",
+          "tags": ["docker", "container", "stopped", "running"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-logs",
+          "title": "Container logs",
+          "command": "docker logs <container>",
+          "description": "Display logs from a Docker container.",
+          "tags": ["docker", "container", "logs"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-tail-logs",
+          "title": "Latest container logs",
+          "command": "docker logs --tail 100 <container>",
+          "description": "Show the latest 100 log lines from a container.",
+          "tags": ["docker", "container", "logs", "tail"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-follow-logs",
+          "title": "Follow container logs",
+          "command": "docker logs -f <container>",
+          "description": "Follow container logs in real time.",
+          "tags": ["docker", "container", "logs", "follow", "live"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-large-log-files",
+          "title": "Find large container log files",
+          "command": "sudo find /var/lib/docker/containers -type f -name '*-json.log' -exec du -h {} + | sort -h | tail -20",
+          "description": "Show the twenty largest container log files on disk. Useful when Docker is filling the disk but the containers themselves look small.",
+          "tags": ["docker", "container", "logs", "disk", "space", "large", "files"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-truncate-log-files",
+          "title": "Truncate container log files",
+          "command": "sudo find /var/lib/docker/containers -type f -name '*-json.log' -exec truncate -s 0 {} \\;",
+          "description": "Empty every container log file, reclaiming the space immediately. The logs are gone: copy anything still needed before running, and set a log rotation limit so it does not recur.",
+          "tags": ["docker", "container", "logs", "truncate", "cleanup", "disk", "space"],
+          "risk": "danger"
+        },
+        {
+          "id": "docker-inspect",
+          "title": "Inspect container",
+          "command": "docker inspect <container>",
+          "description": "Inspect container configuration, mounts, networking and runtime information.",
+          "tags": ["docker", "container", "inspect", "network", "mount"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-shell",
+          "title": "Open shell in container",
+          "command": "docker exec -it <container> sh",
+          "description": "Open an interactive shell inside a running container.",
+          "tags": ["docker", "container", "shell", "exec", "ssh"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-stats",
+          "title": "Container resource usage",
+          "command": "docker stats",
+          "description": "Show live CPU, memory, network and I/O usage for running containers.",
+          "tags": ["docker", "container", "cpu", "memory", "network", "stats"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-disk-usage",
+          "title": "Docker disk usage",
+          "command": "docker system df",
+          "description": "Show disk usage for Docker images, containers, volumes and build cache.",
+          "tags": ["docker", "disk", "space", "images", "volumes"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-disk-usage-detailed",
+          "title": "Detailed Docker disk usage",
+          "command": "docker system df -v",
+          "description": "Show detailed Docker disk usage by images, containers and volumes.",
+          "tags": ["docker", "disk", "space", "images", "volumes", "detailed"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-images",
+          "title": "List Docker images",
+          "command": "docker images",
+          "description": "List locally available Docker images and their sizes.",
+          "tags": ["docker", "images", "disk", "space"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-volumes",
+          "title": "List Docker volumes",
+          "command": "docker volume ls",
+          "description": "List Docker volumes.",
+          "tags": ["docker", "volume", "storage"],
+          "risk": "safe"
+        },
+        {
+          "id": "docker-system-prune",
+          "title": "Prune unused Docker resources",
+          "command": "docker system prune",
+          "description": "Remove unused Docker containers, networks, images and build cache.",
+          "tags": ["docker", "cleanup", "prune", "disk", "space"],
+          "risk": "warning"
+        },
+        {
+          "id": "docker-image-prune",
+          "title": "Prune unused Docker images",
+          "command": "docker image prune",
+          "description": "Remove dangling Docker images.",
+          "tags": ["docker", "images", "cleanup", "prune"],
+          "risk": "warning"
+        },
+        {
+          "id": "docker-container-prune",
+          "title": "Prune stopped containers",
+          "command": "docker container prune",
+          "description": "Remove all stopped Docker containers.",
+          "tags": ["docker", "container", "cleanup", "prune"],
+          "risk": "warning"
+        },
+        {
+          "id": "docker-volume-prune",
+          "title": "Prune unused Docker volumes",
+          "command": "docker volume prune",
+          "description": "Remove unused Docker volumes. Verify volumes are no longer required before running.",
+          "tags": ["docker", "volume", "cleanup", "prune", "data"],
+          "risk": "danger"
+        }
+      ]
+    },
+    {
+      "id": "processes",
+      "name": "CPU, Memory & Processes",
+      "commands": [
+        {
+          "id": "memory-usage",
+          "title": "Memory usage",
+          "command": "free -h",
+          "description": "Show RAM and swap usage in human-readable format.",
+          "tags": ["memory", "ram", "swap"],
+          "risk": "safe"
+        },
+        {
+          "id": "process-top",
+          "title": "Live process usage",
+          "command": "top",
+          "description": "Interactively monitor CPU, memory and running processes.",
+          "tags": ["cpu", "memory", "process", "performance", "top"],
+          "risk": "safe"
+        },
+        {
+          "id": "process-list",
+          "title": "List processes",
+          "command": "ps aux",
+          "description": "List running processes with CPU and memory information.",
+          "tags": ["process", "cpu", "memory"],
+          "risk": "safe"
+        },
+        {
+          "id": "process-memory",
+          "title": "Top memory-consuming processes",
+          "command": "ps aux --sort=-%mem | head",
+          "description": "Show processes consuming the most memory.",
+          "tags": ["process", "memory", "ram", "performance"],
+          "risk": "safe"
+        },
+        {
+          "id": "process-cpu",
+          "title": "Top CPU-consuming processes",
+          "command": "ps aux --sort=-%cpu | head",
+          "description": "Show processes consuming the most CPU.",
+          "tags": ["process", "cpu", "performance"],
+          "risk": "safe"
+        }
+      ]
+    },
+    {
+      "id": "logs",
+      "name": "Logs & Troubleshooting",
+      "commands": [
+        {
+          "id": "journal-errors",
+          "title": "Recent system errors",
+          "command": "journalctl -xe",
+          "description": "Inspect recent systemd journal entries and errors.",
+          "tags": ["logs", "journal", "error", "systemd"],
+          "risk": "safe"
+        },
+        {
+          "id": "service-logs",
+          "title": "Service logs",
+          "command": "journalctl -u <service>",
+          "description": "Show systemd journal logs for a specific service.",
+          "tags": ["logs", "journal", "service", "systemd"],
+          "risk": "safe"
+        },
+        {
+          "id": "kernel-messages",
+          "title": "Recent kernel messages",
+          "command": "dmesg | tail",
+          "description": "Show the latest kernel messages.",
+          "tags": ["logs", "kernel", "dmesg", "system"],
+          "risk": "safe"
+        },
+        {
+          "id": "tail-log",
+          "title": "Follow log file",
+          "command": "tail -f <logfile>",
+          "description": "Follow new lines being written to a log file in real time.",
+          "tags": ["logs", "tail", "follow", "live"],
+          "risk": "safe"
+        },
+        {
+          "id": "grep-errors",
+          "title": "Search log for errors",
+          "command": "grep -i error <logfile>",
+          "description": "Search a log file for lines containing error, ignoring case.",
+          "tags": ["logs", "error", "grep", "search"],
+          "risk": "safe"
+        },
+        {
+          "id": "grep-recursive",
+          "title": "Search files recursively",
+          "command": "grep -R \"<text>\" <path>",
+          "description": "Recursively search files underneath a path for matching text.",
+          "tags": ["grep", "search", "files", "logs"],
+          "risk": "safe"
+        }
+      ]
+    },
+    {
+      "id": "services",
+      "name": "Services",
+      "commands": [
+        {
+          "id": "service-status",
+          "title": "Service status",
+          "command": "systemctl status <service>",
+          "description": "Check whether a systemd service is running and inspect recent status information.",
+          "tags": ["service", "systemd", "status", "troubleshooting"],
+          "risk": "safe"
+        }
+      ]
+    },
+    {
+      "id": "network",
+      "name": "Network",
+      "commands": [
+        {
+          "id": "network-open-connections",
+          "title": "Show network sockets",
+          "command": "lsof -i",
+          "description": "Show processes with open network sockets.",
+          "tags": ["network", "ports", "connections", "lsof"],
+          "risk": "safe"
+        },
+        {
+          "id": "network-listening-ports",
+          "title": "Show listening ports",
+          "command": "ss -tulpn",
+          "description": "Show listening TCP and UDP ports and the associated processes.",
+          "tags": ["network", "ports", "tcp", "udp", "listen"],
+          "risk": "safe"
+        },
+        {
+          "id": "network-curl-verbose",
+          "title": "Debug HTTP request",
+          "command": "curl -v <URL>",
+          "description": "Make an HTTP request with verbose connection and protocol information.",
+          "tags": ["network", "http", "https", "curl", "api", "debug"],
+          "risk": "safe"
+        },
+        {
+          "id": "network-curl-headers",
+          "title": "Check HTTP headers",
+          "command": "curl -I <URL>",
+          "description": "Fetch HTTP response headers without downloading the response body.",
+          "tags": ["network", "http", "https", "curl", "headers"],
+          "risk": "safe"
+        },
+        {
+          "id": "network-ping",
+          "title": "Check host connectivity",
+          "command": "ping <host>",
+          "description": "Test basic network reachability to a host.",
+          "tags": ["network", "ping", "connectivity", "host"],
+          "risk": "safe"
+        },
+        {
+          "id": "network-nslookup",
+          "title": "DNS lookup",
+          "command": "nslookup <host>",
+          "description": "Resolve a hostname using DNS.",
+          "tags": ["network", "dns", "hostname", "nslookup"],
+          "risk": "safe"
+        },
+        {
+          "id": "network-dig",
+          "title": "Detailed DNS lookup",
+          "command": "dig <host>",
+          "description": "Query DNS and display detailed DNS response information.",
+          "tags": ["network", "dns", "hostname", "dig"],
+          "risk": "safe"
+        }
+      ]
+    }
+  ]
+}

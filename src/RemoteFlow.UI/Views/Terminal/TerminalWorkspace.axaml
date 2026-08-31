@@ -301,6 +301,26 @@
       </ItemsControl>
     </Border>
 
+    <!-- Over the whole workspace, not inside a tile: the library belongs to the terminal that has the
+         keyboard, and a tile in a grid is too small to read a command in. -->
+    <Border
+        x:Name="CommandLibraryOverlay"
+        Grid.Row="0"
+        Grid.RowSpan="4"
+        Background="#99000000"
+        IsVisible="{Binding CommandLibrary.IsOpen}"
+        PointerPressed="CommandLibraryOverlay_OnPointerPressed"
+        ZIndex="1000">
+      <terminalViews:CommandLibraryView
+          x:Name="CommandLibraryPanel"
+          HorizontalAlignment="Center"
+          VerticalAlignment="Top"
+          CloseRequested="CommandLibrary_OnCloseRequested"
+          DataContext="{Binding CommandLibrary}"
+          InsertRequested="CommandLibrary_OnInsertRequested"
+          Margin="24,48,24,24" />
+    </Border>
+
     <StackPanel Grid.Row="3" Margin="0,8,0,0" Spacing="4">
       <TextBlock
           Foreground="{DynamicResource Brush.Warning}"

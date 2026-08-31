@@ -95,4 +95,33 @@ public sealed class TerminalsPageViewModel : TerminalWorkspaceViewModel
             sessionManager)
     {
     }
+
+    /// <summary>The composition the application runs with. The optional collaborators are nullable so a
+    /// test can build the page around the one it is exercising, as the base class already allows.</summary>
+    public TerminalsPageViewModel(
+        IPtyService ptyService,
+        IUiDispatcher dispatcher,
+        ISettingsStore? settings,
+        IConfirmationDialogService? confirmation,
+        KeymapService? keymap,
+        TerminalClipboardController? clipboardController,
+        TerminalSettingsViewModel? terminalSettings,
+        IShellProfileService? shellProfileService,
+        ISystemTerminalLauncher? systemTerminalLauncher,
+        ISessionManager? sessionManager,
+        CommandSnippetLibrary? commandSnippets)
+        : base(
+            ptyService,
+            dispatcher,
+            settings,
+            confirmation,
+            keymap,
+            clipboardController,
+            terminalSettings,
+            shellProfileService,
+            systemTerminalLauncher,
+            sessionManager,
+            commandSnippets)
+    {
+    }
 }

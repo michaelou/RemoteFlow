@@ -98,6 +98,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IClipboardService, AvaloniaClipboardService>();
         services.TryAddSingleton<IPasteWarningService, PasteWarningDialogService>();
         services.TryAddSingleton<TerminalClipboardController>();
+        services.TryAddSingleton<CommandSnippetLibrary>();
         services.TryAddSingleton<IConfirmationDialogService, ConfirmationDialogService>();
         services.TryAddSingleton<IApplicationShutdown, ApplicationShutdownService>();
         services.TryAddSingleton<IRemoteEditCloseGuard, RemoteEditCloseGuard>();

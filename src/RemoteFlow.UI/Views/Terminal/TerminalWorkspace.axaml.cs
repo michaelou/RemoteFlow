@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RemoteFlow.Application.Services;
 using RemoteFlow.UI.Input;
@@ -276,6 +277,13 @@ public sealed partial class TerminalWorkspace : UserControl
             return;
         }
 
+        if (viewModel.CommandLibrary.IsOpen)
+        {
+            // The library holds the keyboard while it is open, and its search box is a TextBox like the
+            // find bar's: without this its Escape and Enter would be read as the find bar's.
+            return;
+        }
+
         if (e.Source is TextBox && viewModel.SelectedTerminalSession is { } searchSession)
         {
             if (e.Key == Key.Escape)
@@ -343,7 +351,11 @@ public sealed partial class TerminalWorkspace : UserControl
         }
 
         await TerminalInputRouter.ExecuteAsync(command, viewModel, ToggleFullscreen).ConfigureAwait(true);
-        if (viewModel.SelectedTerminalSession?.IsFindOpen == true)
+        if (viewModel.CommandLibrary.IsOpen)
+        {
+            FocusCommandLibrary();
+        }
+        else if (viewModel.SelectedTerminalSession?.IsFindOpen == true)
         {
             FocusFindBox();
         }
@@ -351,6 +363,39 @@ public sealed partial class TerminalWorkspace : UserControl
         {
             FocusTerminal();
         }
+    }
+
+    /// <summary>Types the chosen command at the prompt and gives the terminal the keyboard back, so the
+    /// Enter that runs it is the user's own.</summary>
+    private async void CommandLibrary_OnInsertRequested(object? sender, EventArgs e)
+    {
+        if (DataContext is TerminalsPageViewModel viewModel)
+        {
+            _ = await viewModel.InsertSelectedCommandAsync().ConfigureAwait(true);
+            FocusTerminal();
+        }
+    }
+
+    private void CommandLibrary_OnCloseRequested(object? sender, EventArgs e)
+    {
+        FocusTerminal();
+    }
+
+    private void CommandLibraryOverlay_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, CommandLibraryOverlay) && DataContext is TerminalsPageViewModel viewModel)
+        {
+            viewModel.CommandLibrary.Close();
+            FocusTerminal();
+            e.Handled = true;
+        }
+    }
+
+    private void FocusCommandLibrary()
+    {
+        // Posted rather than called: the overlay becomes visible with the property change that opened it,
+        // and a control that is not yet visible cannot take focus.
+        Dispatcher.UIThread.Post(CommandLibraryPanel.FocusSearch);
     }
 
     private void ToggleFullscreen()

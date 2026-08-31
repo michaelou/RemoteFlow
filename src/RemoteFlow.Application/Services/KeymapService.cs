@@ -105,6 +105,7 @@ public enum KeymapCommand
     SwitchToTerminal9,
     ToggleFullscreen,
     LeaveTerminal,
+    CommandLibrary,
 }
 
 public enum KeymapResultKind
@@ -241,6 +242,7 @@ public sealed class KeymapService
             App("Ctrl+Shift+W", TerminalKey.W, TerminalModifiers.Control | TerminalModifiers.Shift, KeymapCommand.CloseTerminal, "Close the active terminal"),
             App("Ctrl+Shift+A", TerminalKey.A, TerminalModifiers.Control | TerminalModifiers.Shift, KeymapCommand.SelectAll, "Select all terminal text"),
             App("Ctrl+Shift+F", TerminalKey.F, TerminalModifiers.Control | TerminalModifiers.Shift, KeymapCommand.FindTerminal, "Find in terminal scrollback"),
+            App("Ctrl+Shift+K", TerminalKey.K, TerminalModifiers.Control | TerminalModifiers.Shift, KeymapCommand.CommandLibrary, "Open the command library"),
             App("Ctrl+Tab", TerminalKey.Tab, TerminalModifiers.Control, KeymapCommand.CycleTerminal, "Select the next terminal"),
             App("Ctrl+Shift+Tab", TerminalKey.Tab, TerminalModifiers.Control | TerminalModifiers.Shift, KeymapCommand.CycleTerminalBackward, "Select the previous terminal"),
             App("F11", TerminalKey.F11, TerminalModifiers.None, KeymapCommand.ToggleFullscreen, "Toggle full screen"),
@@ -277,9 +279,12 @@ public sealed class KeymapService
             Pty("F11 (terminal)", TerminalKey.F11, TerminalModifiers.Shift, Esc("[23~"), "Send terminal F11 (Shift avoids the app shortcut)"),
             Pty("F12", TerminalKey.F12, TerminalModifiers.None, Esc("[24~"), "F12"),
         };
+        // Anchored to the binding they read as a continuation of rather than to a count of the rows above
+        // them, which a new binding anywhere earlier would silently shift.
+        var afterCycling = bindings.FindIndex(binding => binding.Command == KeymapCommand.CycleTerminalBackward) + 1;
         for (var index = 1; index <= 9; index++)
         {
-            bindings.Insert(6 + index, App(
+            bindings.Insert(afterCycling + index - 1, App(
                 $"Alt+{index}",
                 (TerminalKey)((int)TerminalKey.D0 + index),
                 TerminalModifiers.Alt,

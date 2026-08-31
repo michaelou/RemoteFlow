@@ -1,0 +1,104 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Terminal.CommandLibraryView"
+    x:DataType="terminalViewModels:CommandSnippetPaletteViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal">
+  <!-- The badge takes its colour from a class rather than from a brush bound per item: a brush resolved
+       in the view model is resolved outside the theme, and the amber and the red have to follow it. -->
+  <UserControl.Styles>
+    <Style Selector="Border.risk">
+      <Setter Property="BorderBrush" Value="{DynamicResource Brush.Warning}" />
+    </Style>
+    <Style Selector="Border.risk > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}" />
+    </Style>
+    <Style Selector="Border.risk.destructive">
+      <Setter Property="BorderBrush" Value="{DynamicResource Brush.Danger}" />
+    </Style>
+    <Style Selector="Border.risk.destructive > TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Brush.Danger}" />
+    </Style>
+  </UserControl.Styles>
+  <Border
+      Width="720"
+      MaxHeight="560"
+      Padding="16"
+      Background="{DynamicResource Brush.Surface.1}"
+      BorderBrush="{DynamicResource Brush.Border}"
+      BorderThickness="1"
+      CornerRadius="12">
+    <Grid RowDefinitions="Auto,*,Auto">
+      <TextBox
+          x:Name="LibrarySearchBox"
+          AutomationProperties.Name="Search commands"
+          KeyDown="LibrarySearchBox_OnKeyDown"
+          PlaceholderText="Search commands — disk, docker logs, listening ports…"
+          Text="{Binding SearchText, Mode=TwoWay}" />
+
+      <Grid Grid.Row="1" Margin="0,8,0,0">
+        <ListBox
+            x:Name="LibraryResults"
+            AutomationProperties.Name="Commands"
+            DoubleTapped="LibraryResults_OnDoubleTapped"
+            ItemsSource="{Binding Results}"
+            SelectedItem="{Binding SelectedResult, Mode=TwoWay}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="terminalViewModels:CommandSnippetItemViewModel">
+              <Grid Margin="8,6" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
+                <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
+                <!-- The command itself is the thing being chosen, so it is shown verbatim and in the
+                     terminal's own kind of type rather than being summarized. -->
+                <TextBlock
+                    Grid.Row="1"
+                    FontFamily="Cascadia Mono,Consolas"
+                    Foreground="{DynamicResource Brush.Accent}"
+                    Text="{Binding Command}"
+                    TextWrapping="Wrap" />
+                <TextBlock
+                    Grid.Row="2"
+                    Foreground="{DynamicResource Brush.Text.Secondary}"
+                    Text="{Binding Description}"
+                    TextWrapping="Wrap" />
+                <Border
+                    Grid.Column="1"
+                    Grid.RowSpan="3"
+                    VerticalAlignment="Top"
+                    BorderThickness="1"
+                    Classes="risk"
+                    Classes.destructive="{Binding IsDestructive}"
+                    CornerRadius="6"
+                    IsVisible="{Binding HasRiskBadge}"
+                    Margin="8,0,0,0"
+                    Padding="6,2">
+                  <TextBlock FontSize="11" Text="{Binding RiskLabel}" />
+                </Border>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+
+        <TextBlock
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            IsVisible="{Binding HasEmptyState}"
+            MaxWidth="480"
+            Text="{Binding EmptyMessage}"
+            TextAlignment="Center"
+            TextWrapping="Wrap" />
+      </Grid>
+
+      <StackPanel Grid.Row="2" Margin="2,8,2,0" Spacing="4">
+        <!-- A command with a hole in it is exactly why Enter inserts rather than runs, so the two lines
+             sit together. -->
+        <TextBlock
+            Foreground="{DynamicResource Brush.Warning}"
+            IsVisible="{Binding SelectedResult.HasPlaceholder, FallbackValue=False}"
+            Text="This command has a &lt;placeholder&gt; to fill in before it will run." />
+        <TextBlock
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="Enter types the command at the prompt without running it • ↑↓ moves • Esc closes" />
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

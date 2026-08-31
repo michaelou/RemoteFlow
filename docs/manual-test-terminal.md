@@ -102,6 +102,11 @@ Click **UTF-8 split probe**. It sends the first byte of `漢` separately from th
    across the rest of the row — see the emulator defects table in ADR 0005. Do it on a line short enough to
    fit: readline reprints a wrapped line, so a long command hides the defect.
 
+9. Press `Ctrl+Shift+K`, type `docker log`, and press Enter. The command must appear at the prompt without
+   running, the cursor must be in the terminal — Enter then runs it — and the `<container>` placeholder must
+   still be there to edit. Repeat with Esc instead of Enter and confirm nothing was typed. Do this once at a
+   prompt inside `vim` as well: the insert arrives as a bracketed paste, so it must not trigger auto-indent.
+
 The control converts framework key events into terminal byte sequences before raising `UserInput`; the PTY adapter must forward those bytes unchanged.
 
 ## Resize
