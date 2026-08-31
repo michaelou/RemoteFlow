@@ -7,6 +7,24 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-31
+
+### Added
+
+- **A library of commands, one chord from the prompt.** `Ctrl+Shift+K` in a terminal opens a searchable
+  list of the commands worth reaching for when something is wrong — disk and inode usage, what is holding a
+  deleted file open, container logs and resource usage, the container log files that have grown and how to
+  empty them, listening ports, journal and kernel errors — and
+  Enter types the one you picked at the cursor. It does **not** run it: the command arrives as a bracketed
+  paste with no newline, so you can edit it and the Enter that runs it stays yours. That is what makes a
+  command with a `<placeholder>` in it worth offering at all, and the library says so under any command that
+  has one. Anything that removes something carries a badge — amber for **Careful**, red for **Destructive**
+  — so `docker volume prune` cannot be mistaken for another way of listing volumes. Searching matches the
+  title, the command, its tags and its description, and every word you type has to match, so `docker logs`
+  finds the three log commands rather than everything Docker. Esc closes it, the arrow keys move through the
+  matches, and the keyboard goes back to the terminal whichever way you leave. The library is fixed in this
+  release; adding and editing your own commands comes next.
+
 ### Fixed
 
 - **Editing a command in the middle no longer smears the line.** Typing a character anywhere but at the end
@@ -633,7 +651,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/michaelou/RemoteFlow/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/michaelou/RemoteFlow/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/michaelou/RemoteFlow/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/michaelou/RemoteFlow/compare/v0.6.0...v0.6.1
