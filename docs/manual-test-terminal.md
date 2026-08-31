@@ -95,6 +95,13 @@ Click **UTF-8 split probe**. It sends the first byte of `漢` separately from th
    blue, which is the colour the renderer used to take from its own fallback palette rather than the
    scheme's.
 
+8. Type a command that fits on one row without wrapping, arrow back into the middle of it, and type a
+   character; then backspace one out and type two others in. The row must read as the command does, and
+   Enter must run what the row shows. The shell's line editor opens a gap with `CSI 1 @` here instead of
+   reprinting the tail, and the emulator's own handler for that sequence repeats the cell at the cursor
+   across the rest of the row — see the emulator defects table in ADR 0005. Do it on a line short enough to
+   fit: readline reprints a wrapped line, so a long command hides the defect.
+
 The control converts framework key events into terminal byte sequences before raising `UserInput`; the PTY adapter must forward those bytes unchanged.
 
 ## Resize

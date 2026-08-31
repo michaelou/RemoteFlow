@@ -7,6 +7,20 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Fixed
+
+- **Editing a command in the middle no longer smears the line.** Typing a character anywhere but at the end
+  of the line — after arrowing back through a pasted command, or into one recalled with Up — repeated one
+  character across the rest of the row, or, where the cursor sat on a space, appeared to wipe everything
+  after it. Pressing Enter always ran the right command, because none of it ever reached the shell: this was
+  only ever what was on screen. `TERM=xterm-256color` advertises insert-character, so the shell's line
+  editor opens a one-column gap with `CSI 1 @` and prints the single character rather than reprinting the
+  tail; the terminal emulator answered that by copying the row over itself forwards, so every cell it read
+  had already been overwritten by the copy. RemoteFlow now performs the shift itself, backwards, and keeps
+  the sequence away from the emulator. Lines long enough to wrap were never affected, which is why short
+  commands looked broken and long ones did not. Filed upstream as
+  [tomlm/XTerm.NET#121](https://github.com/tomlm/XTerm.NET/issues/121).
+
 ## [0.7.0] - 2026-08-30
 
 ### Added

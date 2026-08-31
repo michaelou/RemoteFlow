@@ -30,6 +30,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IWorksp
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Utf8StreamDecoder _decoder = new();
     private readonly OscTitleParser _titleParser = new();
+    private readonly InsertCharacterCorrection _insertCharacters = new();
     private readonly Task _readTask;
     private readonly Task _exitTask;
     private readonly Lock _resizeSync = new();
@@ -504,7 +505,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IWorksp
                                 Model.Feed(truncationNotice);
                             }
 
-                            Model.Feed(text);
+                            FeedOutput(text);
                             if (IsFindOpen && SearchText.Length > 0)
                             {
                                 RefreshSearch();
@@ -599,6 +600,39 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IWorksp
     private async Task ObserveCompletionAsync()
     {
         await Task.WhenAll(_readTask, _exitTask).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Feeds one output frame to the terminal, applying the insert-characters sequences in it rather than
+    /// letting the emulator do it.
+    /// </summary>
+    /// <remarks>
+    /// See <see cref="InsertCharacterCorrection" /> for why. The segments are fed in order because a
+    /// sequence acts wherever the text before it left the cursor, and the display is rebuilt at the end only
+    /// when the frame ended on a sequence: every <see cref="TerminalControlModel.Feed(string)" /> rebuilds it
+    /// already.
+    /// </remarks>
+    private void FeedOutput(string text)
+    {
+        var rebuildNeeded = false;
+        foreach (var segment in _insertCharacters.Split(text))
+        {
+            if (segment.InsertCount > 0)
+            {
+                InsertCharacterCorrection.Apply(Model.Terminal, segment.InsertCount);
+                Model.SearchService.Invalidate();
+                rebuildNeeded = true;
+                continue;
+            }
+
+            Model.Feed(segment.Text);
+            rebuildNeeded = false;
+        }
+
+        if (rebuildNeeded)
+        {
+            Model.UpdateDisplay();
+        }
     }
 
     private async void OnUserInput(object? sender, TerminalUserInputEventArgs e)

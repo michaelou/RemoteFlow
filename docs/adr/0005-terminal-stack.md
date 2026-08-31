@@ -61,6 +61,19 @@ These answers are established from the 1.0.3 public API and exercised by the har
 | Color and font configuration? | Yes. `FontFamily`, `FontSize`, caret/selection brushes, and resource keys for the 256-color palette are exposed. Truecolor is rendered directly from terminal RGB values. |
 | Resize propagation? | Yes. `TerminalSizeChangedEventArgs` contains columns/rows and the harness calls `IPtyConnection.Resize`, which uses ConPTY on supported Windows versions. |
 
+## Emulator defects carried with a workaround
+
+The reconsideration rule lets a single failure keep this decision when the workaround and the upstream issue
+are written down. This is that record.
+
+| Defect | Where | Workaround |
+| --- | --- | --- |
+| `CSI Ps @` (insert characters) shifts a row to the right with a forward copy over itself, so the cell at the cursor is repeated to the end of the row. `XTerm.InputHandler.InsertChars` passes `applyInReverse: false` to `BufferLine.CopyCellsFrom`; a right shift of an overlapping range has to run backwards. `CSI 4 h` (insert mode) reaches the same copy in `InputHandler.Print`. | XTerm.NET 1.0.15, filed upstream as [tomlm/XTerm.NET#121](https://github.com/tomlm/XTerm.NET/issues/121); still present in 1.2.0 and 2.0.0-rc005 | `RemoteFlow.UI.ViewModels.Terminal.InsertCharacterCorrection` takes the sequence out of the output stream and performs the shift on the public buffer. Insert mode is left alone: no shell session uses it, and emulating it would mean taking over printing. Guarded by `TerminalInsertCharacterTests` and, against a live bash, `TerminalLiveShellEditingTests`. |
+
+Not cosmetic trivia: the sequence is how readline edits a line, so every mid-line edit in a shell showed it.
+Remove the correction only against a release whose `InsertChars` copies backwards — no released version
+does yet.
+
 ## Evidence format
 
 Future regression evidence belongs under `docs/evidence/terminal/`. Exported metric snapshots should be copied from `artifacts/terminal-spike/` into the evidence bundle when they support a bug report or benchmark change.
