@@ -130,6 +130,119 @@ public sealed class StorageWorkspaceTests
         }
     }
 
+    /// <summary>The third way onto the bucket, after the Upload button and a drag out of the local pane: a
+    /// file dragged straight off the desktop or the file manager. It carries paths and no pane, so nothing
+    /// is selected anywhere when it lands.</summary>
+    [Fact]
+    public async Task FilesDraggedInFromTheFileManagerUploadToThePrefixTheyWereDroppedOn()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var root = CreateTempDirectory();
+        try
+        {
+            var payload = Encoding.UTF8.GetBytes("payload bytes");
+            var dropped = Path.Combine(root, "report.bin");
+            await File.WriteAllBytesAsync(dropped, payload, token);
+            await using var fixture = StorageTestDoubles.CreateFixture();
+            fixture.Storage.Seed("/media/2024/keep.txt", [1]);
+            await fixture.Page.AttachAsync(fixture.Connection.Id, token);
+
+            // Only the remote pane takes such a drop. On the local pane the file is already on this
+            // machine, and copying it beside itself is not what the gesture means.
+            Assert.True(fixture.Page.Remote.AcceptsExternalFiles);
+            Assert.False(fixture.Page.Local.AcceptsExternalFiles);
+
+            var hovered = fixture.Page.Remote.Items.Single(item => item.Name == "2024");
+            await fixture.Page.Remote.DropExternalFilesAsync(
+                [dropped],
+                fixture.Page.Remote.DropTargetPath(hovered),
+                token);
+
+            // The folder under the pointer, not the prefix the pane happens to be showing.
+            Assert.Null(fixture.Page.ErrorMessage);
+            Assert.Contains("media/2024/report.bin", fixture.Storage.Keys);
+            Assert.Empty(fixture.Page.Local.SelectedItems);
+            Assert.Contains("2024", fixture.Page.Remote.FeedbackMessage, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>A drag that carries nothing this machine has a path for — an image dragged out of a
+    /// browser, an attachment the sender never spooled to disk — says so. Appearing to have worked is the
+    /// one outcome a drop may not have.</summary>
+    [Fact]
+    public async Task ADropCarryingNothingOnThisComputerSaysSoRatherThanAppearingToWork()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var fixture = StorageTestDoubles.CreateFixture();
+        await fixture.Page.AttachAsync(fixture.Connection.Id, token);
+
+        await fixture.Page.Remote.DropExternalFilesAsync(
+            [Path.Combine(Path.GetTempPath(), "remoteflow-never-existed", "gone.bin")],
+            fixture.Page.Remote.CurrentPath,
+            token);
+
+        Assert.Empty(fixture.Storage.Keys);
+        Assert.Contains(
+            "Nothing in that drop",
+            fixture.Page.Remote.FeedbackMessage,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>The pane has always said "Drop into media/2024" while the pointer is over a folder row.
+    /// This is the test that it means it, on both pages' shared pane and in both directions.</summary>
+    [Fact]
+    public async Task APaneToPaneDropLandsInTheFolderUnderThePointerAndNotTheOpenOne()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var root = CreateTempDirectory();
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root, "report.bin"), "payload", token);
+            var into = Directory.CreateDirectory(Path.Combine(root, "arrivals"));
+            await using var fixture = StorageTestDoubles.CreateFixture();
+
+            // A folder row to drop onto, and a file row beside it to drag back the other way.
+            fixture.Storage.Seed("/media/2024/marker.txt", [1]);
+            fixture.Storage.Seed("/media/keep.txt", [1]);
+            await fixture.Page.AttachAsync(fixture.Connection.Id, token);
+            _ = await fixture.Page.Local.NavigateAsync(root, token);
+
+            var remoteFolder = fixture.Page.Remote.Items.Single(item => item.Name == "2024");
+            fixture.Page.Local.SetSelection(
+                fixture.Page.Local.Items.Where(item => item.Name == "report.bin"));
+            await fixture.Page.Local.TransferToAsync(
+                fixture.Page.Remote.DropTargetPath(remoteFolder),
+                token);
+
+            Assert.Null(fixture.Page.ErrorMessage);
+            Assert.Contains("media/2024/report.bin", fixture.Storage.Keys);
+
+            var localFolder = fixture.Page.Local.Items.Single(item => item.Name == "arrivals");
+            fixture.Page.Remote.SetSelection(
+                fixture.Page.Remote.Items.Where(item => item.Name == "keep.txt"));
+            await fixture.Page.Remote.TransferToAsync(
+                fixture.Page.Local.DropTargetPath(localFolder),
+                token);
+
+            Assert.Null(fixture.Page.ErrorMessage);
+            Assert.True(File.Exists(Path.Combine(into.FullName, "keep.txt")));
+
+            // And the button, which has no pointer position, still means the open folder.
+            fixture.Page.Local.SetSelection(
+                fixture.Page.Local.Items.Where(item => item.Name == "report.bin"));
+            await fixture.Page.UploadAsync(token);
+            Assert.Contains("media/report.bin", fixture.Storage.Keys);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task CreatingAndDeletingAFolderIsConfirmationGated()
     {

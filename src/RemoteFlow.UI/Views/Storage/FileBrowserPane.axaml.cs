@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using RemoteFlow.Application.Abstractions.Storage;
@@ -28,12 +29,24 @@ public sealed partial class FileBrowserPane : UserControl
     public static readonly DataFormat<FileBrowserExternalDrop> ExternalDropFormat =
         DataFormat.CreateInProcessFormat<FileBrowserExternalDrop>("remoteflow/file-browser-external-drop");
 
+    private readonly DragGesture _drag = new();
     private string _typePrefix = string.Empty;
     private DateTimeOffset _lastTyped;
 
     public FileBrowserPane()
     {
         InitializeComponent();
+
+        // Attached here rather than in the markup, and with handledEventsToo, because a press on a row
+        // never reaches a plain handler: the row container is a child of the list, so
+        // ListBoxItem.OnPointerPressed runs first, and SelectingItemsControl marks the press handled as
+        // soon as it triggers selection. A handler declared on the ListBox in XAML asks only for
+        // unhandled events, so no drag ever started and neither did the right-click narrowing below.
+        // Running after the container is what this wants anyway: the selection it just applied is already
+        // in place, so pressing an unselected row and dragging in one motion works.
+        EntryList.AddHandler(PointerPressedEvent, EntryList_OnPointerPressed, handledEventsToo: true);
+        EntryList.AddHandler(PointerMovedEvent, EntryList_OnPointerMoved, handledEventsToo: true);
+        EntryList.AddHandler(PointerReleasedEvent, EntryList_OnPointerReleased, handledEventsToo: true);
     }
 
     /// <summary>Focused by the page's pane-jump shortcuts, which is why it is exposed rather than
@@ -180,8 +193,9 @@ public sealed partial class FileBrowserPane : UserControl
         }
     }
 
-    private async void EntryList_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void EntryList_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        _drag.Disarm();
         if (DataContext is not FileBrowserPaneViewModel viewModel)
         {
             return;
@@ -200,16 +214,36 @@ public sealed partial class FileBrowserPane : UserControl
             return;
         }
 
+        // IsRenaming keeps a click into the inline rename editor from arming a drag out of the row it is
+        // editing, which handledEventsToo would otherwise let through.
         if (!properties.IsLeftButtonPressed ||
-            FindItem(e.Source) is not { } dragged ||
+            FindItem(e.Source) is not { IsRenaming: false } dragged ||
             !viewModel.SelectedItems.Contains(dragged))
+        {
+            return;
+        }
+
+        // Armed, not started: a click on a selected row is not a drag, and one of these lists pays for
+        // that distinction in bytes. See DragGesture.
+        _drag.Arm(e, e.GetPosition(this));
+    }
+
+    private async void EntryList_OnPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (DataContext is not FileBrowserPaneViewModel viewModel ||
+            _drag.TryStart(e, e.GetPosition(this)) is not { } press)
         {
             return;
         }
 
         var transfer = new DataTransfer();
         transfer.Add(DataTransferItem.Create(PaneFormat, viewModel));
-        _ = await DragDrop.DoDragDropAsync(e, transfer, DragDropEffects.Copy).ConfigureAwait(true);
+        _ = await DragDrop.DoDragDropAsync(press, transfer, DragDropEffects.Copy).ConfigureAwait(true);
+    }
+
+    private void EntryList_OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        _drag.Disarm();
     }
 
     private void EntryList_OnDragOver(object? sender, DragEventArgs e)
@@ -220,6 +254,9 @@ public sealed partial class FileBrowserPane : UserControl
             return;
         }
 
+        // The in-process formats are tested first, and the operating-system file list last, because a drag
+        // out of the SFTP remote list carries both: its staged files for other applications and an action
+        // for this one. Reading the files here would download the selection a second time.
         if (e.DataTransfer.TryGetValue(ExternalDropFormat) is { } external)
         {
             viewModel.SetDropTarget(FindItem(e.Source), external.Verb);
@@ -227,6 +264,10 @@ public sealed partial class FileBrowserPane : UserControl
         else if (e.DataTransfer.TryGetValue(PaneFormat) is { } origin && !ReferenceEquals(origin, viewModel))
         {
             viewModel.SetDropTarget(FindItem(e.Source));
+        }
+        else if (viewModel.AcceptsExternalFiles && e.DataTransfer.TryGetFiles() is { Length: > 0 })
+        {
+            viewModel.SetDropTarget(FindItem(e.Source), "Upload to");
         }
         else
         {
@@ -254,15 +295,36 @@ public sealed partial class FileBrowserPane : UserControl
         {
             var hovered = FindItem(e.Source);
             viewModel.ClearDropTarget();
+            var destination = viewModel.DropTargetPath(hovered);
             if (e.DataTransfer.TryGetValue(ExternalDropFormat) is { } external)
             {
-                await external.DropAsync(viewModel.DropTargetPath(hovered), CancellationToken.None)
-                    .ConfigureAwait(true);
+                await external.DropAsync(destination, CancellationToken.None).ConfigureAwait(true);
                 await viewModel.RefreshAsync().ConfigureAwait(true);
             }
             else if (e.DataTransfer.TryGetValue(PaneFormat) is { } origin && !ReferenceEquals(origin, viewModel))
             {
-                await origin.TransferAsync().ConfigureAwait(true);
+                // The destination is the folder the pointer was released over, which is what the pane has
+                // been promising in its drop-target message all along.
+                await origin.TransferToAsync(destination).ConfigureAwait(true);
+            }
+            else if (viewModel.AcceptsExternalFiles && e.DataTransfer.TryGetFiles() is { Length: > 0 } files)
+            {
+                // A drop from the file manager, the desktop, or another application.
+                string[] paths = [.. files
+                    .Select(file => file.TryGetLocalPath())
+                    .Where(path => !string.IsNullOrEmpty(path))
+                    .Cast<string>()];
+                if (paths.Length == 0)
+                {
+                    // Nothing the platform can give a path for: an image dragged out of a browser, an
+                    // attachment the sender never spooled to disk. Saying so is the point — appearing to
+                    // have worked is the one outcome a drop may not have.
+                    viewModel.FeedbackMessage = "Nothing in that drop is a file or folder on this computer.";
+                }
+                else
+                {
+                    await viewModel.DropExternalFilesAsync(paths, destination).ConfigureAwait(true);
+                }
             }
         }
 

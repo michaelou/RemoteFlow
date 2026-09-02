@@ -12,12 +12,21 @@ namespace RemoteFlow.UI.Views.Sftp;
 
 public sealed partial class SftpWorkspace : UserControl
 {
+    private readonly DragGesture _drag = new();
     private string _typePrefix = string.Empty;
     private DateTimeOffset _lastTyped;
 
     public SftpWorkspace()
     {
         InitializeComponent();
+
+        // handledEventsToo, and attached here rather than in the markup: the row container marks a press
+        // handled the moment it triggers selection, and it sees the event first, being a child of the
+        // list. A handler declared on the ListBox therefore never ran on a row — see FileBrowserPane,
+        // which had the identical defect.
+        FileList.AddHandler(PointerPressedEvent, FileList_OnPointerPressed, handledEventsToo: true);
+        FileList.AddHandler(PointerMovedEvent, FileList_OnPointerMoved, handledEventsToo: true);
+        FileList.AddHandler(PointerReleasedEvent, FileList_OnPointerReleased, handledEventsToo: true);
     }
 
     private async void Workspace_OnLoaded(object? sender, RoutedEventArgs e)
@@ -174,8 +183,9 @@ public sealed partial class SftpWorkspace : UserControl
         }
     }
 
-    private async void FileList_OnPointerPressed(object? sender, PointerPressedEventArgs e)
+    private void FileList_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        _drag.Disarm();
         if (DataContext is not SftpWorkspaceViewModel viewModel)
         {
             return;
@@ -198,8 +208,23 @@ public sealed partial class SftpWorkspace : UserControl
         {
             return;
         }
+
+        // A click into the inline rename editor is not a drag out of the row being renamed.
         var item = FindItem(e.Source);
-        if (item is null || !viewModel.SelectedItems.Contains(item))
+        if (item is null or { IsRenaming: true } || !viewModel.SelectedItems.Contains(item))
+        {
+            return;
+        }
+
+        // Armed only. Starting here would download the whole selection on a plain click, because that is
+        // what building the file payload below costs.
+        _drag.Arm(e, e.GetPosition(this));
+    }
+
+    private async void FileList_OnPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (DataContext is not SftpWorkspaceViewModel viewModel ||
+            _drag.TryStart(e, e.GetPosition(this)) is not { } press)
         {
             return;
         }
@@ -234,7 +259,12 @@ public sealed partial class SftpWorkspace : UserControl
             }
         }
 
-        _ = await DragDrop.DoDragDropAsync(e, transfer, DragDropEffects.Copy).ConfigureAwait(true);
+        _ = await DragDrop.DoDragDropAsync(press, transfer, DragDropEffects.Copy).ConfigureAwait(true);
+    }
+
+    private void FileList_OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        _drag.Disarm();
     }
 
     private void FileList_OnDragOver(object? sender, DragEventArgs e)

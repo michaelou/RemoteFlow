@@ -186,7 +186,6 @@
             DoubleTapped="EntryList_OnDoubleTapped"
             KeyDown="EntryList_OnKeyDown"
             TextInput="EntryList_OnTextInput"
-            PointerPressed="EntryList_OnPointerPressed"
             DragDrop.AllowDrop="True"
             DragDrop.DragOver="EntryList_OnDragOver"
             DragDrop.DragLeave="EntryList_OnDragLeave"

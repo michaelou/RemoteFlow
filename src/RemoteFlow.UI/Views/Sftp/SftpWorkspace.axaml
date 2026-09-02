@@ -244,7 +244,6 @@
                 DoubleTapped="FileList_OnDoubleTapped"
                 KeyDown="FileList_OnKeyDown"
                 TextInput="FileList_OnTextInput"
-                PointerPressed="FileList_OnPointerPressed"
                 DragDrop.AllowDrop="True"
                 DragDrop.DragOver="FileList_OnDragOver"
                 DragDrop.DragLeave="FileList_OnDragLeave"

@@ -7,6 +7,37 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **Files can be dragged into a bucket from outside RemoteFlow.** Drop them anywhere on the Storage page's
+  remote pane — from the file manager, the desktop, another application — and they upload, whether or not
+  the local pane is pointed anywhere near them. It is the same upload the button runs: a folder among them
+  is counted and confirmed before a byte moves, a collision goes to the same conflict dialog, and the
+  transfer appears in the one shared queue below. A drag carrying nothing this computer has a path for,
+  such as an image dragged straight out of a browser, says so rather than appearing to have worked, and
+  dragging onto the *local* pane does nothing, because the file is already on this machine. The SFTP page's
+  remote list has accepted such a drop for some releases; this is the Storage page catching up. All three
+  drags now work on both pages: remote to local downloads, local to remote uploads, and the file manager to
+  remote uploads.
+
+### Fixed
+
+- **Dragging files between the two panes now works at all.** On both the SFTP and the Storage page, no
+  drag *out of* a file list had ever started — not between the panes in either direction, and not out of
+  the SFTP remote list into another application. The lists asked for pointer presses in a way that never
+  delivered one: the row under the pointer claims the press to update the selection first, and a handler
+  declared in the markup only ever hears about presses nothing else has claimed. Both lists now ask for
+  those too. The same gap had silenced the row menu's "act on the row I right-clicked" behaviour outside
+  the current selection, which is back with it. A drag also now begins only once the pointer has actually
+  moved, so a click on a selected row stays a click — which on the SFTP list matters in bytes, because
+  starting a drag there fetches what is selected to build the payload the operating system needs.
+- **A drag now lands in the folder it was dropped on.** On the Storage page, releasing a drag over a folder
+  row transferred into whichever folder the receiving pane was showing rather than into the folder under
+  the pointer — while the pane displayed *"Drop into media-prod/2024"* the whole time it was held. The
+  message was right and the transfer was not. Both panes now honour it, in both directions, which is what
+  the SFTP page's remote list has always done. The Upload and Download buttons and the row menus are
+  unchanged: with no pointer position, they still mean the folder the other pane is showing.
+
 ## [0.8.0] - 2026-08-31
 
 ### Added

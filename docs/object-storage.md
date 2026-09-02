@@ -82,6 +82,17 @@ Select rows and press **Upload** or **Download**, right-click them and choose th
 drag between the panes, or press `Enter`. A folder is counted first and confirmed before a byte moves,
 because "transfer 1 item" and "transfer 41,000 items" are the same drag.
 
+**A drag lands in the folder under the pointer**, not in whichever folder the receiving pane happens to be
+showing — release it over a folder row to go straight into it, or anywhere else in the pane to use the open
+folder. The pane says which it will be while you hold the drag.
+
+**Files can also be dragged in from outside RemoteFlow** — the file manager, the desktop, another
+application — and dropped anywhere on the remote pane to upload them, whether or not the local pane is
+pointed anywhere near them. They take the same route as any other upload: counted and confirmed if a folder
+is among them, conflict-resolved, and queued below. A drag that carries nothing this computer has a path
+for, such as an image dragged out of a browser, says so rather than appearing to have worked. Dragging onto
+the *local* pane does nothing: the file is already on this machine.
+
 The local pane reopens where you left it, and it is the *same* memory the SFTP page's local pane uses, so
 walking to a folder on one page and switching to the other lands you in that folder rather than back at your
 home directory. A remembered folder that has since been deleted or unmounted falls back to the home

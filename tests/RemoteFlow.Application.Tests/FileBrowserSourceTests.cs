@@ -328,6 +328,57 @@ public sealed class FileBrowserSourceTests
         }
     }
 
+    /// <summary>A path dragged onto the window arrives as a path and nothing else, so it has to be
+    /// described before it can be transferred like a row the pane listed itself.</summary>
+    [Fact]
+    public async Task ADraggedInPathIsDescribedWhateverItIsAndHiddenOrMissingOnesAreNotHidden()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var root = CreateTempDirectory();
+        try
+        {
+            var file = Path.Combine(root, "report.txt");
+            await File.WriteAllTextAsync(file, "seven bytes", token);
+            var folder = Path.Combine(root, "photos");
+            _ = Directory.CreateDirectory(folder);
+            var hidden = Path.Combine(root, ".env");
+            await File.WriteAllTextAsync(hidden, "secret", token);
+            if (OperatingSystem.IsWindows())
+            {
+                File.SetAttributes(hidden, FileAttributes.Hidden);
+            }
+
+            var described = LocalFileBrowserSource.TryDescribe(file);
+            Assert.NotNull(described);
+            Assert.Equal("report.txt", described.Name);
+            Assert.Equal(file, described.Path);
+            Assert.False(described.IsDirectory);
+            Assert.Equal(11, described.Size);
+
+            var directory = LocalFileBrowserSource.TryDescribe(folder);
+            Assert.NotNull(directory);
+            Assert.Equal("photos", directory.Name);
+            Assert.True(directory.IsDirectory);
+
+            // A trailing separator is not a different folder, and the name is still the last segment.
+            var trailing = LocalFileBrowserSource.TryDescribe(folder + Path.DirectorySeparatorChar);
+            Assert.NotNull(trailing);
+            Assert.Equal("photos", trailing.Name);
+            Assert.Equal(folder, trailing.Path);
+
+            // The pane filters hidden entries so it is not full of noise nobody asked for. Something
+            // dragged on by hand was asked for, and dropping it silently would look like a failed drop.
+            Assert.NotNull(LocalFileBrowserSource.TryDescribe(hidden));
+
+            Assert.Null(LocalFileBrowserSource.TryDescribe(Path.Combine(root, "gone.txt")));
+            Assert.Null(LocalFileBrowserSource.TryDescribe(string.Empty));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "remoteflow-browser-" + Path.GetRandomFileName());

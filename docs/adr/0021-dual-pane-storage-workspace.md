@@ -158,6 +158,10 @@ The drag payload is a `DataFormat.CreateInProcessFormat<FileBrowserPaneViewModel
 rows came from; the receiving pane asks it to run its own transfer, which already knows where the other
 side points. Nothing is staged to disk, so the Storage page needs no staging directory and cannot leak one.
 
+**Amended by [ADR-0025](0025-files-dragged-in-from-outside.md)**: the remote pane also accepts a file list
+dragged in from outside the application, and a drop resolves the folder under the pointer rather than the
+receiving pane's open one. Nothing is staged to disk on either path.
+
 ## Consequences
 
 `ConnectionOpenMode.Default` and `ConnectionOpenMode.Storage` now navigate to the Storage page and attach,
@@ -191,7 +195,7 @@ surfaced as an unrelated SFTP hit-test failure three runs in five.
 could arrive without changing the SFTP or transfer contracts held. The SFTP workspace stays single-pane and
 remote-first, and remains governed by it.
 
-## Amended by ADR-0022
+## Amended by ADR-0022 and ADR-0025
 
 [ADR-0022](0022-dual-pane-sftp-workspace.md) gave the SFTP page a local pane of its own, so the sentence
 above is no longer true. Everything else here stands — and that ADR is the evidence for it: a second page
@@ -199,3 +203,8 @@ grew a local half without one line of `FileBrowserPane` changing. Two things her
 `PaneFormat` is now public, because the SFTP remote list is not a pane and must recognise it; and the
 staging leak recorded under "Known limitations" is swept on the one path where a drag out of that list ends
 on the local pane.
+
+[ADR-0025](0025-files-dragged-in-from-outside.md) gave the remote pane the third drag this page was
+missing — a file dragged in from the file manager — and made a drop land in the folder under the pointer,
+which is what this page's own drop-target message had been promising. The pane took one new
+page-supplied seam and, again, no knowledge of what is on the other side of it.

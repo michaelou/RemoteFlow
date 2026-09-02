@@ -171,8 +171,24 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(SourceTitle))]
     public partial IFileBrowserSource? Source { get; set; }
 
-    /// <summary>Supplied by the page, which is the only thing that can see both panes at once.</summary>
-    public Func<CancellationToken, Task>? TransferHandler { get; set; }
+    /// <summary>Supplied by the page, which is the only thing that can see both panes at once.
+    ///
+    /// The string is the destination folder a drop landed on, or null for "wherever the other pane is
+    /// pointed" — which is what the toolbar button and the row menu mean, having no pointer position to
+    /// speak of.</summary>
+    public Func<string?, CancellationToken, Task>? TransferHandler { get; set; }
+
+    /// <summary>Supplied by the page for a pane that accepts files dragged in from outside the
+    /// application — the file manager, the desktop, another program — as local paths and a destination
+    /// folder in this pane.
+    ///
+    /// Null on a pane that has nothing to do with such a drop, which is what makes the drag decline
+    /// visibly instead of ending in nothing: the local pane already has the file, and copying it beside
+    /// itself is not what the gesture means.</summary>
+    public Func<IReadOnlyList<string>, string, CancellationToken, Task>? ExternalFilesHandler { get; set; }
+
+    /// <summary>Whether a drag carrying operating-system files should be offered a drop at all.</summary>
+    public bool AcceptsExternalFiles => ExternalFilesHandler is not null;
 
     public bool IsReady => Source is not null;
 
@@ -393,10 +409,34 @@ public sealed partial class FileBrowserPaneViewModel : ObservableObject
         }
     }
 
+    /// <summary>The toolbar button and the row menu: into whatever folder the other pane is showing.
+    /// Kept parameterless so the generated command stays parameterless for the button that binds it.
+    /// </summary>
     [RelayCommand]
     public Task TransferAsync(CancellationToken cancellationToken = default)
     {
-        return TransferHandler is null ? Task.CompletedTask : TransferHandler(cancellationToken);
+        return TransferToAsync(null, cancellationToken);
+    }
+
+    /// <summary>The drop path: the same transfer, into the folder the pointer was released over. Null
+    /// falls back to the other pane's current folder.</summary>
+    public Task TransferToAsync(string? destination, CancellationToken cancellationToken = default)
+    {
+        return TransferHandler is null ? Task.CompletedTask : TransferHandler(destination, cancellationToken);
+    }
+
+    /// <summary>Files dragged in from outside the application, dropped on <paramref name="destination"/>.
+    /// Silently does nothing on a pane with no handler, which is a drop the view has already declined.
+    /// </summary>
+    public Task DropExternalFilesAsync(
+        IReadOnlyList<string> paths,
+        string destination,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        return ExternalFilesHandler is null || paths.Count == 0
+            ? Task.CompletedTask
+            : ExternalFilesHandler(paths, destination, cancellationToken);
     }
 
     public void SortBy(FileBrowserSortColumn column)

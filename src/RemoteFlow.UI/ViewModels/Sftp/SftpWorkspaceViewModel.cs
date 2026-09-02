@@ -127,7 +127,7 @@ public sealed partial class SftpWorkspaceViewModel : PageViewModel, IAsyncDispos
         _connectionQueries = connectionQueries;
         Local = new FileBrowserPaneViewModel("local folder", "Upload", confirmation, _localFiles, folderMemory)
         {
-            TransferHandler = UploadSelectionAsync,
+            TransferHandler = UploadSelectionToAsync,
         };
     }
 
@@ -640,9 +640,19 @@ public sealed partial class SftpWorkspaceViewModel : PageViewModel, IAsyncDispos
             : Task.CompletedTask;
     }
 
-    /// <summary>The local pane's Upload button, its row menu, and a drop onto the remote list: the local
-    /// selection into the folder the remote list is showing.</summary>
-    public async Task UploadSelectionAsync(CancellationToken cancellationToken = default)
+    /// <summary>The local pane's Upload button and its row menu: the local selection into the folder the
+    /// remote list is showing.</summary>
+    public Task UploadSelectionAsync(CancellationToken cancellationToken = default)
+    {
+        return UploadSelectionToAsync(null, cancellationToken);
+    }
+
+    /// <summary>The same upload, into a named remote directory. <paramref name="targetDirectory"/> is null
+    /// for the button and the row menu, which have no pointer position and mean "the folder the remote list
+    /// is showing".</summary>
+    public async Task UploadSelectionToAsync(
+        string? targetDirectory,
+        CancellationToken cancellationToken = default)
     {
         if (_session is null)
         {
@@ -657,7 +667,7 @@ public sealed partial class SftpWorkspaceViewModel : PageViewModel, IAsyncDispos
             return;
         }
 
-        await UploadAsync(paths, CurrentPath, cancellationToken).ConfigureAwait(true);
+        await UploadAsync(paths, targetDirectory ?? CurrentPath, cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>The remote list's Download button and its row menu: the remote selection into the folder the

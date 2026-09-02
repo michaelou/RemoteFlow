@@ -412,6 +412,26 @@ public sealed class LocalFileBrowserSource : IFileBrowserSource
         }
     }
 
+    /// <summary>Describes one path the pane never listed: a file or folder dragged onto the window from
+    /// the operating system's file manager, which arrives as a path and nothing else. Null when the path
+    /// no longer exists, or cannot be stat'd.
+    ///
+    /// Hidden entries are described rather than filtered out. The filter in <see cref="ListAsync"/> exists
+    /// so a pane is not full of noise nobody asked for; something dragged onto the window was asked for by
+    /// hand, and dropping it silently would look like the drop itself failed.</summary>
+    public static FileBrowserEntry? TryDescribe(string path)
+    {
+        // A file manager can hand over "/home/andreas/photos/", and DirectoryInfo keeps that trailing
+        // separator in FullName — so the entry's path would differ from the same folder listed by the pane.
+        // TrimEndingDirectorySeparator is root-aware, which trimming by hand is not: it leaves "C:\" and
+        // "/" alone rather than turning the drive root into the current directory on that drive. A blank or
+        // absent path fails both probes and needs no guard of its own.
+        FileSystemInfo? info = Directory.Exists(path)
+            ? new DirectoryInfo(Path.TrimEndingDirectorySeparator(path))
+            : File.Exists(path) ? new FileInfo(path) : null;
+        return info is null ? null : Describe(info, new FileBrowserListOptions { ShowHidden = true });
+    }
+
     public async IAsyncEnumerable<FileBrowserEntry> EnumerateRecursiveAsync(
         FileBrowserEntry root,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)

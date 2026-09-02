@@ -57,8 +57,13 @@ public sealed partial class StoragePageViewModel : PageViewModel, IAsyncDisposab
             new LocalFileBrowserSource(),
             folderMemory);
         Remote = new FileBrowserPaneViewModel("remote prefix", "Download", confirmation);
-        Local.TransferHandler = UploadAsync;
-        Remote.TransferHandler = DownloadAsync;
+        Local.TransferHandler = UploadToAsync;
+        Remote.TransferHandler = DownloadToAsync;
+
+        // Files dragged in from the file manager are accepted by the remote pane only. On the local pane
+        // the dropped file is already on this machine, and copying it beside itself is not what the
+        // gesture means — so that drag is declined visibly rather than ending in nothing.
+        Remote.ExternalFilesHandler = UploadDroppedPathsAsync;
     }
 
     public FileBrowserPaneViewModel Local { get; }
@@ -182,13 +187,69 @@ public sealed partial class StoragePageViewModel : PageViewModel, IAsyncDisposab
     /// <summary>Local selection to the remote pane's current prefix.</summary>
     public Task UploadAsync(CancellationToken cancellationToken = default)
     {
-        return TransferAsync(Local, Remote, TransferDirection.Upload, cancellationToken);
+        return UploadToAsync(null, cancellationToken);
+    }
+
+    /// <summary>Local selection to the prefix a drop landed on. Null means the prefix the remote pane is
+    /// showing, which is what the Upload button and the row menu mean.</summary>
+    public Task UploadToAsync(string? destination, CancellationToken cancellationToken = default)
+    {
+        return TransferSelectionAsync(Local, Remote, TransferDirection.Upload, destination, cancellationToken);
     }
 
     /// <summary>Remote selection to the local pane's current folder.</summary>
     public Task DownloadAsync(CancellationToken cancellationToken = default)
     {
-        return TransferAsync(Remote, Local, TransferDirection.Download, cancellationToken);
+        return DownloadToAsync(null, cancellationToken);
+    }
+
+    /// <summary>Remote selection to the folder a drop landed on, or the local pane's current folder.
+    /// </summary>
+    public Task DownloadToAsync(string? destination, CancellationToken cancellationToken = default)
+    {
+        return TransferSelectionAsync(Remote, Local, TransferDirection.Download, destination, cancellationToken);
+    }
+
+    /// <summary>Files dragged onto the remote pane from outside the application — the file manager, the
+    /// desktop, an attachment — and uploaded to the prefix the pointer was released over.
+    ///
+    /// The drag carries paths and nothing else: these rows were never listed by the local pane, so they are
+    /// described here and then take the identical route a pane-to-pane upload takes, counting, conflict
+    /// resolution and the one shared queue included.</summary>
+    public async Task UploadDroppedPathsAsync(
+        IReadOnlyList<string> paths,
+        string destination,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        if (RequireSession() is not { } session)
+        {
+            return;
+        }
+
+        // A path that has been moved or deleted since the drag began is skipped rather than failing the
+        // whole drop, and a drag carrying nothing local at all — a browser image, a mail attachment the
+        // sender never spooled to disk — says so instead of appearing to have worked.
+        var items = paths
+            .Select(LocalFileBrowserSource.TryDescribe)
+            .OfType<FileBrowserEntry>()
+            .Select(entry => new FileBrowserItemViewModel(entry, "Upload"))
+            .ToArray();
+        if (items.Length == 0)
+        {
+            Remote.FeedbackMessage = "Nothing in that drop is a file or folder on this computer.";
+            return;
+        }
+
+        await RunTransferAsync(
+            session,
+            Local,
+            Remote,
+            items,
+            destination,
+            TransferDirection.Upload,
+            Remote,
+            cancellationToken).ConfigureAwait(true);
     }
 
     public async ValueTask DisposeAsync()
@@ -197,15 +258,17 @@ public sealed partial class StoragePageViewModel : PageViewModel, IAsyncDisposab
         GC.SuppressFinalize(this);
     }
 
-    private async Task TransferAsync(
+    /// <summary>The selection in one pane to the other, which is what the transfer buttons, the row menus
+    /// and a pane-to-pane drag all come down to.</summary>
+    private async Task TransferSelectionAsync(
         FileBrowserPaneViewModel from,
         FileBrowserPaneViewModel to,
         TransferDirection direction,
+        string? destination,
         CancellationToken cancellationToken)
     {
-        if (_session is null)
+        if (RequireSession() is not { } session)
         {
-            ErrorMessage = "Connect to a storage account first.";
             return;
         }
 
@@ -216,20 +279,50 @@ public sealed partial class StoragePageViewModel : PageViewModel, IAsyncDisposab
             return;
         }
 
+        await RunTransferAsync(
+            session,
+            from,
+            to,
+            selected,
+            destination,
+            direction,
+            from,
+            cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>Everything a transfer does once what is moving and where it lands are both known: count,
+    /// confirm, one conflict resolver for the batch, and the one shared queue.
+    ///
+    /// <paramref name="from"/> is only asked to expand a folder, so it serves a drop from the file manager
+    /// as well as its own rows. <paramref name="destination"/> is the folder a drop landed on, or null for
+    /// wherever <paramref name="to"/> is pointed. <paramref name="feedback"/> is the pane the message
+    /// belongs on, which is the pane the gesture started in for a selection and the pane it was dropped on
+    /// for a drag from outside.</summary>
+    private async Task RunTransferAsync(
+        StorageWorkspaceSession session,
+        FileBrowserPaneViewModel from,
+        FileBrowserPaneViewModel to,
+        FileBrowserItemViewModel[] items,
+        string? destination,
+        TransferDirection direction,
+        FileBrowserPaneViewModel feedback,
+        CancellationToken cancellationToken)
+    {
         ErrorMessage = null;
+        var folder = destination ?? to.CurrentPath;
 
         // Counted and confirmed before a byte moves. A folder can expand to tens of thousands of objects,
         // and "transfer 1 item" and "transfer 41,000 items" are the same drag.
-        if (selected.Any(item => item.IsDirectory))
+        if (Array.Exists(items, item => item.IsDirectory))
         {
             int count;
             try
             {
-                count = await from.CountAsync(selected, cancellationToken).ConfigureAwait(true);
+                count = await from.CountAsync(items, cancellationToken).ConfigureAwait(true);
             }
             catch (OperationCanceledException)
             {
-                from.FeedbackMessage = "The transfer was cancelled while counting.";
+                feedback.FeedbackMessage = "The transfer was cancelled while counting.";
                 return;
             }
 
@@ -240,28 +333,28 @@ public sealed partial class StoragePageViewModel : PageViewModel, IAsyncDisposab
                 cancellationToken).ConfigureAwait(true);
             if (!confirmed)
             {
-                from.FeedbackMessage = "The transfer was cancelled.";
+                feedback.FeedbackMessage = "The transfer was cancelled.";
                 return;
             }
         }
 
         // One resolver per gesture: the object's lifetime is the batch, which is what makes "apply to all"
         // work without a batch identifier on an Application contract.
-        var resolver = _conflictResolvers.Create(selected.Length);
-        var engine = new ObjectStorageTransferEngine(_session.Storage, resolver);
+        var resolver = _conflictResolvers.Create(items.Length);
+        var engine = new ObjectStorageTransferEngine(session.Storage, resolver);
         var queued = new List<TransferItemViewModel>();
-        foreach (var item in selected)
+        foreach (var item in items)
         {
-            var destination = to.Source!.Combine(to.CurrentPath, item.Name);
+            var destinationPath = to.Source!.Combine(folder, item.Name);
             var source = item.Path;
             queued.Add(await Transfers.QueueAsync(
                 new TransferQueueRequest(
                     direction,
                     source,
-                    destination,
+                    destinationPath,
                     direction == TransferDirection.Upload
-                        ? (progress, token) => engine.UploadAsync(source, destination, progress, token)
-                        : (progress, token) => engine.DownloadAsync(source, destination, progress, token)),
+                        ? (progress, token) => engine.UploadAsync(source, destinationPath, progress, token)
+                        : (progress, token) => engine.DownloadAsync(source, destinationPath, progress, token)),
                 cancellationToken).ConfigureAwait(true));
         }
 
@@ -273,10 +366,22 @@ public sealed partial class StoragePageViewModel : PageViewModel, IAsyncDisposab
         }
         else
         {
-            from.FeedbackMessage = $"{queued.Count} item(s) transferred to {to.CurrentPath}.";
+            feedback.FeedbackMessage = $"{queued.Count} item(s) transferred to {folder}.";
         }
 
         await to.RefreshAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>The attached session, or null with the banner already set. Every transfer needs it, and
+    /// "Connect to a storage account first" is the same answer for all of them.</summary>
+    private StorageWorkspaceSession? RequireSession()
+    {
+        if (_session is null)
+        {
+            ErrorMessage = "Connect to a storage account first.";
+        }
+
+        return _session;
     }
 
     private static string DescribeFailure(TransferResult result, TransferDirection direction)

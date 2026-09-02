@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -153,6 +154,79 @@ public sealed class StorageKeyboardTests
         }
 
         return visited;
+    }
+
+    /// <summary>The routing fact both file pages' drags depend on, and the one that made them silently
+    /// impossible: a press on a row is already handled by the time it reaches the list.
+    ///
+    /// <c>ListBoxItem</c> is a child of the <c>ListBox</c>, so it sees the bubbling press first, and
+    /// <c>SelectingItemsControl.UpdateSelectionFromEvent</c> sets <c>Handled</c> as soon as the press
+    /// triggers selection. A <c>PointerPressed</c> handler declared in XAML asks only for unhandled
+    /// events, so it never ran on a row at all — no drag out of either pane could start, in any
+    /// direction. Both pages now attach that handler in code with <c>handledEventsToo</c>.
+    ///
+    /// This is behaviour of Avalonia 12.1.1, which Directory.Packages.props already says to upgrade by
+    /// hand: if an upgrade stops marking the press handled, this test says so before the drags do.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task APressOnARowIsHandledByTheRowSoADragHandlerHasToAskForHandledEvents()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var root = Path.Combine(Path.GetTempPath(), "remoteflow-drag-" + Path.GetRandomFileName());
+        _ = Directory.CreateDirectory(root);
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(root, "one.txt"), "x", token);
+            var fixture = StorageTestDoubles.CreateFixture();
+            _ = await fixture.Page.Local.NavigateAsync(root, token);
+            var window = Show(fixture.Page);
+            try
+            {
+                var list = window.GetVisualDescendants().OfType<ListBox>()
+                    .First(box => box.Name == "EntryList");
+                window.UpdateLayout();
+                var container = Assert.IsAssignableFrom<Control>(list.ContainerFromIndex(0));
+
+                var plain = 0;
+                var handledToo = 0;
+                list.AddHandler(InputElement.PointerPressedEvent, (_, _) => plain++);
+                list.AddHandler(
+                    InputElement.PointerPressedEvent,
+                    (_, _) => handledToo++,
+                    handledEventsToo: true);
+
+                container.RaiseEvent(PressOn(container, window));
+
+                Assert.Equal(0, plain);
+                Assert.Equal(1, handledToo);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>A left press in the middle of <paramref name="target"/>. The position matters: the row
+    /// only claims the press — and only marks it handled — while the pointer is inside its bounds.
+    /// Raised on the container rather than sent through the window, because headless hit-testing is not
+    /// reliable enough to pin a routing fact on.</summary>
+    private static PointerPressedEventArgs PressOn(Control target, Window window)
+    {
+        var middle = new Point(target.Bounds.Width / 2, target.Bounds.Height / 2);
+        var centre = target.TranslatePoint(middle, window) ?? default;
+        return new PointerPressedEventArgs(
+            target,
+            new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, isPrimary: true),
+            window,
+            centre,
+            0,
+            new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+            KeyModifiers.None);
     }
 
     private static Window Show(StoragePageViewModel page)
