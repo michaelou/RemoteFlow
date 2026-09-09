@@ -45,7 +45,7 @@
     <Border Classes="panel" Padding="16,14">
       <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
         <StackPanel Spacing="5">
-          <TextBlock FontSize="28" FontWeight="SemiBold" Text="Shell profiles" />
+          <TextBlock Classes="page-title" Text="Shell profiles" />
           <TextBlock
               Foreground="{DynamicResource Brush.Text.Secondary}"
               Text="The shells the Terminals page can start, and what each one starts with."

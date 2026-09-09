@@ -94,6 +94,8 @@ public static class DependencyInjection
         services.TryAddSingleton<MainWindowViewModel>();
         services.TryAddSingleton<WindowGeometryService>();
         services.TryAddSingleton<MainWindow>();
+        services.TryAddSingleton<SplashViewModel>();
+        services.TryAddSingleton<SplashWindow>();
         services.TryAddSingleton<IErrorDialogService, ErrorDialogService>();
         services.TryAddSingleton<IClipboardService, AvaloniaClipboardService>();
         services.TryAddSingleton<IPasteWarningService, PasteWarningDialogService>();
@@ -121,16 +123,22 @@ public static class DependencyInjection
         services.TryAddSingleton(provider => new App
         {
             MainWindowFactory = provider.GetRequiredService<MainWindow>,
-            StartupAction = async () =>
+            SplashFactory = provider.GetRequiredService<SplashWindow>,
+            // Each step names itself before it runs, not after: the point of the message is to say what
+            // is taking the time, which is only useful while it is still taking it.
+            StartupAction = async progress =>
             {
+                progress.Report("Preparing the database");
                 await provider.GetRequiredService<IDbInitializer>().InitializeAsync().ConfigureAwait(true);
                 await provider.GetRequiredService<IThemeService>().InitializeAsync().ConfigureAwait(true);
+                progress.Report("Unlocking the credential store");
                 // Before anything reads a credential. On Windows and macOS, and on Linux with a working
                 // keyring, this asks nothing and returns immediately; it only prompts when the selected
                 // store is RemoteFlow's own encrypted file, which nothing else opens. Declining is allowed
                 // and leaves the session running without saved secrets.
                 _ = await provider.GetRequiredService<IVaultUnlockService>()
                     .EnsureUnlockedAsync().ConfigureAwait(true);
+                progress.Report("Tidying up after the last session");
                 await provider.GetRequiredService<IRemoteEditServiceFactory>()
                     .SweepStaleFilesAsync().ConfigureAwait(true);
                 await provider.GetRequiredService<IRdpLauncher>()
@@ -142,6 +150,7 @@ public static class DependencyInjection
                 // Subscribes to change signals and, if the last run never finished, arms a catch-up. Reads
                 // one setting and one small file; it must never await a backup, or the first paint would
                 // wait on an SSH handshake.
+                progress.Report("Checking automatic backup");
                 var autoBackup = provider.GetRequiredService<IAutoBackupRunner>();
                 await autoBackup.SweepStaleFilesAsync().ConfigureAwait(true);
                 await autoBackup.InitializeAsync().ConfigureAwait(true);

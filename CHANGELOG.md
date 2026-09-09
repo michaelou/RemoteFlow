@@ -7,6 +7,46 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **A splash screen covers the start.** RemoteFlow used to put its window on screen the moment the
+  process was up and then fill it in — so the first thing on screen was an empty frame, which on a cold
+  disk sat there through a schema migration and several filesystem sweeps before jumping to its remembered
+  size and position. A splash now holds that time instead, naming whichever step is running — preparing
+  the database, unlocking the credential store, tidying up after the last session — with the version
+  beside it, because "which build is this" is the first question asked of a start that went wrong. The
+  main window is built, loaded and placed behind it and only shown when it has something to show, so the
+  empty frame and the jump are both gone. The step is announced as a polite live region, so the progress
+  is not only visible.
+
+- **The sidebar collapses to a rail of icons.** The double chevron at the bottom of the sidebar folds it
+  down to the width of its glyphs and opens it again, and the choice is remembered, so a rail is still a
+  rail the next morning. Collapsed, each row keeps its icon and grows a tooltip carrying the name the
+  label used to show; the rows keep their full height, so nothing a pointer has to hit gets smaller, and
+  each keeps an accessible name of its own, because a tooltip is never read on keyboard focus. The
+  transfer status along the bottom is squeezed to nothing rather than hidden — it is a live region, and
+  hiding it would take the announcement with it — and the strip repeats it as a tooltip, so a collapsed
+  rail can still be asked what the transfers are doing.
+
+### Changed
+
+- **Headings and tabs are smaller.** Page titles were set at 28 points and section headings at 18 or 20,
+  which is a size that suits a document rather than a tool, and the tab strips on Backup and Settings were
+  drawing at Fluent's stock 24 points and 48 pixels tall. The three steps are now a type scale — 17 for a
+  page title, 15 for a heading, 13 for a tab — carried by style classes instead of by numbers written into
+  each view, so the whole app steps down together and no page can drift from the next. The tab rows take
+  their height from their own padding, which is most of the vertical space back on both pages.
+
+### Fixed
+
+- **An error with no window to sit in is now shown rather than swallowed.** The error dialog drew itself
+  only when there was already a visible main window and otherwise showed nothing at all, which was
+  survivable while the window appeared first and startup filled it in afterwards. It stopped being
+  survivable the moment startup moved behind a splash: a failure there happens before the main window
+  exists, and the process would have disappeared without a word. Such a dialog is now shown ownerless,
+  above the splash.
+
+
 ## [0.8.1] - 2026-09-02
 
 ### Added

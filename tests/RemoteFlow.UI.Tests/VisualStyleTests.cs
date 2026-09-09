@@ -100,6 +100,38 @@ public sealed class VisualStyleTests
         }
     }
 
+    /// <summary>
+    /// The type scale is the whole point of the title and heading classes: a view that went back to
+    /// writing its own FontSize would look right on its own page and wrong beside the next one. This
+    /// pins the three steps, and the tab strip Fluent would otherwise draw at 24 points.
+    /// </summary>
+    [AvaloniaFact]
+    public void TheTypeScaleReachesTitlesAndTabs()
+    {
+        var title = new TextBlock { Classes = { "page-title" }, Text = "Transfers" };
+        var section = new TextBlock { Classes = { "section-title" }, Text = "Active" };
+        var body = new TextBlock { Text = "A queued transfer" };
+        var tab = new TabItem { Header = "Preferences" };
+        var window = Show(new StackPanel
+        {
+            Children = { title, section, body, new TabControl { Items = { tab } } },
+        });
+
+        Assert.Equal(17, title.FontSize);
+        Assert.Equal(15, section.FontSize);
+        Assert.Equal(13, tab.FontSize);
+
+        // The steps have to stay in order, and a heading has to stay a heading: a scale that collapsed
+        // onto the body size would pass three equality checks and still read as no hierarchy at all.
+        Assert.True(title.FontSize > section.FontSize);
+        Assert.True(section.FontSize > body.FontSize);
+        Assert.True(tab.FontSize < body.FontSize);
+
+        // Fluent gives a tab a 48-pixel minimum, which is most of the compactness back.
+        Assert.Equal(0, tab.MinHeight);
+        window.Close();
+    }
+
     private static Window Show(Control content)
     {
         var window = new Window { Content = content, Width = 400, Height = 300 };

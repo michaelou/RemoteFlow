@@ -80,7 +80,7 @@
     </DataTemplate>
     <DataTemplate DataType="{x:Type viewModels:PageViewModel}" x:DataType="viewModels:PageViewModel">
       <Grid Margin="32" RowDefinitions="Auto,Auto,*">
-        <TextBlock FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource Brush.Text.Primary}" Text="{Binding Title}" />
+        <TextBlock Classes="page-title" Text="{Binding Title}" />
         <TextBlock Grid.Row="1" Margin="0,8,0,24" Foreground="{DynamicResource Brush.Text.Secondary}" Text="This page is ready for its feature content." />
         <TextBox
             Grid.Row="2"
@@ -94,45 +94,78 @@
     </DataTemplate>
   </Window.DataTemplates>
   <Grid>
-    <Grid ColumnDefinitions="220,*">
-      <Grid RowDefinitions="*,Auto">
+    <!-- The sidebar's column is Auto and the sidebar sets its own width, so collapsing it is one number
+         on one element rather than a column definition the page host also has to agree about. -->
+    <Grid ColumnDefinitions="Auto,*">
+      <Grid RowDefinitions="*,Auto" Width="{Binding NavigationWidth}">
+      <!-- Collapsed, each row is its glyph and a tooltip. The tooltip is bound whatever the state: it
+           repeats the label while the sidebar is open, which costs nothing, and it is the only name the
+           row has once the label is gone. -->
       <ListBox
         x:Name="NavigationList"
         AutomationProperties.Name="Main navigation"
         Classes="navigation"
+        Classes.collapsed="{Binding !IsNavigationExpanded}"
         ItemsSource="{Binding NavigationItems}"
         KeyDown="NavigationList_OnKeyDown"
         SelectionChanged="NavigationList_OnSelectionChanged"
         SelectedIndex="0">
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="viewModels:NavigationItemViewModel">
-          <StackPanel Orientation="Horizontal" Spacing="10">
+          <!-- Named as well as tooltipped: collapsed, the label is hidden and a tooltip is never read on
+               keyboard focus, so without a name of its own the row would announce as an unlabelled item. -->
+          <StackPanel
+              AutomationProperties.Name="{Binding Title}"
+              Orientation="Horizontal"
+              Spacing="10"
+              ToolTip.Tip="{Binding Title}">
             <PathIcon
                 Width="16"
                 Height="16"
                 VerticalAlignment="Center"
                 Data="{Binding IconKey, Converter={x:Static converters:ResourceKeyConverter.Instance}}" />
-            <TextBlock VerticalAlignment="Center" Text="{Binding Title}" />
+            <TextBlock Classes="nav-label" VerticalAlignment="Center" Text="{Binding Title}" />
           </StackPanel>
         </DataTemplate>
       </ListBox.ItemTemplate>
       </ListBox>
+        <!-- The bottom strip carries both the transfer status and the control that collapses the sidebar.
+             A Panel rather than two columns: collapsed, the status is squeezed to nothing and clipped
+             rather than hidden, which keeps its live region alive, and the chevron takes the middle of the
+             rail instead of hugging an edge. The status is repeated as the strip's tooltip so a collapsed
+             rail can still be asked what the transfers are doing. -->
         <Border
+            x:Name="NavigationFooter"
             Grid.Row="1"
             Height="32"
-            Padding="12,0"
+            ClipToBounds="True"
+            Classes="nav-footer"
+            Classes.collapsed="{Binding !IsNavigationExpanded}"
             Background="{DynamicResource Brush.Surface.1}"
             BorderBrush="{DynamicResource Brush.Border}"
-            BorderThickness="0,1,1,0">
-          <!-- Transfers finish while the user is somewhere else entirely, so this is a live region:
-               the change is announced without stealing focus from whatever they are doing. -->
-          <TextBlock
-              AutomationProperties.LiveSetting="Polite"
-              AutomationProperties.Name="Transfer status"
-              VerticalAlignment="Center"
-              TextTrimming="CharacterEllipsis"
-              Foreground="{DynamicResource Brush.Text.Secondary}"
-              Text="{Binding Transfers.AggregateStatus, FallbackValue=No active transfers}" />
+            BorderThickness="0,1,1,0"
+            ToolTip.Tip="{Binding Transfers.AggregateStatus, FallbackValue=No active transfers}">
+          <Panel>
+            <!-- Transfers finish while the user is somewhere else entirely, so this is a live region:
+                 the change is announced without stealing focus from whatever they are doing. -->
+            <TextBlock
+                AutomationProperties.LiveSetting="Polite"
+                AutomationProperties.Name="Transfer status"
+                Classes="nav-status"
+                Margin="12,0,40,0"
+                VerticalAlignment="Center"
+                TextTrimming="CharacterEllipsis"
+                Foreground="{DynamicResource Brush.Text.Secondary}"
+                Text="{Binding Transfers.AggregateStatus, FallbackValue=No active transfers}" />
+            <Button
+                x:Name="NavigationToggle"
+                AutomationProperties.Name="{Binding NavigationToggleLabel}"
+                Classes="flat icon nav-toggle"
+                Click="NavigationToggle_OnClick"
+                ToolTip.Tip="{Binding NavigationToggleLabel}">
+              <PathIcon Data="{Binding NavigationToggleIconKey, Converter={x:Static converters:ResourceKeyConverter.Instance}}" />
+            </Button>
+          </Panel>
         </Border>
       </Grid>
       <!-- Named and focusable so that committing a navigation can put focus here: the screen reader

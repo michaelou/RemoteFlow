@@ -8,7 +8,7 @@
   <ScrollViewer>
     <StackPanel Margin="8" MaxWidth="1040" HorizontalAlignment="Left" Spacing="18">
       <StackPanel Spacing="5">
-        <TextBlock FontSize="28" FontWeight="SemiBold" Text="Trusted SSH keys" />
+        <TextBlock Classes="page-title" Text="Trusted SSH keys" />
         <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Search, revoke, delete, or import OpenSSH host identities." />
       </StackPanel>
 
@@ -38,7 +38,7 @@
 
       <Border Background="{DynamicResource Brush.Surface.1}" BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="8" Padding="14">
         <StackPanel Spacing="10">
-          <TextBlock FontSize="20" FontWeight="SemiBold" Text="Import OpenSSH known_hosts" />
+          <TextBlock Classes="section-title" Text="Import OpenSSH known_hosts" />
           <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Preview is read-only. Keys are added only after Apply import; the source file is never written." TextWrapping="Wrap" />
           <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
             <TextBox AutomationProperties.Name="OpenSSH known hosts path" Text="{Binding KnownHostsPath, Mode=TwoWay}" />

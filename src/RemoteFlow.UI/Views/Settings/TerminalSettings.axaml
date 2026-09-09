@@ -17,7 +17,7 @@
     <Grid Margin="8" MaxWidth="1040" HorizontalAlignment="Left" ColumnDefinitions="380,6,600" RowDefinitions="Auto,Auto">
       <Border Grid.ColumnSpan="3" Classes="panel" Padding="16,14">
         <StackPanel Spacing="5">
-          <TextBlock FontSize="28" FontWeight="SemiBold" Text="Terminal" />
+          <TextBlock Classes="page-title" Text="Terminal" />
           <TextBlock
               Foreground="{DynamicResource Brush.Text.Secondary}"
               Text="How every embedded terminal looks and behaves, with a live preview."

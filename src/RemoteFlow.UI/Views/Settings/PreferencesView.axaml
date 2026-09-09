@@ -8,7 +8,7 @@
     <StackPanel Margin="8" MaxWidth="640" HorizontalAlignment="Left" Spacing="6">
       <Border Classes="panel" Padding="16,14">
         <StackPanel Spacing="5">
-          <TextBlock FontSize="28" FontWeight="SemiBold" Text="Preferences" />
+          <TextBlock Classes="page-title" Text="Preferences" />
           <TextBlock
               Foreground="{DynamicResource Brush.Text.Secondary}"
               Text="How the app looks and how much of your history it keeps on screen."

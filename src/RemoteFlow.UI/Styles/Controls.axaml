@@ -99,6 +99,30 @@
     <Setter Property="Margin" Value="0,4,0,0" />
   </Style>
 
+  <!-- A page's own name, and the headings that divide it up. Both were per-view numbers — 28 for a title
+       and 18 or 20 for a heading — which is a size that suits a document and not a tool: the people who
+       live in this app want the rows, not the label above them. Here instead, off the type scale, so the
+       whole app steps down together and a heading cannot be resized on one page alone. -->
+  <Style Selector="TextBlock.page-title">
+    <Setter Property="FontSize" Value="{DynamicResource Font.Size.Title}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+  </Style>
+  <Style Selector="TextBlock.section-title">
+    <Setter Property="FontSize" Value="{DynamicResource Font.Size.Section}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+  </Style>
+
+  <!-- Fluent draws a tab strip at 24 points and 48 pixels tall, which is a phone's idea of a tab. These
+       are the tabs on Backup and Settings: chrome above a form, so they take the smallest step of the
+       scale and a row height that comes from their own padding. -->
+  <Style Selector="TabItem">
+    <Setter Property="FontSize" Value="{DynamicResource Font.Size.Tab}" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="12,7" />
+  </Style>
+
   <!-- A button that carries no chrome until it is pointed at: column headers, breadcrumbs, and other
        places where a full button box would draw more attention than the action deserves. -->
   <Style Selector="Button.flat">
@@ -181,5 +205,42 @@
   <Style Selector="ListBox.navigation ListBoxItem:selected">
     <Setter Property="Background" Value="{DynamicResource Brush.Surface.2}" />
     <Setter Property="Foreground" Value="{DynamicResource Brush.Text.Primary}" />
+  </Style>
+
+  <!-- The sidebar collapsed to a rail of icons. Driven by one class on the list rather than by a binding
+       on each part, so the rail cannot end up half collapsed: the label goes, the row centres what is
+       left, and the row keeps its full height so the target a pointer has to hit does not shrink with it.
+
+       The label is hidden rather than removed, and the icon keeps its own size, so collapsing changes
+       nothing about which row is which — the same glyph stays on the same line at the same height. -->
+  <Style Selector="ListBox.navigation.collapsed ListBoxItem">
+    <Setter Property="Padding" Value="0,10" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ListBox.navigation.collapsed TextBlock.nav-label">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+
+  <!-- The strip along the bottom of the sidebar: the transfer status, and the chevron that collapses it.
+       A Panel rather than two columns because the status has to survive the collapse. It is a live region
+       — a transfer finishing announces itself while the user is on another page — so hiding it would take
+       the announcement with it. Instead it is squeezed to nothing and clipped: still in the tree for the
+       screen reader, and out of the way of a 56-pixel rail. The strip carries the same text as a tooltip,
+       so a collapsed rail can still be asked what the transfers are doing. -->
+  <Style Selector="Border.nav-footer.collapsed TextBlock.nav-status">
+    <Setter Property="Width" Value="0" />
+  </Style>
+  <!-- Both placements of the chevron are set here rather than on the button, because a value written on
+       the element itself outranks a style: an inline HorizontalAlignment would leave the collapsed rule
+       below with nothing to change, and the chevron would stay against the edge on a 56-pixel rail. -->
+  <Style Selector="Border.nav-footer Button.nav-toggle">
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="0,0,4,0" />
+    <Setter Property="Padding" Value="6" />
+  </Style>
+  <Style Selector="Border.nav-footer.collapsed Button.nav-toggle">
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="0" />
   </Style>
 </Styles>

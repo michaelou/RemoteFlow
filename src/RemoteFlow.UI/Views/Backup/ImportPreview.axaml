@@ -6,7 +6,7 @@
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Backup">
   <ScrollViewer>
     <StackPanel Margin="8" MaxWidth="760" HorizontalAlignment="Left" Spacing="16">
-      <TextBlock FontSize="28" FontWeight="SemiBold" Text="Inspect backup" />
+      <TextBlock Classes="page-title" Text="Inspect backup" />
       <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Inspection is read-only. Nothing is imported until you review and apply a strategy." TextWrapping="Wrap" />
       <Button HorizontalAlignment="Left" Content="Choose archive" Command="{Binding InspectCommand}" />
       <TextBlock FontWeight="SemiBold" Text="{Binding SelectedPath}" TextWrapping="Wrap" />
@@ -15,18 +15,18 @@
 
       <Border Padding="14" Background="{DynamicResource Brush.Surface.1}" CornerRadius="6">
         <StackPanel Spacing="6">
-          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Merge" />
+          <TextBlock Classes="section-title" Text="Merge" />
           <TextBlock Text="{Binding MergeDescription}" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
       <Border Padding="14" Background="#332F1B1B" BorderBrush="#B84A4A" BorderThickness="1" CornerRadius="6">
         <StackPanel Spacing="6">
-          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Replace (destructive)" />
+          <TextBlock Classes="section-title" Text="Replace (destructive)" />
           <TextBlock Text="{Binding ReplaceDescription}" TextWrapping="Wrap" />
         </StackPanel>
       </Border>
 
-      <TextBlock FontSize="18" FontWeight="SemiBold" Text="Detected conflicts" />
+      <TextBlock Classes="section-title" Text="Detected conflicts" />
       <ItemsControl ItemsSource="{Binding ConflictDescriptions}">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
@@ -35,7 +35,7 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
 
-      <TextBlock FontSize="18" FontWeight="SemiBold" Text="Apply import" />
+      <TextBlock Classes="section-title" Text="Apply import" />
       <ComboBox AutomationProperties.Name="Import strategy" ItemsSource="{Binding Strategies}" SelectedItem="{Binding SelectedStrategy}" />
       <ComboBox AutomationProperties.Name="Conflict policy" ItemsSource="{Binding ConflictPolicies}" SelectedItem="{Binding SelectedConflictPolicy}" />
       <TextBox AutomationProperties.Name="Type REPLACE to confirm a destructive replacement" PlaceholderText="Type REPLACE for destructive replacement" Text="{Binding ReplaceConfirmation}" />

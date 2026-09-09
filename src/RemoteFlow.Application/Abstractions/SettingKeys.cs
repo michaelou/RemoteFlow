@@ -146,6 +146,11 @@ public static class SettingKeys
     /// display preference, remembered because it is set once and then lived with.</summary>
     public static SettingKey<bool> ShowConnectionDetailLine { get; } = new("ShowConnectionDetailLine", true);
 
+    /// <summary>Whether the sidebar shows its labels or is collapsed to a rail of icons. Remembered for
+    /// the same reason as the line above: someone who works from a rail wants the rail every morning, not
+    /// a full sidebar to close again.</summary>
+    public static SettingKey<bool> NavigationExpanded { get; } = new("NavigationExpanded", true);
+
     /// <summary>How automatic backup is configured: whether it runs, how many archives to keep, and where
     /// they go. One key rather than several so the runner can never read a half-changed configuration.
     /// Note that settings travel inside backup archives, so importing one can point this machine at a
@@ -196,6 +201,7 @@ public static class SettingKeys
         StorageConflictDefault,
         LastLocalFolder,
         ShowConnectionDetailLine,
+        NavigationExpanded,
         AutoBackup,
     ];
 }

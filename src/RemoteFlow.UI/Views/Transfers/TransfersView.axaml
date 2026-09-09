@@ -40,7 +40,7 @@
     <Grid Margin="8" RowDefinitions="Auto,Auto" RowSpacing="18">
       <Grid ColumnDefinitions="*,Auto">
         <StackPanel>
-          <TextBlock FontSize="28" FontWeight="SemiBold" Text="Transfers" />
+          <TextBlock Classes="page-title" Text="Transfers" />
           <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding AggregateStatus}" />
         </StackPanel>
         <Button Grid.Column="1" Content="Clear completed" IsEnabled="{Binding HasCompleted}" Command="{Binding ClearCompletedCommand}" />
@@ -49,25 +49,25 @@
       <StackPanel Grid.Row="1" Spacing="18">
         <Border IsVisible="{Binding IsEmpty}" Padding="28" Background="{DynamicResource Brush.Surface.1}" CornerRadius="8">
           <StackPanel HorizontalAlignment="Center" Spacing="6">
-            <TextBlock HorizontalAlignment="Center" FontSize="18" FontWeight="SemiBold" Text="No transfers yet" />
+            <TextBlock HorizontalAlignment="Center" Classes="section-title" Text="No transfers yet" />
             <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Uploads and downloads will appear here." />
           </StackPanel>
         </Border>
 
         <StackPanel IsVisible="{Binding HasActive}" Spacing="8">
-          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Active" />
+          <TextBlock Classes="section-title" Text="Active" />
           <ItemsControl ItemsSource="{Binding ActiveItems}" ItemTemplate="{StaticResource TransferItemTemplate}" />
         </StackPanel>
         <StackPanel IsVisible="{Binding HasQueued}" Spacing="8">
-          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Queued" />
+          <TextBlock Classes="section-title" Text="Queued" />
           <ItemsControl ItemsSource="{Binding QueuedItems}" ItemTemplate="{StaticResource TransferItemTemplate}" />
         </StackPanel>
         <StackPanel IsVisible="{Binding HasFailed}" Spacing="8">
-          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Failed and cancelled" />
+          <TextBlock Classes="section-title" Text="Failed and cancelled" />
           <ItemsControl ItemsSource="{Binding FailedItems}" ItemTemplate="{StaticResource TransferItemTemplate}" />
         </StackPanel>
         <StackPanel IsVisible="{Binding HasCompleted}" Spacing="8">
-          <TextBlock FontSize="18" FontWeight="SemiBold" Text="Completed" />
+          <TextBlock Classes="section-title" Text="Completed" />
           <ItemsControl ItemsSource="{Binding CompletedItems}" ItemTemplate="{StaticResource TransferItemTemplate}" />
         </StackPanel>
       </StackPanel>

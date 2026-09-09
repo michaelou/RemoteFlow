@@ -61,7 +61,12 @@ crosses — carry an explicit one, because a tooltip is not a name and is never 
   announces which pane it belongs to: *"Refresh the local folder"* and *"Refresh the remote prefix"*, not
   *"Refresh"* twice. The grid splitters are named and carry help text saying which arrow keys move them.
 - The transfer status line is a polite live region: a transfer finishing is announced without taking
-  focus away from whatever is being done.
+  focus away from whatever is being done. Collapsing the sidebar squeezes it to nothing rather than hiding
+  it, so the announcement survives the rail.
+- Sidebar rows carry their page name explicitly rather than relying on the label beside the icon, so they
+  announce the same way once the sidebar is collapsed and the label is gone.
+- The splash names each startup step as a polite live region, so a slow start is heard as progress rather
+  than as one announcement followed by silence.
 
 ## Colour is never the only signal
 

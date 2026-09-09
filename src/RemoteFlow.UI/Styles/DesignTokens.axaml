@@ -151,6 +151,13 @@
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
   <FontFamily x:Key="Font.Family.Default">fonts:Inter#Inter</FontFamily>
+  <!-- The type scale. Three sizes above the 14-pixel body text, and no more: this is a tool for people
+       who keep a lot of panes open at once, so a heading earns its size by being the only thing that
+       size on the page rather than by being large. Tokens rather than per-view numbers so a page title
+       on Transfers cannot end up a different size from the one on Settings. -->
+  <x:Double x:Key="Font.Size.Title">17</x:Double>
+  <x:Double x:Key="Font.Size.Section">15</x:Double>
+  <x:Double x:Key="Font.Size.Tab">13</x:Double>
   <x:Double x:Key="Space.1">4</x:Double>
   <x:Double x:Key="Space.2">8</x:Double>
   <x:Double x:Key="Space.3">12</x:Double>

@@ -49,6 +49,18 @@ public sealed class ErrorDialogService : IErrorDialogService
             { MainWindow.IsVisible: true } desktop)
         {
             await dialog.ShowDialog(desktop.MainWindow);
+            return;
         }
+
+        // There is not always a window to own it. Startup runs behind the splash, and a failure there
+        // happens before the main window is built at all — which is the one moment an error absolutely
+        // has to be shown, because the alternative is a process that vanishes without a word. Shown
+        // ownerless, and awaited through its Closed event, since only ShowDialog returns a task.
+        var closed = new TaskCompletionSource();
+        dialog.Closed += (_, _) => closed.TrySetResult();
+        // Above the splash, which is topmost while it is up.
+        dialog.Topmost = true;
+        dialog.Show();
+        await closed.Task;
     }
 }

@@ -1,13 +1,16 @@
 using System.Globalization;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Avalonia.Styling;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.TestSupport;
 using RemoteFlow.UI.Converters;
 using RemoteFlow.UI.Navigation;
+using RemoteFlow.UI.ViewModels.CommandPalette;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels;
 using RemoteFlow.UI.Views;
@@ -84,6 +87,127 @@ public sealed class ShellTests
 
         Assert.Equal("Terminals", navigation.CurrentPage.Title);
         window.Close();
+    }
+
+    /// <summary>
+    /// The main window can be loaded and placed before it is shown, which is what lets the splash cover
+    /// the whole start instead of a window appearing empty and then jumping to its remembered size. It is
+    /// asserted because the ordering is not obvious: restoring geometry reads the screen list, and a
+    /// window that has not been shown yet is exactly where that could have been unavailable.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task MainWindowLoadsAndTakesItsRememberedGeometryBeforeItIsShown()
+    {
+        var settings = new InMemorySettingsStore();
+        var geometry = new WindowGeometryService(settings);
+        await geometry.SaveAsync(
+            new WindowGeometry(120, 96, 1024, 700, false),
+            TestContext.Current.CancellationToken);
+        var window = new MainWindow(
+            new MainWindowViewModel(NavigationService.CreateDefault()),
+            geometry);
+
+        Assert.False(window.IsVisible);
+        await window.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1024, window.Width);
+        Assert.Equal(700, window.Height);
+        Assert.Equal(WindowStartupLocation.Manual, window.WindowStartupLocation);
+
+        // And showing it afterwards is what the splash flow then does, so it has to survive that too.
+        window.Show();
+        Assert.True(window.IsVisible);
+        window.Close();
+    }
+
+    /// <summary>
+    /// The sidebar collapses to a rail of icons and opens again, and the choice survives a restart. The
+    /// rail is asserted through what a user would see — the width, the hidden label, the tooltip that
+    /// replaces it — rather than only through the flag, because the whole rail is driven by one style
+    /// class and a class that stopped matching would leave the flag right and the sidebar unchanged.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SidebarCollapsesToARailOfIconsAndRemembersIt()
+    {
+        var settings = new InMemorySettingsStore();
+        var viewModel = new MainWindowViewModel(
+            NavigationService.CreateDefault(),
+            new CommandPaletteViewModel(),
+            null,
+            null,
+            settings);
+        var window = new MainWindow(viewModel, new WindowGeometryService(settings));
+        window.Show();
+        var list = window.FindControl<ListBox>("NavigationList");
+        var footer = window.FindControl<Border>("NavigationFooter");
+        Assert.NotNull(list);
+        Assert.NotNull(footer);
+
+        Assert.True(viewModel.IsNavigationExpanded);
+        Assert.Equal(220, viewModel.NavigationWidth);
+        Assert.DoesNotContain("collapsed", list.Classes);
+        Assert.Equal("Collapse sidebar", viewModel.NavigationToggleLabel);
+
+        viewModel.RequestToggleNavigation();
+        await viewModel.NavigationChangesSettled;
+        window.UpdateLayout();
+
+        Assert.False(viewModel.IsNavigationExpanded);
+        Assert.Equal(56, viewModel.NavigationWidth);
+        Assert.Contains("collapsed", list.Classes);
+        Assert.Contains("collapsed", footer.Classes);
+        Assert.Equal("Expand sidebar", viewModel.NavigationToggleLabel);
+        Assert.False(await settings.Get(SettingKeys.NavigationExpanded, TestContext.Current.CancellationToken));
+
+        // What is left of a row once its label is gone: the glyph, and a tooltip carrying the name the
+        // label used to show. Without the tooltip the collapsed rail would be four unlabelled icons.
+        var row = Assert.IsType<StackPanel>(
+            list.GetRealizedContainers()
+                .OfType<ListBoxItem>()
+                .First()
+                .GetVisualDescendants()
+                .OfType<StackPanel>()
+                .First());
+        var label = Assert.IsType<TextBlock>(row.Children.OfType<TextBlock>().First());
+        Assert.False(label.IsVisible);
+        Assert.Equal("Connections", ToolTip.GetTip(row));
+
+        // And a name of its own, because the tooltip is not one: a hidden label leaves the row with
+        // nothing for a screen reader to read on keyboard focus.
+        Assert.Equal("Connections", AutomationProperties.GetName(row));
+
+        // And back: the label returns rather than the rail merely widening around a hidden one.
+        viewModel.RequestToggleNavigation();
+        await viewModel.NavigationChangesSettled;
+        window.UpdateLayout();
+
+        Assert.True(label.IsVisible);
+        Assert.Equal(220, viewModel.NavigationWidth);
+        Assert.True(await settings.Get(SettingKeys.NavigationExpanded, TestContext.Current.CancellationToken));
+        window.Close();
+    }
+
+    /// <summary>
+    /// A restart lands on whichever state the sidebar was left in, and the first frame is drawn expanded
+    /// rather than flashing shut before the preference has been read.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SidebarRestoresTheRailItWasLeftIn()
+    {
+        var settings = new InMemorySettingsStore();
+        await settings.Set(SettingKeys.NavigationExpanded, false, TestContext.Current.CancellationToken);
+        var viewModel = new MainWindowViewModel(
+            NavigationService.CreateDefault(),
+            new CommandPaletteViewModel(),
+            null,
+            null,
+            settings);
+
+        Assert.True(viewModel.IsNavigationExpanded);
+
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(viewModel.IsNavigationExpanded);
     }
 
     [AvaloniaFact]

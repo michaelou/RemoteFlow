@@ -24,7 +24,7 @@
         <StackPanel Spacing="14">
           <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
             <StackPanel Spacing="5">
-              <TextBlock FontSize="28" FontWeight="SemiBold" Text="{Binding ProductName}" />
+              <TextBlock Classes="page-title" Text="{Binding ProductName}" />
               <TextBlock
                   Foreground="{DynamicResource Brush.Text.Secondary}"
                   Text="The build on this machine, the commit it was built from, and where it keeps your files."

@@ -6,7 +6,7 @@
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Backup">
   <ScrollViewer>
     <StackPanel Margin="8" MaxWidth="720" HorizontalAlignment="Left" Spacing="16">
-      <TextBlock FontSize="28" FontWeight="SemiBold" Text="Export backup" />
+      <TextBlock Classes="page-title" Text="Export backup" />
       <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Create a portable ZIP archive of your RemoteFlow data." />
 
       <TextBlock FontWeight="SemiBold" Text="Scope" />

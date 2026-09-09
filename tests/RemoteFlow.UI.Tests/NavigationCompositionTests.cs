@@ -1,11 +1,14 @@
 using Avalonia.Headless.XUnit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using RemoteFlow.Application;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Infrastructure;
 using RemoteFlow.Persistence;
+using RemoteFlow.TestSupport;
 using RemoteFlow.UI.Navigation;
+using RemoteFlow.UI.ViewModels;
 using Xunit;
 
 namespace RemoteFlow.UI.Tests;
@@ -34,6 +37,12 @@ public sealed class NavigationCompositionTests
                 .AddRemoteFlowInfrastructure(paths)
                 .AddRemoteFlowPersistence(paths)
                 .AddRemoteFlowUI();
+            // The one substitution: the settings store, so the constructor-selection check below can read
+            // and write without standing up a SQLite file and its migrations. Everything the test is about
+            // — which registrations exist, and which constructor the container picks for each — is
+            // unchanged by it, because only the implementation behind the interface differs.
+            var settings = new InMemorySettingsStore();
+            _ = services.Replace(ServiceDescriptor.Singleton<ISettingsStore>(settings));
             // Disposed asynchronously: the page view models are IAsyncDisposable, and the container
             // refuses to dispose one of those from the synchronous path.
             await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
@@ -46,6 +55,18 @@ public sealed class NavigationCompositionTests
             // default, so the two pages with a local browser pane would each quietly stop remembering where
             // it was pointed and no page-level test would notice.
             _ = provider.GetRequiredService<ILocalFolderMemory>();
+
+            // The shell's settings store is the same trap: MainWindowViewModel takes it optionally, so if
+            // the container picked the shorter constructor the sidebar would still collapse and simply
+            // stop remembering it. Proved by writing the preference and asking the shell to restore it —
+            // a view model holding no store reads nothing and stays expanded.
+            await settings.Set(SettingKeys.NavigationExpanded, false, TestContext.Current.CancellationToken);
+            // Resolved because the splash is now the first thing built at startup: one missing dependency
+            // behind it is not a page that fails to open but an application that never appears.
+            _ = provider.GetRequiredService<SplashViewModel>();
+            var shell = provider.GetRequiredService<MainWindowViewModel>();
+            await shell.InitializeAsync(TestContext.Current.CancellationToken);
+            Assert.False(shell.IsNavigationExpanded);
 
             var registrations = provider.GetServices<NavigationPageRegistration>().ToArray();
 

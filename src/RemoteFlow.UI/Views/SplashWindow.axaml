@@ -1,0 +1,80 @@
+<Window
+    x:Class="RemoteFlow.UI.Views.SplashWindow"
+    x:DataType="viewModels:SplashViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels"
+    Title="Starting RemoteFlow"
+    Icon="/Assets/remoteflow.ico"
+    Width="440"
+    Height="200"
+    CanResize="False"
+    ShowInTaskbar="False"
+    WindowDecorations="None"
+    Topmost="True"
+    WindowStartupLocation="CenterScreen"
+    Background="{DynamicResource Brush.Surface.1}">
+  <!-- Square corners and a plain opaque fill, deliberately: a rounded frameless window needs a
+       transparent backing, and where the compositor will not give one the corners come back as black
+       blocks. A one-pixel border does the work of separating it from whatever is behind it. -->
+  <Border
+      BorderBrush="{DynamicResource Brush.Border}"
+      BorderThickness="1"
+      Padding="28,24">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="0">
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <PathIcon
+            Width="26"
+            Height="26"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brush.Accent}"
+            Data="{StaticResource Icon.Terminals}" />
+        <!-- Off the type scale on purpose. The scale exists to keep a dense tool dense; this is the one
+             screen with a single thing on it, and the product's own name is what it is for. -->
+        <TextBlock
+            FontSize="24"
+            FontWeight="SemiBold"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brush.Text.Primary}"
+            Text="{Binding ProductName}" />
+      </StackPanel>
+
+      <TextBlock
+          Grid.Row="1"
+          Margin="0,8,0,0"
+          Foreground="{DynamicResource Brush.Text.Secondary}"
+          Text="{Binding Tagline}" />
+
+      <!-- An indeterminate bar rather than a percentage: the steps behind it are a migration and a few
+           filesystem sweeps, and none of them can say how far along it is. Claiming a percentage it
+           cannot know is worse than admitting it does not. -->
+      <ProgressBar
+          Grid.Row="3"
+          Margin="0,0,0,10"
+          Height="3"
+          IsIndeterminate="True"
+          AutomationProperties.Name="Starting RemoteFlow" />
+
+      <Grid Grid.Row="4" ColumnDefinitions="*,Auto">
+        <!-- A polite live region: the steps are the only thing on this window that changes, so a screen
+             reader user hears the start progress rather than one announcement and then silence. -->
+        <TextBlock
+            AutomationProperties.LiveSetting="Polite"
+            AutomationProperties.Name="Startup progress"
+            FontSize="12"
+            VerticalAlignment="Center"
+            TextTrimming="CharacterEllipsis"
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="{Binding StatusMessage, StringFormat='{}{0}…'}" />
+        <TextBlock
+            Grid.Column="1"
+            Margin="12,0,0,0"
+            FontSize="12"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brush.Text.Muted}"
+            IsVisible="{Binding VersionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+            Text="{Binding VersionText}" />
+      </Grid>
+    </Grid>
+  </Border>
+</Window>

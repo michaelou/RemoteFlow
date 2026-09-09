@@ -6,7 +6,7 @@
     xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Backup">
   <ScrollViewer>
     <StackPanel Margin="8" MaxWidth="720" HorizontalAlignment="Left" Spacing="16">
-      <TextBlock FontSize="28" FontWeight="SemiBold" Text="Automatic backup" />
+      <TextBlock Classes="page-title" Text="Automatic backup" />
       <TextBlock
           Foreground="{DynamicResource Brush.Text.Secondary}"
           Text="A backup runs about 30 seconds after the last change to a connection, folder or tag, so a burst of edits produces one archive rather than a dozen."

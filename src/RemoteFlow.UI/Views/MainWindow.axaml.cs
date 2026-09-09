@@ -48,6 +48,7 @@ public sealed partial class MainWindow : Window
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        await _viewModel.InitializeAsync(cancellationToken).ConfigureAwait(true);
         if (_viewModel.CurrentPage is ConnectionsPageViewModel connectionsPage)
         {
             await connectionsPage.RefreshAsync(cancellationToken).ConfigureAwait(true);
@@ -64,7 +65,20 @@ public sealed partial class MainWindow : Window
         WindowState = geometry.IsMaximized ? WindowState.Maximized : WindowState.Normal;
         _initialized = true;
         SyncNavigationSelection();
-        _ = NavigationList.Focus();
+        // Only if the window is already up. Behind a splash this runs before Show, where there is no
+        // active window for focus to land in; OnOpened does it in that case.
+        if (IsVisible)
+        {
+            _ = NavigationList.Focus();
+        }
+    }
+
+    /// <summary>Collapses the sidebar to a rail of icons, or opens it again. Deliberately not on a
+    /// keyboard shortcut: every unclaimed Ctrl combination on this window is tunnelled to the terminal,
+    /// and Ctrl+B — the obvious choice — is tmux's prefix key.</summary>
+    private void NavigationToggle_OnClick(object? sender, RoutedEventArgs e)
+    {
+        _viewModel.RequestToggleNavigation();
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -98,6 +112,11 @@ public sealed partial class MainWindow : Window
     {
         Opened -= OnOpened;
         Dispatcher.UIThread.Post(() => WindowsTaskbarIcon.Apply(this), DispatcherPriority.Background);
+
+        // The keyboard starts in the sidebar. Posted rather than set inline because a window being shown
+        // has not finished laying out yet, and posted from here rather than done in InitializeAsync
+        // because behind a splash that has already run by the time the window is shown.
+        Dispatcher.UIThread.Post(() => _ = NavigationList.Focus(), DispatcherPriority.Input);
     }
 
     private void OnPositionChanged(object? sender, PixelPointEventArgs e)
