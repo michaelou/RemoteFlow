@@ -7,6 +7,8 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-09-10
+
 ### Added
 
 - **A splash screen covers the start.** RemoteFlow used to put its window on screen the moment the
@@ -724,7 +726,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/michaelou/RemoteFlow/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/michaelou/RemoteFlow/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/michaelou/RemoteFlow/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/michaelou/RemoteFlow/compare/v0.6.2...v0.7.0
