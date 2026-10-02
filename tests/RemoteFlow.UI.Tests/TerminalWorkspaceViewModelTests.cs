@@ -1,6 +1,7 @@
 using System.IO.Pipelines;
 using System.Text;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -139,6 +140,210 @@ public sealed class TerminalWorkspaceViewModelTests
     }
 
     /// <summary>
+    /// Dragging a tile to another place in the grid moves it on screen and nowhere else. Moving an item of an
+    /// <c>ItemsControl</c>'s source rebuilds its container, so the tiles are generated from a collection that
+    /// never reorders, and the same hosts must still be holding the same sessions afterwards.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ReorderingTheGridMovesTilesWithoutRehostingAny()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var workspace = new TerminalWorkspaceViewModel(new RecordingPtyService(), new UiDispatcher());
+        var terminal = (await workspace.AddLocalSessionAsync(token))!;
+        var sessions = Enumerable.Range(1, 2)
+            .Select(index => new FakeWorkspaceSession($"RDP {index}", "RDP"))
+            .ToArray();
+        foreach (var session in sessions)
+        {
+            workspace.AddWorkspaceSession(session);
+        }
+
+        workspace.MaxGridColumns = 3;
+        workspace.IsGridLayout = true;
+        var view = new RemoteFlow.UI.Views.Terminal.TerminalWorkspace { DataContext = workspace };
+        var window = new Window { Width = 1200, Height = 800, Content = view };
+        window.Show();
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var panel = view.GetVisualDescendants()
+            .OfType<RemoteFlow.UI.Views.Terminal.WorkspaceSessionTilePanel>()
+            .Single();
+        var containers = panel.Children.ToArray();
+        var hostsBefore = HostsBySession(view);
+        double LeftOf(IWorkspaceSessionViewModel session)
+        {
+            return global::Avalonia.VisualExtensions.TranslatePoint(hostsBefore[session], default, panel)!.Value.X;
+        }
+        Assert.True(LeftOf(terminal) < LeftOf(sessions[0]));
+        Assert.True(LeftOf(sessions[0]) < LeftOf(sessions[1]));
+
+        workspace.MoveSession(sessions[1], terminal);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal([sessions[1], terminal, sessions[0]], workspace.Sessions);
+        Assert.Equal([terminal, sessions[0], sessions[1]], workspace.HostedSessions);
+        Assert.Equal(containers, panel.Children);
+        var hostsAfter = HostsBySession(view);
+        Assert.All(hostsBefore, pair => Assert.Same(pair.Value, hostsAfter[pair.Key]));
+        Assert.True(LeftOf(sessions[1]) < LeftOf(terminal));
+        Assert.True(LeftOf(terminal) < LeftOf(sessions[0]));
+        Assert.All(sessions, session => Assert.Equal(1, session.CreateContentCount));
+        window.Close();
+
+        static Dictionary<IWorkspaceSessionViewModel, RemoteFlow.UI.Views.Terminal.WorkspaceSessionContentHost>
+            HostsBySession(Control view)
+        {
+            return view.GetVisualDescendants()
+                .OfType<RemoteFlow.UI.Views.Terminal.WorkspaceSessionContentHost>()
+                .ToDictionary(host => host.Session!);
+        }
+    }
+
+    /// <summary>A tile moves when its header is dragged onto another tile and released, and only then: the
+    /// grid does not rearrange while the pointer is still crossing it.</summary>
+    [AvaloniaFact]
+    public async Task DraggingATileHeaderOntoAnotherTileMovesItThere()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var workspace = new TerminalWorkspaceViewModel(new RecordingPtyService(), new UiDispatcher());
+        var sessions = new[]
+        {
+            new FakeWorkspaceSession("DC01", "RDP"),
+            new FakeWorkspaceSession("SQL01", "RDP"),
+            new FakeWorkspaceSession("WEB01", "RDP"),
+        };
+        foreach (var session in sessions)
+        {
+            workspace.AddWorkspaceSession(session);
+        }
+
+        workspace.MaxGridColumns = 3;
+        workspace.IsGridLayout = true;
+        var view = new RemoteFlow.UI.Views.Terminal.TerminalWorkspace { DataContext = workspace };
+        var window = new Window { Width = 1200, Height = 800, Content = view };
+        window.Show();
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var headers = view.GetVisualDescendants()
+            .OfType<Border>()
+            .Where(border => border.Classes.Contains("tile-header"))
+            .ToDictionary(border => (IWorkspaceSessionViewModel)border.DataContext!);
+        global::Avalonia.Point CentreOf(Control control)
+        {
+            return global::Avalonia.VisualExtensions.TranslatePoint(
+                control,
+                new global::Avalonia.Point(control.Bounds.Width / 2, control.Bounds.Height / 2),
+                window)!.Value;
+        }
+        var from = CentreOf(headers[sessions[2]]);
+        var to = CentreOf(headers[sessions[0]]) + new global::Avalonia.Point(0, 200);
+
+        window.MouseDown(from, global::Avalonia.Input.MouseButton.Left);
+        window.MouseMove(from + new global::Avalonia.Point(-40, 40), global::Avalonia.Input.RawInputModifiers.LeftMouseButton);
+        window.MouseMove(to, global::Avalonia.Input.RawInputModifiers.LeftMouseButton);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(sessions, workspace.Sessions);
+        var target = Assert.Single(
+            view.GetVisualDescendants().OfType<Control>(),
+            control => control.Classes.Contains("tile-drop-target"));
+        Assert.Same(sessions[0], target.DataContext);
+        _ = Assert.Single(
+            view.GetVisualDescendants().OfType<Border>(),
+            border => border.Classes.Contains("drop-indicator") && border.IsEffectivelyVisible);
+
+        window.MouseUp(to, global::Avalonia.Input.MouseButton.Left);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal([sessions[2], sessions[0], sessions[1]], workspace.Sessions);
+        Assert.DoesNotContain(
+            view.GetVisualDescendants().OfType<Control>(),
+            control => control.Classes.Contains("tile-drop-target"));
+        Assert.All(sessions, session => Assert.Equal(1, session.CreateContentCount));
+        window.Close();
+    }
+
+    /// <summary>Tabs reorder while they are dragged, like a browser's, and settle where they are released.</summary>
+    [AvaloniaFact]
+    public async Task DraggingATabAlongTheStripReordersTheSessions()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var workspace = new TerminalWorkspaceViewModel(new RecordingPtyService(), new UiDispatcher());
+        var sessions = new[]
+        {
+            new FakeWorkspaceSession("DC01", "RDP"),
+            new FakeWorkspaceSession("SQL01", "RDP"),
+            new FakeWorkspaceSession("WEB01", "RDP"),
+        };
+        foreach (var session in sessions)
+        {
+            workspace.AddWorkspaceSession(session);
+        }
+
+        var view = new RemoteFlow.UI.Views.Terminal.TerminalWorkspace { DataContext = workspace };
+        var window = new Window { Width = 1200, Height = 800, Content = view };
+        window.Show();
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Border TabOf(IWorkspaceSessionViewModel session)
+        {
+            return view.GetVisualDescendants()
+                .OfType<Border>()
+                .Single(border => border.Classes.Contains("session-tab") && ReferenceEquals(border.DataContext, session));
+        }
+
+        global::Avalonia.Point PointIn(Control control, double fraction)
+        {
+            return global::Avalonia.VisualExtensions.TranslatePoint(
+                control,
+                new global::Avalonia.Point(control.Bounds.Width * fraction, control.Bounds.Height / 2),
+                window)!.Value;
+        }
+        var from = PointIn(TabOf(sessions[0]), 0.3);
+
+        window.MouseDown(from, global::Avalonia.Input.MouseButton.Left);
+        window.MouseMove(from + new global::Avalonia.Point(10, 0), global::Avalonia.Input.RawInputModifiers.LeftMouseButton);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        window.MouseMove(PointIn(TabOf(sessions[1]), 0.9), global::Avalonia.Input.RawInputModifiers.LeftMouseButton);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal([sessions[1], sessions[0], sessions[2]], workspace.Sessions);
+
+        var end = PointIn(TabOf(sessions[2]), 0.9);
+        window.MouseMove(end, global::Avalonia.Input.RawInputModifiers.LeftMouseButton);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        window.MouseUp(end, global::Avalonia.Input.MouseButton.Left);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal([sessions[1], sessions[2], sessions[0]], workspace.Sessions);
+        Assert.All(sessions, session => Assert.Equal(1, session.CreateContentCount));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task HostedSessionsFollowOpeningAndClosingButNotReordering()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var workspace = new TerminalWorkspaceViewModel(new RecordingPtyService(), new UiDispatcher());
+        var terminal = (await workspace.AddLocalSessionAsync(token))!;
+        var first = new FakeWorkspaceSession("DC01", "RDP");
+        var second = new FakeWorkspaceSession("SQL01", "RDP");
+        workspace.AddWorkspaceSession(first);
+        workspace.AddWorkspaceSession(second);
+
+        Assert.True(workspace.MoveSessionBy(second, -5));
+        Assert.Equal([second, terminal, first], workspace.Sessions);
+        Assert.False(workspace.MoveSessionBy(second, -1));
+        Assert.True(workspace.MoveSessionBy(terminal, 1));
+        Assert.Equal([second, first, terminal], workspace.Sessions);
+        Assert.Equal([terminal, first, second], workspace.HostedSessions);
+
+        Assert.True(await workspace.CloseSessionAsync(first, skipConfirmation: true, token));
+        Assert.Equal([terminal, second], workspace.HostedSessions);
+        var third = new FakeWorkspaceSession("WEB01", "RDP");
+        workspace.AddWorkspaceSession(third);
+        Assert.Equal([terminal, second, third], workspace.HostedSessions);
+    }
+
+    /// <summary>
     /// Every keyboard command — close, copy, paste, find — acts on the selected session, so in a grid the
     /// session holding the keyboard has to be the selected one. A native remote desktop cannot say so with a
     /// pointer event, because the click never reaches Avalonia; it asks through the content host instead.
@@ -176,7 +381,8 @@ public sealed class TerminalWorkspaceViewModelTests
     }
 
     /// <summary>Which tile holds the keyboard decides what Close, Copy and Find act on, so it has to be
-    /// marked. The tint the tabs use is nearly invisible on a session with a grey accent.</summary>
+    /// marked. The tint the tabs use is nearly invisible on a session with a grey accent, so every tile's
+    /// frame keeps its environment colour and the ones without the keyboard draw it faded.</summary>
     [AvaloniaFact]
     public async Task TheTileHoldingTheKeyboardIsTheOneMarkedAsActive()
     {
@@ -190,17 +396,19 @@ public sealed class TerminalWorkspaceViewModelTests
         window.Show();
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 
-        var tiles = view.GetVisualDescendants()
+        var frames = view.GetVisualDescendants()
             .OfType<Border>()
-            .Where(border => border.Classes.Contains("session-tile"))
+            .Where(border => border.Classes.Contains("tile-frame"))
             .ToArray();
-        Assert.Equal(2, tiles.Length);
-        Assert.Same(second, Assert.Single(tiles, tile => tile.BorderThickness.Left == 2).DataContext);
+        Assert.Equal(2, frames.Length);
+        Assert.All(frames, frame => Assert.Equal(1, frame.BorderThickness.Left));
+        Assert.Same(second, Assert.Single(frames, frame => frame.Opacity == 1).DataContext);
 
         workspace.SelectSession(first);
         global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
 
-        Assert.Same(first, Assert.Single(tiles, tile => tile.BorderThickness.Left == 2).DataContext);
+        Assert.Same(first, Assert.Single(frames, frame => frame.Opacity == 1).DataContext);
+        Assert.All(frames.Where(frame => !ReferenceEquals(frame.DataContext, first)), frame => Assert.True(frame.Opacity < 1));
         window.Close();
     }
 

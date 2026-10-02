@@ -58,4 +58,10 @@
   <StreamGeometry x:Key="Icon.Forward">M8.8,2.4L14.4,8L8.8,13.6V9.2H2.5V6.8H8.8Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.Up">M8,1.6L13.6,7.2H9.2V13.5H6.8V7.2H2.4Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.Cancel">M3.7,2.3L8,6.6L12.3,2.3L13.7,3.7L9.4,8L13.7,12.3L12.3,13.7L8,9.4L3.7,13.7L2.3,12.3L6.6,8L2.3,3.7Z</StreamGeometry>
+  <!-- The terminal workspace toolbar. Help opens the keyboard shortcuts, so its glyph is a keyboard rather
+       than a question mark. The search handle starts where the ring ends, so the two read as one shape. -->
+  <StreamGeometry x:Key="Icon.Grid">M2,2H7V7H2Z M9,2H14V7H9Z M2,9H7V14H2Z M9,9H14V14H9Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Keyboard">F0 M1,3.5H15V12.5H1Z M2.5,5V11H13.5V5Z M3.5,6H5V7.5H3.5Z M6,6H7.5V7.5H6Z M8.5,6H10V7.5H8.5Z M11,6H12.5V7.5H11Z M5,8.75H11V10H5Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Search">F0 M6.5,1.5A5,5 0 1 1 6.5,11.5A5,5 0 1 1 6.5,1.5Z M6.5,3A3.5,3.5 0 1 0 6.5,10A3.5,3.5 0 1 0 6.5,3Z M9.5,10.6L10.6,9.5L14.8,13.7L13.7,14.8Z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Add">M7,2H9V7H14V9H9V14H7V9H2V7H7Z</StreamGeometry>
 </ResourceDictionary>

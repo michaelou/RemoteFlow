@@ -140,6 +140,36 @@ public sealed class WorkspaceSessionTilePanelTests
         Assert.True(shown.ZIndex > last.ZIndex);
     }
 
+    /// <summary>
+    /// Tiles are laid out by their order, not by the order of the children: the children cannot be reordered
+    /// without rebuilding them, so dragging a tile to a new place changes its number instead.
+    /// </summary>
+    [AvaloniaFact]
+    public void TilesAreLaidOutInTileOrderRatherThanChildOrder()
+    {
+        var panel = new WorkspaceSessionTilePanel { MaxColumns = 3 };
+        var first = new Border();
+        var second = new Border();
+        var third = new Border();
+        panel.Children.Add(first);
+        panel.Children.Add(second);
+        panel.Children.Add(third);
+        WorkspaceSessionTilePanel.SetTileOrder(first, 2);
+        WorkspaceSessionTilePanel.SetTileOrder(second, 0);
+        WorkspaceSessionTilePanel.SetTileOrder(third, 1);
+
+        Layout(panel, 900, 600);
+
+        Assert.Equal(new Rect(0, 0, 300, 600), second.Bounds);
+        Assert.Equal(new Rect(300, 0, 300, 600), third.Bounds);
+        Assert.Equal(new Rect(600, 0, 300, 600), first.Bounds);
+
+        WorkspaceSessionTilePanel.SetTileOrder(first, -1);
+        Layout(panel, 900, 600);
+
+        Assert.Equal(new Rect(0, 0, 300, 600), first.Bounds);
+    }
+
     /// <summary>Every tile of a grid is equal, so none of them may cover a neighbour.</summary>
     [AvaloniaFact]
     public void EveryTileOfAGridSharesOneZOrder()

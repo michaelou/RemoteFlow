@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
@@ -14,16 +15,42 @@ namespace RemoteFlow.UI.Views.Terminal;
 
 public sealed partial class TerminalWorkspace : UserControl
 {
+    /// <summary>How far the pointer travels before a press on a tab or a tile header becomes a drag. Below
+    /// it, the press was a click.</summary>
+    private const double _dragThreshold = 6;
+
+    private const string _dragSourceClass = "tile-drag-source";
+    private const string _dropTargetClass = "tile-drop-target";
+    private const string _draggingTabClass = "dragging";
+
     private readonly Dictionary<Control, IDisposable> _containerTiling = [];
-    private IWorkspaceSessionViewModel? _pressedTab;
+    private TerminalWorkspaceViewModel? _observedWorkspace;
+    private IWorkspaceSessionViewModel? _dragSession;
+    private DragSurface _dragSurface;
     private Point _pressPosition;
-    private bool _isDraggingTab;
+    private bool _isDragging;
+    private int _dragOriginIndex;
+    private Control? _dropTile;
+
+    private enum DragSurface
+    {
+        Tab,
+        Tile,
+    }
 
     public TerminalWorkspace()
     {
         InitializeComponent();
         Loaded += OnLoaded;
+        DataContextChanged += OnDataContextChanged;
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+        // A drag captures the pointer to the workspace itself: live reordering rebuilds the tab under the
+        // pointer, and a tile drag crosses other tiles — neither the pressed element nor what lies beneath
+        // the pointer can be trusted to keep receiving the gesture. Handled events too, because a terminal
+        // marks the moves it sees as its own.
+        AddHandler(PointerMovedEvent, OnDragPointerMoved, RoutingStrategies.Bubble, handledEventsToo: true);
+        AddHandler(PointerReleasedEvent, OnDragPointerReleased, RoutingStrategies.Bubble, handledEventsToo: true);
+        AddHandler(PointerCaptureLostEvent, OnDragCaptureLost, RoutingStrategies.Direct);
         AddHandler(
             WorkspaceSessionContentHost.FocusEscapeRequestedEvent,
             OnFocusEscapeRequested,
@@ -92,7 +119,7 @@ public sealed partial class TerminalWorkspace : UserControl
     private async void Tab_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Control { DataContext: IWorkspaceSessionViewModel session } control ||
-            DataContext is not TerminalsPageViewModel viewModel)
+            DataContext is not TerminalWorkspaceViewModel viewModel)
         {
             return;
         }
@@ -111,9 +138,7 @@ public sealed partial class TerminalWorkspace : UserControl
         }
 
         viewModel.SelectSession(session);
-        _pressedTab = session;
-        _pressPosition = e.GetPosition(this);
-        _isDraggingTab = false;
+        BeginPress(session, DragSurface.Tab, e);
         if (session is IWorkspaceSessionFocusTarget)
         {
             _ = control.Focus(NavigationMethod.Pointer);
@@ -124,18 +149,29 @@ public sealed partial class TerminalWorkspace : UserControl
         }
     }
 
-    /// <summary>Enter or Space selects the focused tab; Delete closes it. The tab keeps focus after a
-    /// selection so a keyboard user can keep moving along the strip, and hands focus to the terminal
-    /// only when they ask for the session itself.</summary>
+    /// <summary>Enter or Space selects the focused tab; Delete closes it; Ctrl+Shift+Left and Right move it.
+    /// The tab keeps focus after a selection so a keyboard user can keep moving along the strip, and hands
+    /// focus to the terminal only when they ask for the session itself.</summary>
     private async void Tab_OnKeyDown(object? sender, KeyEventArgs e)
     {
         if (sender is not Control { DataContext: IWorkspaceSessionViewModel session } ||
-            DataContext is not TerminalsPageViewModel viewModel)
+            DataContext is not TerminalWorkspaceViewModel viewModel)
         {
             return;
         }
 
-        if (e.Key is Key.Enter or Key.Space)
+        if (e.Key is Key.Left or Key.Right &&
+            e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+        {
+            // Moving the session rebuilds its tab, and the new one does not have the focus the old one did.
+            if (viewModel.MoveSessionBy(session, e.Key == Key.Left ? -1 : 1))
+            {
+                Dispatcher.UIThread.Post(() => FocusTab(session), DispatcherPriority.Loaded);
+            }
+
+            e.Handled = true;
+        }
+        else if (e.Key is Key.Enter or Key.Space)
         {
             viewModel.SelectSession(session);
             e.Handled = true;
@@ -148,29 +184,257 @@ public sealed partial class TerminalWorkspace : UserControl
         }
     }
 
-    private void Tab_OnPointerMoved(object? sender, PointerEventArgs e)
+    /// <summary>The header is the only part of a tile that is the workspace's own to handle: everything
+    /// below it belongs to the session. Pressing it selects the session; dragging it moves the tile.</summary>
+    private void TileHeader_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (_pressedTab is null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        if (sender is not Control { DataContext: IWorkspaceSessionViewModel session } control ||
+            DataContext is not TerminalWorkspaceViewModel viewModel ||
+            !e.GetCurrentPoint(control).Properties.IsLeftButtonPressed)
         {
             return;
         }
 
-        var position = e.GetPosition(this);
-        _isDraggingTab = Math.Abs(position.X - _pressPosition.X) > 6 ||
-            Math.Abs(position.Y - _pressPosition.Y) > 6;
+        viewModel.SelectSession(session);
+        BeginPress(session, DragSurface.Tile, e);
+        FocusTerminal();
+        e.Handled = true;
     }
 
-    private void Tab_OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+    private void BeginPress(IWorkspaceSessionViewModel session, DragSurface surface, PointerEventArgs e)
     {
-        if (_isDraggingTab && _pressedTab is not null &&
-            sender is Control { DataContext: IWorkspaceSessionViewModel target } &&
-            DataContext is TerminalsPageViewModel viewModel)
+        _dragSession = session;
+        _dragSurface = surface;
+        _pressPosition = e.GetPosition(this);
+        _isDragging = false;
+    }
+
+    private void OnDragPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_dragSession is null || DataContext is not TerminalWorkspaceViewModel viewModel)
         {
-            viewModel.MoveSession(_pressedTab, target);
+            return;
         }
 
-        _pressedTab = null;
-        _isDraggingTab = false;
+        // The button can come up outside the window, where the release is never seen.
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            EndDrag(commit: false);
+            return;
+        }
+
+        if (!_isDragging)
+        {
+            var position = e.GetPosition(this);
+            if (Math.Abs(position.X - _pressPosition.X) <= _dragThreshold &&
+                Math.Abs(position.Y - _pressPosition.Y) <= _dragThreshold)
+            {
+                return;
+            }
+
+            _isDragging = true;
+            _dragOriginIndex = viewModel.Sessions.IndexOf(_dragSession);
+            e.Pointer.Capture(this);
+            Cursor = new Cursor(StandardCursorType.DragMove);
+            MarkDragSource();
+        }
+
+        if (_dragSurface == DragSurface.Tab)
+        {
+            ReorderTabUnderPointer(e, viewModel);
+        }
+        else
+        {
+            MarkDropTile(TileUnderPointer(e));
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnDragPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_dragSession is null)
+        {
+            return;
+        }
+
+        if (_isDragging)
+        {
+            e.Handled = true;
+        }
+
+        EndDrag(commit: true);
+    }
+
+    private void OnDragCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (_isDragging && ReferenceEquals(e.Source, this))
+        {
+            EndDrag(commit: false);
+        }
+    }
+
+    /// <summary>
+    /// Tabs reorder live, the way a browser's do: the dragged tab takes the place of whichever one the
+    /// pointer is over.
+    /// </summary>
+    /// <remarks>
+    /// A tab only swaps in once the pointer is far enough across the other one that, after the swap, it is
+    /// still over the dragged tab. Swapping on first contact makes a narrow tab dragged over a wide one land
+    /// with the pointer back over the wide one, which swaps them again — the pair flickers back and forth.
+    /// </remarks>
+    private void ReorderTabUnderPointer(PointerEventArgs e, TerminalWorkspaceViewModel viewModel)
+    {
+        var session = _dragSession!;
+        var dragged = TabFor(session);
+        var draggedWidth = dragged?.Bounds.Width ?? 0;
+        if (draggedWidth <= 0)
+        {
+            // The tab was rebuilt by the last move and has not been laid out yet.
+            return;
+        }
+
+        foreach (var tab in Tabs())
+        {
+            if (tab.DataContext is not IWorkspaceSessionViewModel target || ReferenceEquals(target, session))
+            {
+                continue;
+            }
+
+            var x = e.GetPosition(tab).X;
+            var width = tab.Bounds.Width;
+            if (x < 0 || x > width)
+            {
+                continue;
+            }
+
+            var movingRight = viewModel.Sessions.IndexOf(target) > viewModel.Sessions.IndexOf(session);
+            var settles = movingRight ? x >= width - draggedWidth : x <= draggedWidth;
+            if (settles)
+            {
+                viewModel.MoveSession(session, target);
+                Dispatcher.UIThread.Post(MarkDragSource, DispatcherPriority.Loaded);
+            }
+
+            return;
+        }
+    }
+
+    private Control? TileUnderPointer(PointerEventArgs e)
+    {
+        if (SessionContent.ItemsPanelRoot is not WorkspaceSessionTilePanel panel)
+        {
+            return null;
+        }
+
+        foreach (var tile in panel.Children)
+        {
+            if (WorkspaceSessionTilePanel.IsTile(tile) &&
+                new Rect(tile.Bounds.Size).Contains(e.GetPosition(tile)))
+            {
+                return tile;
+            }
+        }
+
+        return null;
+    }
+
+    private void MarkDropTile(Control? tile)
+    {
+        // Dropping a tile on itself goes nowhere, so it is not marked as somewhere to go.
+        if (tile is not null && ReferenceEquals(SessionContent.ItemFromContainer(tile), _dragSession))
+        {
+            tile = null;
+        }
+
+        if (ReferenceEquals(tile, _dropTile))
+        {
+            return;
+        }
+
+        _ = _dropTile?.Classes.Remove(_dropTargetClass);
+        _dropTile = tile;
+        _dropTile?.Classes.Add(_dropTargetClass);
+    }
+
+    /// <summary>Fades whatever stands for the session being dragged: its tab, or in a tile drag its tile.</summary>
+    private void MarkDragSource()
+    {
+        if (_dragSession is null || !_isDragging)
+        {
+            return;
+        }
+
+        if (_dragSurface == DragSurface.Tab)
+        {
+            foreach (var tab in Tabs())
+            {
+                tab.Classes.Set(_draggingTabClass, ReferenceEquals(tab.DataContext, _dragSession));
+            }
+        }
+        else if (SessionContent.ContainerFromItem(_dragSession) is { } tile)
+        {
+            tile.Classes.Add(_dragSourceClass);
+        }
+    }
+
+    /// <summary>
+    /// Finishes the gesture. A tile moves only now, on release: a grid that rearranged itself while the
+    /// pointer crossed it would resize every terminal it passed over. A cancelled tab drag puts the tab back
+    /// where it started, since its moves were made as it went.
+    /// </summary>
+    private void EndDrag(bool commit)
+    {
+        var session = _dragSession;
+        var wasDragging = _isDragging;
+        var dropTile = _dropTile;
+        _dragSession = null;
+        _isDragging = false;
+        MarkDropTile(null);
+        if (!wasDragging || session is null)
+        {
+            return;
+        }
+
+        ClearValue(CursorProperty);
+        foreach (var tab in Tabs())
+        {
+            _ = tab.Classes.Remove(_draggingTabClass);
+        }
+
+        if (SessionContent.ContainerFromItem(session) is { } tile)
+        {
+            _ = tile.Classes.Remove(_dragSourceClass);
+        }
+
+        if (DataContext is not TerminalWorkspaceViewModel viewModel)
+        {
+            return;
+        }
+
+        if (_dragSurface == DragSurface.Tile && commit &&
+            dropTile is not null &&
+            SessionContent.ItemFromContainer(dropTile) is IWorkspaceSessionViewModel target)
+        {
+            viewModel.MoveSession(session, target);
+        }
+        else if (_dragSurface == DragSurface.Tab && !commit &&
+            _dragOriginIndex >= 0 && _dragOriginIndex < viewModel.Sessions.Count)
+        {
+            viewModel.MoveSession(session, viewModel.Sessions[_dragOriginIndex]);
+        }
+    }
+
+    private IEnumerable<Border> Tabs()
+    {
+        return TabScroller.GetVisualDescendants()
+            .OfType<Border>()
+            .Where(border => border.Classes.Contains("session-tab"));
+    }
+
+    private Border? TabFor(IWorkspaceSessionViewModel? session)
+    {
+        return Tabs().FirstOrDefault(tab => ReferenceEquals(tab.DataContext, session));
     }
 
     private void TerminalBorder_OnPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -233,17 +497,44 @@ public sealed partial class TerminalWorkspace : UserControl
     {
         ReleaseContainerTiling(container);
         if (DataContext is not TerminalWorkspaceViewModel viewModel ||
-            index < 0 || index >= viewModel.Sessions.Count)
+            index < 0 || index >= viewModel.HostedSessions.Count)
         {
             return;
         }
 
+        var session = viewModel.HostedSessions[index];
+        WorkspaceSessionTilePanel.SetTileOrder(container, viewModel.Sessions.IndexOf(session));
         _containerTiling[container] = container.Bind(
             WorkspaceSessionTilePanel.IsTileShownProperty,
             new Binding(nameof(IWorkspaceSessionViewModel.IsContentVisible))
             {
-                Source = viewModel.Sessions[index],
+                Source = session,
             });
+    }
+
+    private void OnDataContextChanged(object? sender, EventArgs e)
+    {
+        _observedWorkspace?.Sessions.CollectionChanged -= OnSessionOrderChanged;
+        _observedWorkspace = DataContext as TerminalWorkspaceViewModel;
+        _observedWorkspace?.Sessions.CollectionChanged += OnSessionOrderChanged;
+    }
+
+    /// <summary>Hands every tile its place in the user's order. Any change to the order can move any tile,
+    /// and there are never more than a handful of them.</summary>
+    private void OnSessionOrderChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (DataContext is not TerminalWorkspaceViewModel viewModel)
+        {
+            return;
+        }
+
+        foreach (var container in SessionContent.GetRealizedContainers())
+        {
+            if (SessionContent.ItemFromContainer(container) is IWorkspaceSessionViewModel session)
+            {
+                WorkspaceSessionTilePanel.SetTileOrder(container, viewModel.Sessions.IndexOf(session));
+            }
+        }
     }
 
     private void ReleaseContainerTiling(Control container)
@@ -259,7 +550,7 @@ public sealed partial class TerminalWorkspace : UserControl
         BindContainerTiling(e.Container, e.Index);
     }
 
-    /// <summary>Reordering hands a container a different session without clearing it.</summary>
+    /// <summary>Closing a session shifts the index of every container after it without clearing them.</summary>
     private void SessionContent_OnContainerIndexChanged(object? sender, ContainerIndexChangedEventArgs e)
     {
         BindContainerTiling(e.Container, e.NewIndex);
@@ -274,6 +565,18 @@ public sealed partial class TerminalWorkspace : UserControl
     {
         if (DataContext is not TerminalsPageViewModel viewModel)
         {
+            return;
+        }
+
+        if (_isDragging)
+        {
+            // Escape abandons a drag; nothing else typed in the middle of one is meant for the terminal.
+            if (e.Key == Key.Escape)
+            {
+                EndDrag(commit: false);
+            }
+
+            e.Handled = true;
             return;
         }
 
@@ -427,11 +730,12 @@ public sealed partial class TerminalWorkspace : UserControl
     /// are no sessions at all.</summary>
     private void FocusTabStrip()
     {
-        var selected = (DataContext as TerminalsPageViewModel)?.SelectedSession;
-        var tab = TabScroller.GetVisualDescendants()
-            .OfType<Border>()
-            .FirstOrDefault(border => border.Focusable && ReferenceEquals(border.DataContext, selected));
-        _ = tab?.Focus(NavigationMethod.Tab) ?? Focus(NavigationMethod.Tab);
+        FocusTab((DataContext as TerminalsPageViewModel)?.SelectedSession);
+    }
+
+    private void FocusTab(IWorkspaceSessionViewModel? session)
+    {
+        _ = TabFor(session)?.Focus(NavigationMethod.Tab) ?? Focus(NavigationMethod.Tab);
     }
 
     private void FocusFindBox()

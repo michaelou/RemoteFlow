@@ -8,36 +8,165 @@
     xmlns:terminalViewModels="using:RemoteFlow.UI.ViewModels.Terminal">
   <UserControl.Styles>
     <Style Selector="Border.session-tab:focus">
-      <Setter Property="BorderThickness" Value="2,2,2,3" />
+      <Setter Property="BorderThickness" Value="2" />
     </Style>
-    <!-- The column picker's minimum height is taller than a button's, and the row is taller still because
-         the page title beside it is two lines. Centring every control in the row is what puts the picker and
-         the buttons on one line. -->
+    <Style Selector="Border.session-tab.dragging">
+      <Setter Property="Opacity" Value="0.6" />
+    </Style>
+    <!-- The tab strip is taller than a button, so centring every control in the row is what lines the
+         actions up with the middle of the tabs instead of with their top edge. -->
     <Style Selector="StackPanel#WorkspaceActions > :is(Control)">
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <!-- Which tile has the keyboard decides what Close, Copy and Find act on, so in a grid it has to be
-         legible at a glance. The tint alone is nearly invisible for a session with a grey accent. Both
-         thicknesses are set here: a value set on the element itself would outrank the active one. -->
-    <Style Selector="Border.session-tile">
-      <Setter Property="BorderThickness" Value="1" />
+    <!-- The actions are glyphs, each named by its tooltip and its accessible name, so the toolbar is a
+         short run of squares rather than a row of words competing with the tabs for width. Equal padding
+         keeps each one square at the column picker's height. -->
+    <Style Selector=":is(Button).toolbar">
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Padding" Value="8" />
     </Style>
-    <Style Selector="Border.session-tile.active">
-      <Setter Property="BorderThickness" Value="2" />
+    <Style Selector="SplitButton.toolbar">
+      <Setter Property="Padding" Value="8" />
+    </Style>
+    <Style Selector=":is(Control).toolbar PathIcon">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Height" Value="14" />
+    </Style>
+    <!-- The session's state as a dot: green while it is up, red once it has ended. The word is still its
+         tooltip and its accessible name, so the dot is never the only thing that says it. -->
+    <Style Selector="Ellipse.status-dot">
+      <Setter Property="Fill" Value="{DynamicResource Brush.Success}" />
+    </Style>
+    <Style Selector="Ellipse.status-dot.ended">
+      <Setter Property="Fill" Value="{DynamicResource Brush.Danger}" />
+    </Style>
+    <!-- Close is the one action every tab and tile carries, so it is drawn as a glyph that only becomes a
+         button when pointed at: a full button box on every tab turned the strip into a row of grey dots. -->
+    <Style Selector="Button.session-close">
+      <Setter Property="Padding" Value="5" />
+      <Setter Property="CornerRadius" Value="{DynamicResource Radius.Small}" />
+    </Style>
+    <Style Selector="Button.session-close PathIcon">
+      <Setter Property="Width" Value="9" />
+      <Setter Property="Height" Value="9" />
+    </Style>
+    <!-- Which tile has the keyboard decides what Close, Copy and Find act on, so in a grid it has to be
+         legible at a glance. Every tile keeps its environment colour, because that is what says production,
+         and the tiles without the keyboard draw it faded rather than thinner. The frame is a layer of its own
+         over the tile so that its brush can stay bound to the session's accent while a style fades it. -->
+    <Style Selector="Border.tile-frame">
+      <Setter Property="Opacity" Value="0.4" />
+    </Style>
+    <Style Selector="Border.tile-frame.active">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Border.tile-header">
+      <Setter Property="Cursor" Value="SizeAll" />
+    </Style>
+    <!-- Dragging a tile marks the one it will land on. The container carries the class: it is the element
+         the drag finds by position, and the tile inside it is a template the code never names. -->
+    <Style Selector="Border.drop-indicator">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector=":is(Control).tile-drop-target Border.drop-indicator">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector=":is(Control).tile-drag-source Border.session-tile">
+      <Setter Property="Opacity" Value="0.6" />
     </Style>
   </UserControl.Styles>
-  <Grid Margin="8" RowDefinitions="Auto,Auto,*,Auto">
-    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-      <StackPanel>
-        <TextBlock FontSize="24" FontWeight="SemiBold" Text="Terminal workspace" />
-        <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="Independent local and remote sessions" />
-      </StackPanel>
-      <StackPanel x:Name="WorkspaceActions" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+  <Grid Margin="8" RowDefinitions="Auto,*,Auto">
+    <!-- The tabs and the actions share one row: the page is named by the sidebar already, and a heading
+         above the tabs cost a terminal several lines of output for nothing. -->
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" Margin="0,0,0,6">
+      <ScrollViewer
+          x:Name="TabScroller"
+          HorizontalScrollBarVisibility="Auto"
+          VerticalAlignment="Bottom"
+          VerticalScrollBarVisibility="Disabled">
+        <ItemsControl ItemsSource="{Binding Sessions}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="4" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="terminalViewModels:IWorkspaceSessionViewModel">
+              <!-- A tab is a control, not decoration: it takes keyboard focus, announces which session
+                   and environment it is, and activates with Enter or Space. Without this the strip is
+                   reachable only through the close buttons inside it. -->
+              <Border
+                  AutomationProperties.HelpText="Drag, or press Ctrl+Shift+Left or Right, to move this session"
+                  AutomationProperties.Name="{Binding TabAccessibleName}"
+                  Background="{Binding TabBackgroundHex}"
+                  BorderBrush="{Binding AccentColorHex}"
+                  BorderThickness="0,0,0,2"
+                  Classes="session-tab"
+                  ClipToBounds="True"
+                  CornerRadius="4,4,0,0"
+                  Focusable="True"
+                  KeyDown="Tab_OnKeyDown"
+                  MinWidth="150"
+                  MaxWidth="240"
+                  Padding="9,5,3,5"
+                  PointerPressed="Tab_OnPointerPressed"
+                  ToolTip.Tip="{Binding Title}">
+                <Border.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Click="OpenSystemTerminal_OnClick" Header="Open in system terminal" IsVisible="{Binding CanOpenInSystemTerminal}" />
+                  </ContextMenu>
+                </Border.ContextMenu>
+                <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="7">
+                  <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <Border Background="{Binding AccentColorHex}" CornerRadius="3" Padding="4,1">
+                      <TextBlock FontSize="10" FontWeight="Bold" Foreground="#0B0F14" Text="{Binding EnvironmentCue}" />
+                    </Border>
+                    <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3" Padding="4,1">
+                      <TextBlock FontSize="10" FontWeight="Bold" Text="{Binding ProtocolCue}" />
+                    </Border>
+                  </StackPanel>
+                  <!-- A star column (not a StackPanel) so the title is measured against the tab
+                       width and actually trims instead of overflowing the dot and the close button. -->
+                  <TextBlock
+                      Grid.Column="1"
+                      FontSize="{DynamicResource Font.Size.Tab}"
+                      Text="{Binding TabTitle}"
+                      TextTrimming="CharacterEllipsis"
+                      VerticalAlignment="Center" />
+                  <!-- The same dot as the tile header. The tab's own accessible name already ends with the
+                       state, so the dot carries it only as a tooltip. -->
+                  <Ellipse
+                      Grid.Column="2"
+                      Classes="status-dot"
+                      Classes.ended="{Binding IsEnded}"
+                      Height="8"
+                      ToolTip.Tip="{Binding StatusText}"
+                      VerticalAlignment="Center"
+                      Width="8" />
+                  <Button
+                      Grid.Column="3"
+                      AutomationProperties.Name="{Binding CloseTabAccessibleName}"
+                      Classes="flat session-close"
+                      Click="CloseTab_OnClick"
+                      MinWidth="0"
+                      VerticalAlignment="Center"
+                      ToolTip.Tip="Close session (Ctrl+Shift+W)">
+                    <PathIcon Data="{StaticResource Icon.Cancel}" />
+                  </Button>
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+      <StackPanel x:Name="WorkspaceActions" Grid.Column="1" Orientation="Horizontal" Spacing="6">
         <ToggleButton
             AutomationProperties.Name="Grid view"
-            Content="Grid"
+            Classes="toolbar"
             IsChecked="{Binding IsGridLayout, Mode=TwoWay}"
-            ToolTip.Tip="Show every session at once instead of one tab at a time" />
+            ToolTip.Tip="Grid view: show every session at once instead of one tab at a time">
+          <PathIcon Data="{StaticResource Icon.Grid}" />
+        </ToggleButton>
         <!-- MinHeight, not Height: the picker then measures to a button's height here without being pinned
              to a number that a font or theme change would leave stranded. -->
         <ComboBox
@@ -48,141 +177,64 @@
             SelectedItem="{Binding MaxGridColumns, Mode=TwoWay}"
             ToolTip.Tip="How many sessions a grid row holds before the next row starts"
             Width="62" />
-        <Button Click="Shortcuts_OnClick" Content="Help" ToolTip.Tip="Keyboard shortcuts for copy, paste, find, and switching terminals" />
-        <Button Command="{Binding SelectedTerminalSession.OpenFindCommand}" Content="Find" ToolTip.Tip="Find in scrollback (Ctrl+Shift+F)" />
         <Button
+            AutomationProperties.Name="Keyboard shortcuts"
+            Classes="toolbar"
+            Click="Shortcuts_OnClick"
+            ToolTip.Tip="Keyboard shortcuts for copy, paste, find, and switching terminals">
+          <PathIcon Data="{StaticResource Icon.Keyboard}" />
+        </Button>
+        <Button
+            AutomationProperties.Name="Find in scrollback"
+            Classes="toolbar"
+            Command="{Binding SelectedTerminalSession.OpenFindCommand}"
+            ToolTip.Tip="Find in scrollback (Ctrl+Shift+F)">
+          <PathIcon Data="{StaticResource Icon.Search}" />
+        </Button>
+        <!-- One control rather than a button and a lone arrow beside it: the arrow opens the profiles, and the
+             body opens the default one. -->
+        <SplitButton
+            AutomationProperties.Name="New terminal"
+            Classes="toolbar"
             Click="AddTab_OnClick"
-            Content="+ New terminal"
-            IsEnabled="{Binding !IsStarting}" />
-        <Button AutomationProperties.Name="New terminal with profile" Content="▾" ToolTip.Tip="New terminal with profile">
-          <Button.Flyout>
+            IsEnabled="{Binding !IsStarting}"
+            ToolTip.Tip="New terminal (Ctrl+Shift+T); the arrow picks a shell profile">
+          <PathIcon Data="{StaticResource Icon.Add}" />
+          <SplitButton.Flyout>
             <Flyout Placement="BottomEdgeAlignedRight">
               <ItemsControl ItemsSource="{Binding ShellProfiles}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="terminalViewModels:ShellProfileMenuItemViewModel">
                     <Button
                         AutomationProperties.Name="{Binding DisplayName}"
+                        Classes="flat"
                         Command="{Binding OpenCommand}"
+                        HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Left"
                         MinWidth="220">
                       <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="{Binding Icon}" />
-                        <TextBlock Text="{Binding DisplayName}" />
+                        <TextBlock Foreground="{DynamicResource Brush.Text.Primary}" Text="{Binding DisplayName}" />
                       </StackPanel>
                     </Button>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
             </Flyout>
-          </Button.Flyout>
-        </Button>
+          </SplitButton.Flyout>
+        </SplitButton>
       </StackPanel>
     </Grid>
 
-    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
-      <ScrollViewer
-          x:Name="TabScroller"
-          HorizontalScrollBarVisibility="Auto"
-          VerticalScrollBarVisibility="Disabled">
-        <ItemsControl ItemsSource="{Binding Sessions}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <StackPanel Orientation="Horizontal" Spacing="2" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="terminalViewModels:IWorkspaceSessionViewModel">
-              <!-- A tab is a control, not decoration: it takes keyboard focus, announces which session
-                   and environment it is, and activates with Enter or Space. Without this the strip is
-                   reachable only through the close buttons inside it. -->
-              <Border
-                  AutomationProperties.Name="{Binding TabAccessibleName}"
-                  Background="{Binding TabBackgroundHex}"
-                  BorderBrush="{Binding AccentColorHex}"
-                  BorderThickness="0,0,0,3"
-                  Classes="session-tab"
-                  ClipToBounds="True"
-                  CornerRadius="6,6,0,0"
-                  Focusable="True"
-                  KeyDown="Tab_OnKeyDown"
-                  Margin="0,0,2,0"
-                  MinWidth="150"
-                  MaxWidth="240"
-                  Padding="9,5,5,5"
-                  PointerMoved="Tab_OnPointerMoved"
-                  PointerPressed="Tab_OnPointerPressed"
-                  PointerReleased="Tab_OnPointerReleased"
-                  ToolTip.Tip="{Binding Title}">
-                <Border.ContextMenu>
-                  <ContextMenu>
-                    <MenuItem Click="OpenSystemTerminal_OnClick" Header="Open in system terminal" IsVisible="{Binding CanOpenInSystemTerminal}" />
-                  </ContextMenu>
-                </Border.ContextMenu>
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="7">
-                  <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <Border Background="{Binding AccentColorHex}" CornerRadius="3" Padding="4,1">
-                      <TextBlock FontSize="10" FontWeight="Bold" Foreground="#0B0F14" Text="{Binding EnvironmentCue}" />
-                    </Border>
-                    <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3" Padding="4,1">
-                      <TextBlock FontSize="10" FontWeight="Bold" Text="{Binding ProtocolCue}" />
-                    </Border>
-                  </StackPanel>
-                  <!-- A star column (not a StackPanel) so the title is measured against the tab
-                       width and actually trims instead of overflowing the close button. -->
-                  <Grid Grid.Column="1" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
-                    <!-- The dot says "this session has ended". Its colour is not what carries that —
-                         its presence is — but a reader needs the words. -->
-                    <TextBlock
-                        AutomationProperties.Name="Session ended"
-                        IsVisible="{Binding IsEnded}"
-                        Foreground="{DynamicResource Brush.Warning}"
-                        Margin="0,0,5,0"
-                        Text="●"
-                        ToolTip.Tip="This session has ended"
-                        VerticalAlignment="Center" />
-                    <TextBlock
-                        Grid.Column="1"
-                        Text="{Binding TabTitle}"
-                        TextTrimming="CharacterEllipsis"
-                        VerticalAlignment="Center" />
-                    <TextBlock
-                        Grid.Row="1"
-                        Grid.Column="1"
-                        FontSize="10"
-                        Foreground="{DynamicResource Brush.Text.Secondary}"
-                        Text="{Binding StatusText}" />
-                  </Grid>
-                  <Button
-                      Grid.Column="2"
-                      AutomationProperties.Name="{Binding CloseTabAccessibleName}"
-                      Click="CloseTab_OnClick"
-                      Content="×"
-                      FontSize="13"
-                      Padding="6,1"
-                      MinWidth="0"
-                      VerticalAlignment="Center"
-                      ToolTip.Tip="Close session (Ctrl+Shift+W)" />
-                </Grid>
-              </Border>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
-    </Grid>
-
-    <Border
-        Grid.Row="2"
-        Background="{Binding SelectedSession.ChromeTintHex}"
-        BorderBrush="{Binding SelectedSession.AccentColorHex}"
-        BorderThickness="1"
-        CornerRadius="0,0,6,6"
-        PointerPressed="TerminalBorder_OnPointerPressed">
+    <Border Grid.Row="1" PointerPressed="TerminalBorder_OnPointerPressed">
+      <!-- Generated from HostedSessions, not Sessions: the user's order reaches the panel as TileOrder on
+           each container, so moving a session never rebuilds the container that hosts its content. -->
       <ItemsControl
           x:Name="SessionContent"
           ContainerClearing="SessionContent_OnContainerClearing"
           ContainerIndexChanged="SessionContent_OnContainerIndexChanged"
           ContainerPrepared="SessionContent_OnContainerPrepared"
-          ItemsSource="{Binding Sessions}">
+          ItemsSource="{Binding HostedSessions}">
         <!-- One panel for both layouts. A tab is this grid with a single visible tile, and swapping the
              panel to change layout would rebuild the containers — which an embedded remote desktop, whose
              native window may only be hosted once, does not survive. -->
@@ -193,109 +245,148 @@
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="terminalViewModels:IWorkspaceSessionViewModel">
-            <!-- The tile header is a row rather than an overlay, and the tile has no corner radius: native
-                 remote desktop content draws above every Avalonia control and is not clipped by one. The
-                 tint and the accent already differ for the selected session, so the tile the keyboard is in
-                 is the one that looks lit. -->
-            <Border
-                Background="{Binding ChromeTintHex}"
-                BorderBrush="{Binding AccentColorHex}"
-                Classes="session-tile"
-                Classes.active="{Binding IsActive}">
-              <Grid RowDefinitions="Auto,*">
-                <Grid
-                    ColumnDefinitions="Auto,*,Auto"
-                    ColumnSpacing="7"
-                    IsVisible="{Binding IsTiled}"
-                    Margin="7,4,4,4">
-                  <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                    <Border Background="{Binding AccentColorHex}" CornerRadius="3" Padding="4,1">
-                      <TextBlock FontSize="10" FontWeight="Bold" Foreground="#0B0F14" Text="{Binding EnvironmentCue}" />
-                    </Border>
-                    <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3" Padding="4,1">
-                      <TextBlock FontSize="10" FontWeight="Bold" Text="{Binding ProtocolCue}" />
-                    </Border>
-                  </StackPanel>
-                  <TextBlock
-                      Grid.Column="1"
-                      Text="{Binding TabTitle}"
-                      TextTrimming="CharacterEllipsis"
-                      ToolTip.Tip="{Binding Title}"
-                      VerticalAlignment="Center" />
-                  <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <TextBlock
-                        FontSize="10"
-                        Foreground="{DynamicResource Brush.Text.Secondary}"
-                        Text="{Binding StatusText}"
-                        VerticalAlignment="Center" />
-                    <Button
-                        AutomationProperties.Name="{Binding CloseTabAccessibleName}"
-                        Click="CloseTab_OnClick"
-                        Content="×"
-                        FontSize="13"
-                        MinWidth="0"
-                        Padding="6,1"
-                        ToolTip.Tip="Close session (Ctrl+Shift+W)" />
-                  </StackPanel>
-                </Grid>
-                <terminalViews:WorkspaceSessionContentHost
-                    Grid.Row="1"
-                    IsVisible="{Binding IsContentVisible}"
-                    Session="{Binding}">
-              <terminalViews:WorkspaceSessionContentHost.DataTemplates>
-                <DataTemplate x:DataType="terminalViewModels:TerminalSessionViewModel">
-            <Grid RowDefinitions="Auto,*">
+            <!-- The tile header is a row rather than an overlay: native remote desktop content draws above
+                 every Avalonia control and is not clipped by one. That is also why the corners stay small
+                 and the frame sits one pixel outside the content — a square native window inside a large
+                 radius would cut across the rounded corner. -->
+            <Panel>
               <Border
-                  Background="{DynamicResource Brush.Surface.1}"
-                  BorderBrush="{DynamicResource Brush.Border}"
-                  BorderThickness="0,0,0,1"
-                  IsVisible="{Binding IsFindOpen}"
-                  Padding="8">
-                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="6">
-                  <TextBox
-                      x:Name="FindTextBox"
-                      AutomationProperties.Name="Find in scrollback"
-                      PlaceholderText="Find in scrollback"
-                      Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
-                  <CheckBox Grid.Column="1" Content="Case" IsChecked="{Binding IsSearchCaseSensitive}" VerticalAlignment="Center" />
-                  <CheckBox Grid.Column="2" Content="Regex" IsChecked="{Binding IsSearchRegex}" VerticalAlignment="Center" />
-                  <Button Grid.Column="3" AutomationProperties.Name="Previous match" Command="{Binding FindPreviousCommand}" Content="↑" ToolTip.Tip="Previous match (Shift+Enter)" />
-                  <Button Grid.Column="4" AutomationProperties.Name="Next match" Command="{Binding FindNextCommand}" Content="↓" ToolTip.Tip="Next match (Enter)" />
-                  <Button Grid.Column="5" AutomationProperties.Name="Close find" Command="{Binding CloseFindCommand}" Content="×" ToolTip.Tip="Close find (Esc)" />
-                </Grid>
-              </Border>
-              <Grid Grid.Row="1">
-                <!-- Without an override this announces as an unlabelled custom control. It is a text
-                     surface, and the name says which session a reader has landed in. -->
-                <terminal:TerminalControl
-                    AutomationProperties.ControlTypeOverride="Text"
-                    AutomationProperties.Name="{Binding TerminalAccessibleName}"
-                    AutomationProperties.HelpText="Terminal output and input. Ctrl+Shift+F searches the scrollback; F6 leaves the terminal."
-                    Background="{Binding TerminalBackground}"
-                    FontFamily="{Binding FontFamilyName}"
-                    FontSize="{Binding TerminalFontSize}"
-                    Model="{Binding Model}"
-                    RightClickAction="None" />
+                  Background="{Binding ChromeTintHex}"
+                  Classes="session-tile"
+                  CornerRadius="{DynamicResource Radius.Small}"
+                  Padding="1">
+                <Grid RowDefinitions="Auto,*">
+                  <!-- The header is the tile's handle: pressing it selects the session, and dragging it moves
+                       the tile to wherever it is dropped. -->
+                  <Border
+                      Background="Transparent"
+                      Classes="tile-header"
+                      IsVisible="{Binding IsTiled}"
+                      Padding="8,3,3,3"
+                      PointerPressed="TileHeader_OnPointerPressed"
+                      ToolTip.Tip="Drag to move this session in the grid">
+                    <!-- The name has the left to itself; what kind of session it is and how it is doing sit
+                         together at the right, beside the button that ends it. -->
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="7">
+                      <TextBlock
+                          FontSize="{DynamicResource Font.Size.Tab}"
+                          Text="{Binding TabTitle}"
+                          TextTrimming="CharacterEllipsis"
+                          ToolTip.Tip="{Binding Title}"
+                          VerticalAlignment="Center" />
+                      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                        <Border Background="{Binding AccentColorHex}" CornerRadius="3" Padding="4,1" VerticalAlignment="Center">
+                          <TextBlock FontSize="10" FontWeight="Bold" Foreground="#0B0F14" Text="{Binding EnvironmentCue}" />
+                        </Border>
+                        <Border BorderBrush="{DynamicResource Brush.Border}" BorderThickness="1" CornerRadius="3" Padding="4,1" VerticalAlignment="Center">
+                          <TextBlock FontSize="10" FontWeight="Bold" Text="{Binding ProtocolCue}" />
+                        </Border>
+                        <!-- A transparent box around the dot, so the tooltip has more than eight pixels to
+                             be found on. -->
+                        <Border
+                            AutomationProperties.Name="{Binding StatusText}"
+                            Background="Transparent"
+                            Cursor="Arrow"
+                            Focusable="False"
+                            Margin="3,0,0,0"
+                            Padding="3"
+                            ToolTip.Tip="{Binding StatusText}"
+                            VerticalAlignment="Center">
+                          <Ellipse
+                              Classes="status-dot"
+                              Classes.ended="{Binding IsEnded}"
+                              Height="8"
+                              Width="8" />
+                        </Border>
+                        <Button
+                            AutomationProperties.Name="{Binding CloseTabAccessibleName}"
+                            Classes="flat session-close"
+                            Click="CloseTab_OnClick"
+                            Cursor="Arrow"
+                            MinWidth="0"
+                            ToolTip.Tip="Close session (Ctrl+Shift+W)">
+                          <PathIcon Data="{StaticResource Icon.Cancel}" />
+                        </Button>
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                  <terminalViews:WorkspaceSessionContentHost
+                      Grid.Row="1"
+                      IsVisible="{Binding IsContentVisible}"
+                      Session="{Binding}">
+                <terminalViews:WorkspaceSessionContentHost.DataTemplates>
+                  <DataTemplate x:DataType="terminalViewModels:TerminalSessionViewModel">
+              <Grid RowDefinitions="Auto,*">
                 <Border
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Top"
-                    Background="{DynamicResource Brush.Surface.2}"
-                    CornerRadius="4"
+                    Background="{DynamicResource Brush.Surface.1}"
+                    BorderBrush="{DynamicResource Brush.Border}"
+                    BorderThickness="0,0,0,1"
                     IsVisible="{Binding IsFindOpen}"
-                    Margin="8"
-                    Padding="7,4">
-                  <StackPanel>
-                    <TextBlock Text="{Binding SearchStatus}" />
-                    <TextBlock Foreground="{DynamicResource Brush.Danger}" IsVisible="{Binding SearchError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Text="{Binding SearchError}" MaxWidth="420" TextWrapping="Wrap" />
-                  </StackPanel>
+                    Padding="8">
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="6">
+                    <TextBox
+                        x:Name="FindTextBox"
+                        AutomationProperties.Name="Find in scrollback"
+                        PlaceholderText="Find in scrollback"
+                        Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+                    <CheckBox Grid.Column="1" Content="Case" IsChecked="{Binding IsSearchCaseSensitive}" VerticalAlignment="Center" />
+                    <CheckBox Grid.Column="2" Content="Regex" IsChecked="{Binding IsSearchRegex}" VerticalAlignment="Center" />
+                    <Button Grid.Column="3" AutomationProperties.Name="Previous match" Command="{Binding FindPreviousCommand}" Content="↑" ToolTip.Tip="Previous match (Shift+Enter)" />
+                    <Button Grid.Column="4" AutomationProperties.Name="Next match" Command="{Binding FindNextCommand}" Content="↓" ToolTip.Tip="Next match (Enter)" />
+                    <Button Grid.Column="5" AutomationProperties.Name="Close find" Command="{Binding CloseFindCommand}" Content="×" ToolTip.Tip="Close find (Esc)" />
+                  </Grid>
+                </Border>
+                <!-- The terminal's own background fills a small gutter around the text, so the first column
+                     no longer sits hard against the tile's frame. -->
+                <Border Grid.Row="1" Background="{Binding TerminalBackground}" Padding="6,4,2,2">
+                  <Grid>
+                    <!-- Without an override this announces as an unlabelled custom control. It is a text
+                         surface, and the name says which session a reader has landed in. -->
+                    <terminal:TerminalControl
+                        AutomationProperties.ControlTypeOverride="Text"
+                        AutomationProperties.Name="{Binding TerminalAccessibleName}"
+                        AutomationProperties.HelpText="Terminal output and input. Ctrl+Shift+F searches the scrollback; F6 leaves the terminal."
+                        Background="{Binding TerminalBackground}"
+                        FontFamily="{Binding FontFamilyName}"
+                        FontSize="{Binding TerminalFontSize}"
+                        Model="{Binding Model}"
+                        RightClickAction="None" />
+                    <Border
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Background="{DynamicResource Brush.Surface.2}"
+                        CornerRadius="4"
+                        IsVisible="{Binding IsFindOpen}"
+                        Margin="8"
+                        Padding="7,4">
+                      <StackPanel>
+                        <TextBlock Text="{Binding SearchStatus}" />
+                        <TextBlock Foreground="{DynamicResource Brush.Danger}" IsVisible="{Binding SearchError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Text="{Binding SearchError}" MaxWidth="420" TextWrapping="Wrap" />
+                      </StackPanel>
+                    </Border>
+                  </Grid>
                 </Border>
               </Grid>
-            </Grid>
-                </DataTemplate>
-              </terminalViews:WorkspaceSessionContentHost.DataTemplates>
-                </terminalViews:WorkspaceSessionContentHost>
-              </Grid>
-            </Border>
+                  </DataTemplate>
+                </terminalViews:WorkspaceSessionContentHost.DataTemplates>
+                  </terminalViews:WorkspaceSessionContentHost>
+                </Grid>
+              </Border>
+              <Border
+                  BorderBrush="{Binding AccentColorHex}"
+                  BorderThickness="1"
+                  Classes="tile-frame"
+                  Classes.active="{Binding IsActive}"
+                  CornerRadius="{DynamicResource Radius.Small}"
+                  IsHitTestVisible="False" />
+              <Border
+                  Background="#296CB6FF"
+                  BorderBrush="{DynamicResource Brush.Accent}"
+                  BorderThickness="2"
+                  Classes="drop-indicator"
+                  CornerRadius="{DynamicResource Radius.Small}"
+                  IsHitTestVisible="False" />
+            </Panel>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
@@ -306,7 +397,7 @@
     <Border
         x:Name="CommandLibraryOverlay"
         Grid.Row="0"
-        Grid.RowSpan="4"
+        Grid.RowSpan="3"
         Background="#99000000"
         IsVisible="{Binding CommandLibrary.IsOpen}"
         PointerPressed="CommandLibraryOverlay_OnPointerPressed"
@@ -321,19 +412,25 @@
           Margin="24,48,24,24" />
     </Border>
 
-    <StackPanel Grid.Row="3" Margin="0,8,0,0" Spacing="4">
+    <!-- Each line carries its own margin and visibility, so a session with nothing to report gives the
+         terminal every pixel instead of an empty status line. -->
+    <StackPanel Grid.Row="2">
       <TextBlock
           Foreground="{DynamicResource Brush.Warning}"
           IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+          Margin="0,6,0,0"
           Text="{Binding ErrorMessage}" />
       <TextBlock
           Foreground="{DynamicResource Brush.Text.Secondary}"
+          IsVisible="{Binding SelectedSession.EndedMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+          Margin="0,6,0,0"
           Text="{Binding SelectedSession.EndedMessage}" />
       <Button
           HorizontalAlignment="Left"
           Command="{Binding SelectedSession.RetryCommand}"
           Content="{Binding SelectedSession.RecoveryActionLabel}"
-          IsVisible="{Binding SelectedSession.IsEnded}" />
+          IsVisible="{Binding SelectedSession.IsEnded}"
+          Margin="0,6,0,0" />
     </StackPanel>
   </Grid>
 </UserControl>

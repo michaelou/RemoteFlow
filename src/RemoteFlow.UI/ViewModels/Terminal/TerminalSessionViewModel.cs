@@ -195,13 +195,13 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IWorksp
     public string CloseTabAccessibleName => $"Close terminal {TabTitle}";
 
     /// <summary>
-    /// What a screen reader reads for the tab itself: the title, plus the environment the session runs
-    /// against, which the tab otherwise conveys through its colour.
+    /// What a screen reader reads for the tab itself: the title, the environment the session runs against,
+    /// and its state — the two things the tab otherwise conveys only through colour, its accent and its dot.
     /// </summary>
-    public string TabAccessibleName => $"{TabTitle}, {EnvironmentDescription}";
+    public string TabAccessibleName => $"{TabTitle}, {EnvironmentDescription}, {StatusText}";
 
     /// <summary>What a screen reader reads on entering the terminal surface itself.</summary>
-    public string TerminalAccessibleName => $"Terminal, {TabAccessibleName}";
+    public string TerminalAccessibleName => $"Terminal, {TabTitle}, {EnvironmentDescription}";
 
     private string EnvironmentDescription => Environment switch
     {
@@ -699,6 +699,7 @@ public sealed partial class TerminalSessionViewModel : ObservableObject, IWorksp
         OnPropertyChanged(nameof(IsLive));
         OnPropertyChanged(nameof(IsEnded));
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(TabAccessibleName));
         OnPropertyChanged(nameof(RecoveryActionLabel));
         RetryCommand.NotifyCanExecuteChanged();
     }

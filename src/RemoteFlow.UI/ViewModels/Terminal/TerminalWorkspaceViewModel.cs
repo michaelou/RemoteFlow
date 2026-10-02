@@ -22,6 +22,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     private readonly IShellProfileService? _shellProfileService;
     private readonly ISystemTerminalLauncher? _systemTerminalLauncher;
     private readonly ISessionManager? _sessionManager;
+    private readonly ObservableCollection<IWorkspaceSessionViewModel> _hostedSessions = [];
     private int _startingCount;
     private int _disposeStarted;
     private bool _isGridLayout;
@@ -32,6 +33,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     public TerminalWorkspaceViewModel()
         : base("Terminals")
     {
+        HostedSessions = new(_hostedSessions);
         CommandLibrary = new CommandSnippetPaletteViewModel();
         Sessions.CollectionChanged += OnSessionsChanged;
     }
@@ -97,6 +99,7 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         _shellProfileService = shellProfileService;
         _systemTerminalLauncher = systemTerminalLauncher;
         _sessionManager = sessionManager;
+        HostedSessions = new(_hostedSessions);
         CommandLibrary = new CommandSnippetPaletteViewModel(commandSnippets ?? new CommandSnippetLibrary());
         Sessions.CollectionChanged += OnSessionsChanged;
         if (_shellProfileService is { } activeProfileService)
@@ -115,7 +118,20 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         }
     }
 
+    /// <summary>Every session, in the order the user has arranged them: the tab strip, the grid and the
+    /// Ctrl+number shortcuts all read this order.</summary>
     public ObservableCollection<IWorkspaceSessionViewModel> Sessions { get; } = [];
+
+    /// <summary>
+    /// The same sessions as <see cref="Sessions" />, but in the order they were opened, and never reordered.
+    /// </summary>
+    /// <remarks>
+    /// The session content binds here. Moving an item in an <c>ItemsControl</c>'s source tears its container
+    /// down and builds a new one, which would re-host a remote desktop's native window — so dragging a tile
+    /// to a new place in the grid must not move anything in the collection the tiles are generated from.
+    /// Where a tile appears on screen comes from its position in <see cref="Sessions" /> instead.
+    /// </remarks>
+    public ReadOnlyObservableCollection<IWorkspaceSessionViewModel> HostedSessions { get; }
 
     public ObservableCollection<ShellProfileMenuItemViewModel> ShellProfiles { get; } = [];
 
@@ -370,6 +386,26 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
         }
 
         Sessions.Move(oldIndex, newIndex);
+    }
+
+    /// <summary>Moves a session the given number of places along the order, stopping at either end. The
+    /// keyboard's way of doing what dragging a tab does.</summary>
+    public bool MoveSessionBy(IWorkspaceSessionViewModel session, int offset)
+    {
+        var oldIndex = Sessions.IndexOf(session);
+        if (oldIndex < 0)
+        {
+            return false;
+        }
+
+        var newIndex = Math.Clamp(oldIndex + offset, 0, Sessions.Count - 1);
+        if (newIndex == oldIndex)
+        {
+            return false;
+        }
+
+        Sessions.Move(oldIndex, newIndex);
+        return true;
     }
 
     public async Task<bool> CloseSessionAsync(
@@ -668,6 +704,28 @@ public class TerminalWorkspaceViewModel : PageViewModel, IAsyncDisposable, IDisp
     /// <summary>Sessions arrive from four places; the collection is the one point they all pass through.</summary>
     private void OnSessionsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (e.Action == NotifyCollectionChangedAction.Move)
+        {
+            // A move changes where a session is drawn, never which sessions are hosted.
+            return;
+        }
+
+        for (var index = _hostedSessions.Count - 1; index >= 0; index--)
+        {
+            if (!Sessions.Contains(_hostedSessions[index]))
+            {
+                _hostedSessions.RemoveAt(index);
+            }
+        }
+
+        foreach (var session in Sessions)
+        {
+            if (!_hostedSessions.Contains(session))
+            {
+                _hostedSessions.Add(session);
+            }
+        }
+
         if (e.NewItems is null)
         {
             return;

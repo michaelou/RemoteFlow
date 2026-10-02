@@ -7,6 +7,34 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **Sessions can be dragged into a new order.** A tab dragged along the strip slides into place as it
+  goes, the way a browser's tabs do, and Escape puts it back where it started. In the grid, dragging a
+  tile by its header marks the tile it will land on and moves it there on release; the grid does not
+  rearrange while the pointer is still crossing it, because every tile it rearranged would resize its
+  terminal. Tabs and tiles share one order, so moving one moves the other, and Ctrl+1 to Ctrl+9 follow
+  it. A remote desktop moves without being re-hosted: the tiles are built from a list that never
+  reorders, and the order reaches the grid as a number on each tile. A focused tab also moves with
+  Ctrl+Shift+Left and Ctrl+Shift+Right, so the order is not only the mouse's to change.
+
+### Changed
+
+- **The terminal workspace gives its space to the terminals.** The page title and subtitle are gone —
+  the sidebar already says where you are — and the actions now sit at the end of the tab row instead of
+  on a row of their own, as icons — grid, keyboard shortcuts, find, and a split + button whose arrow
+  picks a shell profile — each named by its tooltip and its accessible name. A tile's header keeps the
+  session's name on the left and gathers the environment and protocol tags at the right, beside a dot
+  that is green while the session is up and red once it has ended; the word it replaces is the dot's
+  tooltip and accessible name. Tabs carry the same dot in place of their second line of status, so a tab
+  is one line tall, and a terminal tab's accessible name now ends with its state as a remote desktop's
+  always did. Tiles draw a
+  one-pixel frame with small corners instead of a heavier frame inside another frame. The tile with the
+  keyboard draws its environment colour at full strength and the others draw it faded, so every tile
+  still says production but only one says it is where you are typing. Close buttons are flat glyphs
+  until pointed at, the terminal text has a small gutter instead of touching the frame, and the status
+  line under the workspace takes no room when there is nothing to report.
+
 ## [0.8.2] - 2026-09-10
 
 ### Added

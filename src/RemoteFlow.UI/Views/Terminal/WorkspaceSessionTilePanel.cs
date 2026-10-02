@@ -37,6 +37,18 @@ public sealed class WorkspaceSessionTilePanel : Panel
             defaultValue: true);
 
     /// <summary>
+    /// Where this child's tile falls in reading order, lowest first.
+    /// </summary>
+    /// <remarks>
+    /// The children are in the order their sessions were opened, and that order cannot change: reordering an
+    /// <c>ItemsControl</c>'s source rebuilds the containers it moves, and a remote desktop does not survive
+    /// being re-hosted. So the user's arrangement reaches the panel as a number on each child instead. Ties
+    /// keep the children's own order.
+    /// </remarks>
+    public static readonly AttachedProperty<int> TileOrderProperty =
+        AvaloniaProperty.RegisterAttached<WorkspaceSessionTilePanel, Control, int>("TileOrder");
+
+    /// <summary>
     /// A child that holds no cell is still arranged over the whole area, so in the tab layout every session's
     /// container covers the one the user is looking at. A container always paints its own tile chrome and
     /// always answers a hit test — only its content honours <c>IsContentVisible</c> — so without a z-order the
@@ -52,7 +64,7 @@ public sealed class WorkspaceSessionTilePanel : Panel
     static WorkspaceSessionTilePanel()
     {
         AffectsMeasure<WorkspaceSessionTilePanel>(MaxColumnsProperty, TileSpacingProperty);
-        AffectsParentMeasure<WorkspaceSessionTilePanel>(IsTileShownProperty);
+        AffectsParentMeasure<WorkspaceSessionTilePanel>(IsTileShownProperty, TileOrderProperty);
     }
 
     public WorkspaceSessionTilePanel()
@@ -84,6 +96,25 @@ public sealed class WorkspaceSessionTilePanel : Panel
     {
         ArgumentNullException.ThrowIfNull(child);
         _ = child.SetValue(IsTileShownProperty, value);
+    }
+
+    public static int GetTileOrder(Control child)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+        return child.GetValue(TileOrderProperty);
+    }
+
+    public static void SetTileOrder(Control child, int value)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+        _ = child.SetValue(TileOrderProperty, value);
+    }
+
+    /// <summary>Whether this child holds a cell of the grid right now.</summary>
+    public static bool IsTile(Control child)
+    {
+        ArgumentNullException.ThrowIfNull(child);
+        return child.IsVisible && GetIsTileShown(child);
     }
 
     /// <summary>
@@ -219,23 +250,10 @@ public sealed class WorkspaceSessionTilePanel : Panel
             double.IsInfinity(availableSize.Height) ? desired.Height : availableSize.Height);
     }
 
-    private static bool IsTile(Control child)
-    {
-        return child.IsVisible && GetIsTileShown(child);
-    }
-
     private List<Control> TileChildren()
     {
-        var visible = new List<Control>(Children.Count);
-        foreach (var child in Children)
-        {
-            if (IsTile(child))
-            {
-                visible.Add(child);
-            }
-        }
-
-        return visible;
+        // OrderBy rather than List.Sort: it is stable, so tiles that share an order keep the children's.
+        return [.. Children.Where(IsTile).OrderBy(GetTileOrder)];
     }
 
     /// <summary>

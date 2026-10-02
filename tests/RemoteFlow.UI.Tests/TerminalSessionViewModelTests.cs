@@ -26,6 +26,30 @@ public sealed class TerminalSessionViewModelTests
         Assert.Equal("🙂", second);
     }
 
+    /// <summary>The tab shows its state only as a coloured dot, so a screen reader has to hear it in the
+    /// tab's name instead — and hear it change.</summary>
+    [AvaloniaFact]
+    public async Task TheTabNameCarriesTheStateTheDotShows()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var channel = new FakeTerminalChannel();
+        await using var viewModel = new TerminalSessionViewModel(channel, new ImmediateDispatcher(), initialTitle: "Shell");
+        Assert.EndsWith(", Connected", viewModel.TabAccessibleName, StringComparison.Ordinal);
+        Assert.DoesNotContain("Connected", viewModel.TerminalAccessibleName, StringComparison.Ordinal);
+
+        var changed = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        await channel.CompleteAsync(1);
+        await Task.Delay(50, token);
+
+        Assert.True(viewModel.IsEnded);
+        Assert.EndsWith($", {viewModel.StatusText}", viewModel.TabAccessibleName, StringComparison.Ordinal);
+        Assert.Contains(nameof(TerminalSessionViewModel.TabAccessibleName), changed);
+
+        await using var failed = TerminalSessionViewModel.CreateFailed(new ImmediateDispatcher(), "Shell", "no shell");
+        Assert.EndsWith(", Failed", failed.TabAccessibleName, StringComparison.Ordinal);
+    }
+
     [AvaloniaFact]
     public async Task SplitOutputFeedsTheModelAndClosureShowsExitCode()
     {
