@@ -46,6 +46,10 @@ public sealed partial class ConnectionDetailsViewModel(
         () => open(ConnectionOpenMode.Sftp),
         () => connection.SupportsSftp);
 
+    public IAsyncRelayCommand OpenDockerCommand { get; } = new AsyncRelayCommand(
+        () => open(ConnectionOpenMode.Docker),
+        () => connection.SupportsSftp);
+
     public IAsyncRelayCommand LaunchRdpCommand { get; } = new AsyncRelayCommand(
         () => open(ConnectionOpenMode.Rdp),
         () => connection.Protocol == ProtocolType.Rdp);

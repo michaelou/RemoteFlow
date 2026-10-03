@@ -96,6 +96,34 @@ internal sealed class TmdsSshConnection : ISshConnection
         }
     }
 
+    public async Task<SshResult<ISshRunningCommand>> StartCommandAsync(
+        string command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return SshResult<ISshRunningCommand>.Fail(SshError.ChannelClosed, "The SSH connection is closed.");
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_operationTimeout);
+        try
+        {
+            var process = await _client.ExecuteAsync(command, timeout.Token).ConfigureAwait(false);
+            process.WriteEof();
+            return SshResult<ISshRunningCommand>.Success(new TmdsRunningCommand(process));
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
+        {
+            return SshResult<ISshRunningCommand>.Fail(SshError.Timeout, "Starting the SSH command timed out.");
+        }
+        catch (Exception exception)
+        {
+            return SshErrorMapper.Failure<ISshRunningCommand>(exception, cancellationToken);
+        }
+    }
+
     public ISftpService OpenSftp()
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);

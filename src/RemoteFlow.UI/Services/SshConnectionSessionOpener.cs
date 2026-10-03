@@ -60,6 +60,16 @@ public sealed class SshConnectionSessionOpener(
                     : ConnectionOpenResult.Failure(workspace.ErrorMessage);
             }
 
+            if (mode == ConnectionOpenMode.Docker)
+            {
+                var docker = _services.GetRequiredService<ViewModels.Docker.DockerWorkspaceViewModel>();
+                navigation.Navigate("docker");
+                await docker.AttachAsync(connectionId, cancellationToken).ConfigureAwait(true);
+                return docker.IsConnected && docker.ErrorMessage is null
+                    ? ConnectionOpenResult.Success()
+                    : ConnectionOpenResult.Failure(docker.ErrorMessage);
+            }
+
             navigation.Navigate("terminals");
             _ = await _sessions.OpenAsync(connectionId, cancellationToken).ConfigureAwait(true);
             return ConnectionOpenResult.Success();

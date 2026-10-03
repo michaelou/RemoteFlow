@@ -1,0 +1,380 @@
+<UserControl
+    x:Class="RemoteFlow.UI.Views.Docker.DockerWorkspace"
+    x:DataType="viewModels:DockerWorkspaceViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:viewModels="using:RemoteFlow.UI.ViewModels.Docker"
+    Loaded="Workspace_OnLoaded"
+    Unloaded="Workspace_OnUnloaded">
+  <UserControl.Styles>
+    <!-- The state is always written next to the dot, so the colour only repeats what the word says. -->
+    <Style Selector="Ellipse.state-dot">
+      <Setter Property="Fill" Value="{DynamicResource Brush.Text.Muted}" />
+    </Style>
+    <Style Selector="Ellipse.state-dot.running">
+      <Setter Property="Fill" Value="{DynamicResource Brush.Success}" />
+    </Style>
+    <!-- Row actions are a size down from the toolbar's icon buttons: there are four on every row, and at
+         full size they outweighed the row they belong to. -->
+    <Style Selector="Button.icon.row">
+      <Setter Property="Padding" Value="5" />
+    </Style>
+    <Style Selector="Button.icon.row PathIcon">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+    </Style>
+    <Style Selector="SelectableTextBlock.log-line">
+      <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="SelectableTextBlock.log-line.error">
+      <Setter Property="Foreground" Value="{DynamicResource Brush.Warning}" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid RowDefinitions="*,Auto" KeyDown="Workspace_OnKeyDown">
+    <Grid x:Name="Body" Margin="8" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+      <!-- Connection picker, the first tab stop: it is the decision the page exists to make. -->
+      <Border Classes="panel" Margin="0,0,0,10" Padding="12,10">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+          <TextBlock
+              Margin="0,0,8,0"
+              VerticalAlignment="Center"
+              Foreground="{DynamicResource Brush.Text.Secondary}"
+              Text="Connection" />
+          <ComboBox
+              x:Name="ConnectionPicker"
+              Grid.Column="1"
+              AutomationProperties.Name="Connection"
+              HorizontalAlignment="Stretch"
+              ItemsSource="{Binding AvailableConnections}"
+              SelectedItem="{Binding SelectedConnection}"
+              PlaceholderText="Select a connection…">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="viewModels:DockerConnectionChoice">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Endpoint}" />
+                </StackPanel>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <Button
+              Grid.Column="2"
+              Margin="8,0,0,0"
+              Classes="accent"
+              Content="Connect"
+              Command="{Binding ConnectSelectedCommand}" />
+          <Button
+              Grid.Column="3"
+              AutomationProperties.Name="Reload the connection list"
+              Classes="icon"
+              Margin="6,0,0,0"
+              Command="{Binding LoadConnectionsCommand}"
+              ToolTip.Tip="Reload the connection list">
+            <PathIcon Data="{DynamicResource Icon.Refresh}" />
+          </Button>
+          <StackPanel
+              Grid.Column="4"
+              Margin="12,0,0,0"
+              Orientation="Horizontal"
+              Spacing="8"
+              VerticalAlignment="Center"
+              IsVisible="{Binding IsConnected}">
+            <TextBlock FontWeight="SemiBold" Text="{Binding ConnectionTitle}" />
+            <TextBlock Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding ServerVersion}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <!-- What to show, and how fresh to keep it. -->
+      <Grid Grid.Row="1" Margin="0,0,0,8" ColumnDefinitions="260,Auto,Auto,*,Auto" IsVisible="{Binding IsConnected}">
+        <TextBox
+            x:Name="FilterBox"
+            AutomationProperties.Name="Filter containers"
+            PlaceholderText="Filter by name, image or project"
+            Text="{Binding FilterText}" />
+        <CheckBox
+            Grid.Column="1"
+            Margin="12,0,0,0"
+            AutomationProperties.Name="Show stopped containers"
+            Content="Stopped"
+            IsChecked="{Binding ShowStopped}" />
+        <CheckBox
+            Grid.Column="2"
+            Margin="12,0,0,0"
+            AutomationProperties.Name="Refresh automatically"
+            Content="Auto-refresh"
+            IsChecked="{Binding AutoRefresh}"
+            ToolTip.Tip="Refresh the list every few seconds while this page is open" />
+        <TextBlock
+            Grid.Column="3"
+            Margin="12,0"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brush.Text.Secondary}"
+            Text="{Binding Summary}" />
+        <Button
+            Grid.Column="4"
+            AutomationProperties.Name="Refresh the container list"
+            Command="{Binding RefreshCommand}"
+            ToolTip.Tip="Refresh the container list (F5)">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Refresh}" />
+            <TextBlock Text="Refresh" />
+          </StackPanel>
+        </Button>
+      </Grid>
+
+      <Border
+          Grid.Row="2"
+          Margin="0,0,0,8"
+          Padding="10,6"
+          Background="{DynamicResource Brush.Danger.Surface}"
+          BorderBrush="{DynamicResource Brush.Danger}"
+          BorderThickness="1"
+          CornerRadius="{DynamicResource Radius.Control}"
+          IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+        <SelectableTextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+      </Border>
+
+      <Border Grid.Row="3" Classes="panel" ClipToBounds="True">
+        <Grid>
+          <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsConnected}">
+            <Border Classes="browser-header">
+              <Grid Margin="4,4,4,4" ColumnDefinitions="100,2*,*,2*,1.5*,70,150,124">
+                <TextBlock Text="State" />
+                <TextBlock Grid.Column="1" Text="Name" />
+                <TextBlock Grid.Column="2" Text="Project" />
+                <TextBlock Grid.Column="3" Text="Image" />
+                <TextBlock Grid.Column="4" Text="Status" />
+                <TextBlock Grid.Column="5" HorizontalAlignment="Right" Text="CPU" />
+                <TextBlock Grid.Column="6" Margin="12,0,0,0" Text="Memory" />
+              </Grid>
+            </Border>
+
+            <ListBox
+                x:Name="ContainerList"
+                Grid.Row="1"
+                AutomationProperties.Name="Containers"
+                Classes="browser"
+                Background="Transparent"
+                ItemsSource="{Binding Containers}"
+                SelectedItem="{Binding SelectedContainer}"
+                DoubleTapped="ContainerList_OnDoubleTapped"
+                KeyDown="ContainerList_OnKeyDown">
+              <ListBox.ItemsPanel>
+                <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+              </ListBox.ItemsPanel>
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="viewModels:DockerContainerItemViewModel">
+                  <Grid
+                      Margin="4,0,0,0"
+                      MinHeight="28"
+                      Background="Transparent"
+                      AutomationProperties.Name="{Binding AccessibleName}"
+                      ColumnDefinitions="100,2*,*,2*,1.5*,70,150,124">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <Ellipse Width="8" Height="8" Classes="state-dot" Classes.running="{Binding IsRunning}" />
+                      <TextBlock Text="{Binding StateText}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Id}" />
+                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Project}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="3" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Image}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Image}" />
+                    <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Status}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Ports}" />
+                    <TextBlock Grid.Column="5" VerticalAlignment="Center" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding CpuText}" />
+                    <TextBlock Grid.Column="6" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding MemoryText}" TextTrimming="CharacterEllipsis" />
+                    <!-- Each action is a named button rather than only a menu entry, so the keyboard reaches
+                         it with Tab; the context menu repeats them for the pointer. -->
+                    <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right">
+                      <ProgressBar Width="24" MinWidth="24" Height="3" IsIndeterminate="True" VerticalAlignment="Center" IsVisible="{Binding IsBusy}" />
+                      <Button
+                          Classes="icon row"
+                          AutomationProperties.Name="{Binding Name, StringFormat='Start {0}'}"
+                          IsVisible="{Binding !IsRunning}"
+                          IsEnabled="{Binding CanStart}"
+                          Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).StartContainerCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Start">
+                        <PathIcon Data="{DynamicResource Icon.Play}" />
+                      </Button>
+                      <Button
+                          Classes="icon row"
+                          AutomationProperties.Name="{Binding Name, StringFormat='Stop {0}'}"
+                          IsVisible="{Binding IsRunning}"
+                          IsEnabled="{Binding CanStop}"
+                          Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).StopContainerCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Stop">
+                        <PathIcon Data="{DynamicResource Icon.Stop}" />
+                      </Button>
+                      <Button
+                          Classes="icon row"
+                          AutomationProperties.Name="{Binding Name, StringFormat='Restart {0}'}"
+                          IsEnabled="{Binding !IsBusy}"
+                          Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).RestartContainerCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Restart">
+                        <PathIcon Data="{DynamicResource Icon.Restart}" />
+                      </Button>
+                      <Button
+                          Classes="icon row"
+                          AutomationProperties.Name="{Binding Name, StringFormat='Show the logs of {0}'}"
+                          Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ShowLogsCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Logs (Enter)">
+                        <PathIcon Data="{DynamicResource Icon.Logs}" />
+                      </Button>
+                      <Button
+                          Classes="icon row"
+                          AutomationProperties.Name="{Binding Name, StringFormat='Open a shell in {0}'}"
+                          IsEnabled="{Binding CanOpenShell}"
+                          Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).OpenShellCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="Open a shell in a terminal tab">
+                        <PathIcon Data="{DynamicResource Icon.Terminals}" />
+                      </Button>
+                    </StackPanel>
+                    <Grid.ContextFlyout>
+                      <MenuFlyout>
+                        <MenuItem Header="Start" IsEnabled="{Binding CanStart}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).StartContainerCommand}" CommandParameter="{Binding}" />
+                        <MenuItem Header="Stop" IsEnabled="{Binding CanStop}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).StopContainerCommand}" CommandParameter="{Binding}" />
+                        <MenuItem Header="Restart" IsEnabled="{Binding !IsBusy}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).RestartContainerCommand}" CommandParameter="{Binding}" />
+                        <Separator />
+                        <MenuItem Header="Logs" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ShowLogsCommand}" CommandParameter="{Binding}" />
+                        <MenuItem Header="Open shell" IsEnabled="{Binding CanOpenShell}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).OpenShellCommand}" CommandParameter="{Binding}" />
+                        <Separator />
+                        <MenuItem Header="Copy ID" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).CopyIdCommand}" CommandParameter="{Binding}" />
+                        <MenuItem Header="Remove…" IsEnabled="{Binding CanRemove}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).RemoveContainerCommand}" CommandParameter="{Binding}" />
+                      </MenuFlyout>
+                    </Grid.ContextFlyout>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+
+            <TextBlock
+                Grid.Row="1"
+                Margin="0,40"
+                HorizontalAlignment="Center"
+                Foreground="{DynamicResource Brush.Text.Secondary}"
+                IsVisible="{Binding HasNoContainers}"
+                Text="{Binding NoContainersMessage}" />
+          </Grid>
+
+          <Border Padding="40" IsVisible="{Binding !IsConnected}">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+              <TextBlock FontSize="22" FontWeight="SemiBold" HorizontalAlignment="Center" Text="Not connected" />
+              <TextBlock
+                  HorizontalAlignment="Center"
+                  TextAlignment="Center"
+                  TextWrapping="Wrap"
+                  Foreground="{DynamicResource Brush.Text.Secondary}"
+                  Text="{Binding NoConnectionMessage}" />
+              <Button
+                  Classes="accent"
+                  Content="Connect"
+                  HorizontalAlignment="Center"
+                  IsVisible="{Binding HasConnectionChoices}"
+                  Command="{Binding ConnectSelectedCommand}" />
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Border>
+
+      <GridSplitter
+          x:Name="LogsSplitter"
+          Grid.Row="4"
+          Height="6"
+          AutomationProperties.Name="Height of the log pane"
+          AutomationProperties.HelpText="Use the up and down arrow keys to move the divider."
+          Background="Transparent"
+          ResizeDirection="Rows"
+          IsVisible="{Binding Logs.IsOpen}" />
+
+      <!-- The log pane. Its row is given a pixel height by the code-behind while the pane is open, rather
+           than Auto, because the splitter above needs a pixel neighbour to move. -->
+      <Border
+          x:Name="LogsPane"
+          Grid.Row="5"
+          Classes="panel"
+          ClipToBounds="True"
+          DataContext="{Binding Logs}"
+          IsVisible="{Binding IsOpen}">
+        <Grid RowDefinitions="Auto,*">
+          <Grid Margin="10,6" ColumnDefinitions="Auto,*,200,Auto,Auto,Auto,Auto,Auto,Auto">
+            <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding Heading}" />
+            <TextBlock
+                Grid.Column="1"
+                Margin="12,0"
+                VerticalAlignment="Center"
+                Foreground="{DynamicResource Brush.Text.Secondary}"
+                Text="{Binding StatusMessage}"
+                TextTrimming="CharacterEllipsis" />
+            <TextBox
+                Grid.Column="2"
+                AutomationProperties.Name="Filter log lines"
+                PlaceholderText="Filter lines"
+                Text="{Binding FilterText}" />
+            <CheckBox Grid.Column="3" Margin="10,0,0,0" AutomationProperties.Name="Follow new log lines" Content="Follow" IsChecked="{Binding Follow}" />
+            <CheckBox Grid.Column="4" Margin="10,0,0,0" AutomationProperties.Name="Show timestamps" Content="Timestamps" IsChecked="{Binding Timestamps}" />
+            <Button Grid.Column="5" Margin="8,0,0,0" Classes="icon" AutomationProperties.Name="Reload the logs" Command="{Binding ReloadCommand}" ToolTip.Tip="Reload">
+              <PathIcon Data="{DynamicResource Icon.Refresh}" />
+            </Button>
+            <Button Grid.Column="6" Classes="icon" AutomationProperties.Name="Copy the shown log lines" Command="{Binding CopyAllCommand}" ToolTip.Tip="Copy the shown lines">
+              <PathIcon Data="{DynamicResource Icon.Duplicate}" />
+            </Button>
+            <Button Grid.Column="7" Classes="icon" AutomationProperties.Name="Clear the log pane" Command="{Binding ClearCommand}" ToolTip.Tip="Clear">
+              <PathIcon Data="{DynamicResource Icon.ClearRecent}" />
+            </Button>
+            <Button Grid.Column="8" Classes="icon" AutomationProperties.Name="Close the log pane" Command="{Binding CloseCommand}" ToolTip.Tip="Close (stops following)">
+              <PathIcon Data="{DynamicResource Icon.Cancel}" />
+            </Button>
+          </Grid>
+          <ListBox
+              x:Name="LogList"
+              Grid.Row="1"
+              AutomationProperties.Name="Log lines"
+              Background="Transparent"
+              ItemsSource="{Binding Lines}">
+            <ListBox.ItemsPanel>
+              <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.Styles>
+              <Style Selector="ListBoxItem">
+                <Setter Property="Padding" Value="10,0" />
+                <Setter Property="MinHeight" Value="0" />
+              </Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="viewModels:DockerLogLine">
+                <SelectableTextBlock Classes="log-line" Classes.error="{Binding IsError}" Text="{Binding Text}" TextWrapping="NoWrap" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <!-- Status bar: what the last action did. -->
+    <Border
+        Grid.Row="1"
+        Height="32"
+        Padding="12,0"
+        Background="{DynamicResource Brush.Surface.1}"
+        BorderBrush="{DynamicResource Brush.Border}"
+        BorderThickness="0,1,0,0">
+      <Grid ColumnDefinitions="150,*">
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsVisible="{Binding IsLoading}">
+          <ProgressBar Width="60" Height="4" MinWidth="60" MinHeight="4" IsIndeterminate="True" VerticalAlignment="Center" />
+          <TextBlock Text="Loading…" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" />
+        </StackPanel>
+        <TextBlock
+            Grid.Column="1"
+            VerticalAlignment="Center"
+            TextTrimming="CharacterEllipsis"
+            Text="{Binding FeedbackMessage}"
+            Foreground="{DynamicResource Brush.Text.Secondary}" />
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

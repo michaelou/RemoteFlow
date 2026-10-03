@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.IO.Pipelines;
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Application.Abstractions.Ssh;
@@ -54,6 +56,14 @@ public sealed class FakeSshConnection : ISshConnection
 
     public Func<string, SshExecResult> Execute { get; set; } = command => new(0, command, string.Empty);
 
+    /// <summary>What a streamed command produces. The default ends at once with exit code 0; a test that
+    /// wants to feed lines while the reader waits returns a stream it keeps and publishes to.</summary>
+    public Func<string, FakeSshRunningCommand> StartCommand { get; set; } = _ => FakeSshRunningCommand.Completed(0);
+
+    public List<string> StartedCommands { get; } = [];
+
+    public FakeSshRunningCommand? LastRunningCommand { get; private set; }
+
     public event EventHandler<SshDisconnectedEventArgs>? Disconnected;
 
     public void FailNextShell(SshError error, string? message = null)
@@ -94,6 +104,23 @@ public sealed class FakeSshConnection : ISshConnection
             : Task.FromResult(SshResult<SshExecResult>.Success(Execute(command)));
     }
 
+    public Task<SshResult<ISshRunningCommand>> StartCommandAsync(
+        string command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_execFailures.TryDequeue(out var failure))
+        {
+            return Task.FromResult(SshResult<ISshRunningCommand>.Fail(failure.Error, failure.Message));
+        }
+
+        StartedCommands.Add(command);
+        LastRunningCommand = StartCommand(command);
+        return Task.FromResult(SshResult<ISshRunningCommand>.Success(LastRunningCommand));
+    }
+
     public ISftpService OpenSftp()
     {
         return Sftp;
@@ -119,6 +146,71 @@ public sealed class FakeSshConnection : ISshConnection
     public ValueTask DisposeAsync()
     {
         return DisconnectAsync(null, null);
+    }
+}
+
+public sealed class FakeSshRunningCommand : ISshRunningCommand
+{
+    private readonly Channel<SshOutputLine> _lines = Channel.CreateUnbounded<SshOutputLine>();
+    private int? _pendingExitCode;
+    private SshFailure? _pendingFailure;
+    private int _disposed;
+
+    public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
+
+    public int? ExitCode { get; private set; }
+
+    public SshFailure? Failure { get; private set; }
+
+    public static FakeSshRunningCommand Completed(int exitCode, params string[] lines)
+    {
+        var stream = new FakeSshRunningCommand();
+        foreach (var line in lines)
+        {
+            stream.Publish(line);
+        }
+
+        stream.Complete(exitCode);
+        return stream;
+    }
+
+    public void Publish(string line, SshOutputKind kind = SshOutputKind.StandardOutput)
+    {
+        _ = _lines.Writer.TryWrite(new SshOutputLine(kind, line));
+    }
+
+    public void Complete(int exitCode)
+    {
+        _pendingExitCode = exitCode;
+        _ = _lines.Writer.TryComplete();
+    }
+
+    public void Break(SshError error, string message)
+    {
+        _pendingFailure = new SshFailure(error, message);
+        _ = _lines.Writer.TryComplete();
+    }
+
+    public async IAsyncEnumerable<SshOutputLine> ReadLinesAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await foreach (var line in _lines.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+        {
+            yield return line;
+        }
+
+        ExitCode = _pendingExitCode;
+        Failure = _pendingFailure;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            _ = _lines.Writer.TryComplete();
+        }
+
+        return ValueTask.CompletedTask;
     }
 }
 

@@ -24,6 +24,7 @@ public enum ExplorerAction
     Duplicate = 5,
     Delete = 6,
     NewFolder = 7,
+    OpenDocker = 8,
 }
 
 /// <summary>
@@ -67,6 +68,9 @@ public sealed partial class ExplorerNodeViewModel : ObservableObject
             () => Kind == ExplorerNodeKind.Connection);
         OpenSftpCommand = new AsyncRelayCommand(
             () => ExecuteAsync(ExplorerAction.OpenSftp),
+            () => Connection?.Protocol is ProtocolType.Ssh or ProtocolType.Sftp);
+        OpenDockerCommand = new AsyncRelayCommand(
+            () => ExecuteAsync(ExplorerAction.OpenDocker),
             () => Connection?.Protocol is ProtocolType.Ssh or ProtocolType.Sftp);
         OpenRdpCommand = new AsyncRelayCommand(
             () => ExecuteAsync(ExplorerAction.OpenRdp),
@@ -115,6 +119,8 @@ public sealed partial class ExplorerNodeViewModel : ObservableObject
     public IAsyncRelayCommand ConnectCommand { get; }
 
     public IAsyncRelayCommand OpenSftpCommand { get; }
+
+    public IAsyncRelayCommand OpenDockerCommand { get; }
 
     public IAsyncRelayCommand OpenRdpCommand { get; }
 

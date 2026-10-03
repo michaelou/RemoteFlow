@@ -97,6 +97,35 @@ internal sealed class SshNetConnection : ISshConnection
         }
     }
 
+    public async Task<SshResult<ISshRunningCommand>> StartCommandAsync(
+        string command,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(command);
+        if (Volatile.Read(ref _disposed) != 0 || !_client.IsConnected)
+        {
+            return SshResult<ISshRunningCommand>.Fail(
+                SshError.ChannelClosed,
+                SshErrorMessages.ToUserMessage(SshError.ChannelClosed));
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_operationTimeout);
+        try
+        {
+            var stream = await SshNetRunningCommand.StartAsync(_client, command, timeout.Token).ConfigureAwait(false);
+            return SshResult<ISshRunningCommand>.Success(stream);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
+        {
+            return SshResult<ISshRunningCommand>.Fail(SshError.Timeout, SshErrorMessages.ToUserMessage(SshError.Timeout));
+        }
+        catch (Exception exception)
+        {
+            return SshErrorMapper.Failure<ISshRunningCommand>(exception, cancellationToken);
+        }
+    }
+
     public ISftpService OpenSftp()
     {
         return new SshNetSftpService(_sftpFactory, _operationTimeout);

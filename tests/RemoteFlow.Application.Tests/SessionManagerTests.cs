@@ -88,6 +88,48 @@ public sealed class SessionManagerTests
     }
 
     [Fact]
+    public async Task SessionStartupCommandRunsAfterTheConnectionsOwnAndCarriesItsTitle()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = CreateFixture(initialCommand: "printf ready");
+
+        var session = await fixture.Manager.OpenAsync(
+            fixture.Connection.Id,
+            new SessionOpenOptions { Title = "web-01 › api", StartupCommand = "exec docker exec -it 'api' sh" },
+            token);
+        var startup = Encoding.UTF8.GetString(Assert.Single(fixture.Transport.LastConnection!.LastShell!.Writes));
+
+        Assert.Equal("web-01 › api", session.Title);
+        Assert.True(
+            startup.IndexOf("printf ready", StringComparison.Ordinal) <
+            startup.IndexOf("exec docker exec", StringComparison.Ordinal));
+        await fixture.Manager.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task SessionStartupCommandIsTypedAgainOnReconnect()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var fixture = CreateFixture();
+        var session = await fixture.Manager.OpenAsync(
+            fixture.Connection.Id,
+            new SessionOpenOptions { StartupCommand = "exec docker exec -it 'api' sh" },
+            token);
+        var second = await fixture.Manager.OpenAsync(
+            fixture.Connection.Id,
+            new SessionOpenOptions { StartupCommand = "exec docker exec -it 'api' sh" },
+            token);
+
+        await fixture.Transport.Connections[0].DisconnectAsync();
+        await fixture.Manager.RetryAsync(session.SessionId, token);
+
+        var replayed = Encoding.UTF8.GetString(Assert.Single(fixture.Transport.LastConnection!.LastShell!.Writes));
+        Assert.Contains("exec docker exec -it 'api' sh", replayed, StringComparison.Ordinal);
+        Assert.Equal("web-01 (2)", second.Title);
+        await fixture.Manager.DisposeAsync();
+    }
+
+    [Fact]
     public async Task ShutdownClosesEveryConnectionWithinBound()
     {
         var token = TestContext.Current.CancellationToken;

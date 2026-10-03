@@ -7,6 +7,21 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **A Docker page manages the containers on your SSH servers.** Pick a saved SSH connection in the new
+  **Docker** sidebar entry, or choose **Open Docker** on a connection, to see every container on that
+  server. The list shows each container's state, compose project, image, status, CPU and memory, grouped
+  by project and refreshed every five seconds while the page is open. From there you can start, stop,
+  restart or remove a container. Removing always asks first, and on a connection marked production, so do
+  stopping and restarting. **Logs** opens a pane under the list with the last 500 lines. It keeps
+  following new output until you close it, and it can filter, show timestamps and copy lines. **Open
+  shell** opens a terminal tab with a shell inside the container, using bash when the image has it and sh
+  when it does not. The tab goes back into the container if it reconnects. Nothing is installed on the
+  server: RemoteFlow runs the `docker` command over the same SSH connection, so the page can do what your
+  account can do, and no more. If the account is not allowed to use Docker, the page says so and names
+  the command that fixes it, rather than failing on every refresh.
+
 ## [0.8.3] - 2026-10-02
 
 ### Added

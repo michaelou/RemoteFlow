@@ -985,10 +985,12 @@ public sealed partial class ConnectionsPageViewModel : PageViewModel, IDisposabl
             case ExplorerAction.Connect:
             case ExplorerAction.OpenSftp:
             case ExplorerAction.OpenRdp:
+            case ExplorerAction.OpenDocker:
                 var mode = action switch
                 {
                     ExplorerAction.Connect => ConnectionOpenMode.Default,
                     ExplorerAction.OpenSftp => ConnectionOpenMode.Sftp,
+                    ExplorerAction.OpenDocker => ConnectionOpenMode.Docker,
                     ExplorerAction.OpenRdp => ConnectionOpenMode.Rdp,
                     ExplorerAction.Edit => throw new ArgumentOutOfRangeException(nameof(action)),
                     ExplorerAction.Duplicate => throw new ArgumentOutOfRangeException(nameof(action)),

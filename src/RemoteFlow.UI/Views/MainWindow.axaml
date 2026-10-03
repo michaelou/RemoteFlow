@@ -6,6 +6,8 @@
     xmlns:converters="using:RemoteFlow.UI.Converters"
     xmlns:connectionViewModels="using:RemoteFlow.UI.ViewModels.Connections"
     xmlns:connectionViews="using:RemoteFlow.UI.Views.Connections"
+    xmlns:dockerViews="using:RemoteFlow.UI.Views.Docker"
+    xmlns:dockerViewModels="using:RemoteFlow.UI.ViewModels.Docker"
     xmlns:backupViewModels="using:RemoteFlow.UI.ViewModels.Backup"
     xmlns:backupViews="using:RemoteFlow.UI.Views.Backup"
     xmlns:paletteViews="using:RemoteFlow.UI.Views.CommandPalette"
@@ -52,6 +54,9 @@
     </DataTemplate>
     <DataTemplate DataType="{x:Type storageViewModels:StoragePageViewModel}" x:DataType="storageViewModels:StoragePageViewModel">
       <storageViews:StorageWorkspace />
+    </DataTemplate>
+    <DataTemplate DataType="{x:Type dockerViewModels:DockerWorkspaceViewModel}" x:DataType="dockerViewModels:DockerWorkspaceViewModel">
+      <dockerViews:DockerWorkspace />
     </DataTemplate>
     <DataTemplate DataType="{x:Type transferViewModels:TransfersPageViewModel}" x:DataType="transferViewModels:TransfersPageViewModel">
       <transferViews:TransfersView />

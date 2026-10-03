@@ -84,6 +84,22 @@ declaration order, so `Tab` already walks from the local list to the remote one.
 
 Both grid splitters are reachable by `Tab` and move with the arrow keys once focused.
 
+## Docker page
+
+These work while the keyboard is anywhere on the Docker page. Like the file pages' bindings, they are not
+part of the terminal keymap.
+
+| Binding | Result |
+| --- | --- |
+| `F5` | Refresh the container list. |
+| `Ctrl+F` | Focus the filter box. |
+| `Enter` | Show the selected container's logs (same as a double-click). |
+| `Delete` | Remove the selected container, after a confirmation. Only a stopped container can be removed. |
+
+Every row action (start or stop, restart, logs, shell) is also a button on the row with its own name,
+so `Tab` reaches each one without opening the context menu. The splitter above the log pane is a tab stop
+and moves with the arrow keys.
+
 ## Embedded RDP on Windows
 
 The embedded Microsoft RDP control owns keyboard input while its surface has focus. RemoteFlow uses

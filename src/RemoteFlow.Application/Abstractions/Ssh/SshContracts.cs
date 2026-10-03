@@ -150,6 +150,35 @@ public sealed record HostKeyInfo(
 
 public sealed record SshExecResult(int ExitCode, string StandardOutput, string StandardError);
 
+public enum SshOutputKind
+{
+    StandardOutput = 0,
+    StandardError = 1,
+}
+
+public readonly record struct SshOutputLine(SshOutputKind Kind, string Text);
+
+/// <summary>A command whose output is read while it is still running — <c>docker logs -f</c>, <c>tail -f</c>
+/// — rather than collected once it has finished, which is all <see cref="ISshConnection.ExecuteAsync"/>
+/// offers. No operation timeout applies once the channel is open: the command runs until it exits, the
+/// connection drops, or the stream is disposed. Disposing closes the channel, which is what stops a
+/// follow-mode command on the server.</summary>
+public interface ISshRunningCommand : IAsyncDisposable
+{
+    /// <summary>Standard output and standard error interleaved in the order they arrived, one line at a
+    /// time. The enumeration ends when the command exits or the channel closes; it can be enumerated
+    /// once.</summary>
+    IAsyncEnumerable<SshOutputLine> ReadLinesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The command's exit code, once the enumeration has ended because the command exited.
+    /// Null while it is running and when the channel closed without reporting one.</summary>
+    int? ExitCode { get; }
+
+    /// <summary>Why the enumeration ended early, when it did. A command that exits — whatever its exit
+    /// code — is not a failure; a channel that broke underneath it is.</summary>
+    SshFailure? Failure { get; }
+}
+
 public sealed class SshDisconnectedEventArgs(SshError? error, string? message) : EventArgs
 {
     public SshError? Error { get; } = error;
@@ -166,6 +195,12 @@ public interface ISshConnection : IAsyncDisposable
         CancellationToken cancellationToken = default);
 
     Task<SshResult<SshExecResult>> ExecuteAsync(
+        string command,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Starts a command and hands back its output as a stream. The operation timeout bounds
+    /// opening the channel only, not how long the command may run.</summary>
+    Task<SshResult<ISshRunningCommand>> StartCommandAsync(
         string command,
         CancellationToken cancellationToken = default);
 

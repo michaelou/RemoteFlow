@@ -31,10 +31,19 @@ public sealed class SessionManager(
     public IReadOnlyList<ManagedSshSession> Sessions =>
         [.. _sessions.Values.Select(item => item.Session).OrderBy(item => item.SessionId)];
 
-    public async Task<ManagedSshSession> OpenAsync(
+    public Task<ManagedSshSession> OpenAsync(
         Guid connectionId,
         CancellationToken cancellationToken = default)
     {
+        return OpenAsync(connectionId, new SessionOpenOptions(), cancellationToken);
+    }
+
+    public async Task<ManagedSshSession> OpenAsync(
+        Guid connectionId,
+        SessionOpenOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _shutdown) != 0, this);
         EnsureNetworkMonitorSubscribed();
         var connection = await connections.GetByIdAsync(connectionId, cancellationToken).ConfigureAwait(false)
@@ -45,10 +54,11 @@ public sealed class SessionManager(
         }
 
         var existingTitles = GetForConnection(connectionId).Select(item => item.Title).ToHashSet(StringComparer.Ordinal);
-        var title = connection.Name;
+        var baseTitle = string.IsNullOrWhiteSpace(options.Title) ? connection.Name : options.Title;
+        var title = baseTitle;
         for (var suffix = 2; existingTitles.Contains(title); suffix++)
         {
-            title = $"{connection.Name} ({suffix})";
+            title = $"{baseTitle} ({suffix})";
         }
         var deferred = new DeferredTerminalChannel();
         var session = new ManagedSshSession(
@@ -58,7 +68,10 @@ public sealed class SessionManager(
             connection.Environment,
             connection.ColorOverrideHex,
             deferred);
-        var resources = new SessionResources(session, connection, deferred);
+        var resources = new SessionResources(session, connection, deferred)
+        {
+            StartupCommand = options.StartupCommand,
+        };
         if (!_sessions.TryAdd(session.SessionId, resources))
         {
             throw new InvalidOperationException("The generated session ID already exists.");
@@ -195,7 +208,8 @@ public sealed class SessionManager(
             resources.Shell = shell.Value;
             await resources.Channel.AttachAsync(shell.Value, resources.ConnectCancellation.Token).ConfigureAwait(false);
             shell.Value.Closed += (_, _) => OnChannelClosed(resources);
-            await ApplyStartupAsync(connection, shell.Value, resources.ConnectCancellation.Token).ConfigureAwait(false);
+            await ApplyStartupAsync(connection, resources.StartupCommand, shell.Value, resources.ConnectCancellation.Token)
+                .ConfigureAwait(false);
             await recent.RecordOpenedAsync(connection.Id, clock.UtcNow, resources.ConnectCancellation.Token).ConfigureAwait(false);
             resources.Session.TransitionTo(SessionState.Connected);
         }
@@ -218,6 +232,7 @@ public sealed class SessionManager(
 
     private static async Task ApplyStartupAsync(
         Connection connection,
+        string? sessionStartupCommand,
         ISshShell shell,
         CancellationToken cancellationToken)
     {
@@ -231,6 +246,10 @@ public sealed class SessionManager(
         if (!string.IsNullOrWhiteSpace(connection.Ssh.InitialCommand))
         {
             _ = commands.AppendLine(connection.Ssh.InitialCommand);
+        }
+        if (!string.IsNullOrWhiteSpace(sessionStartupCommand))
+        {
+            _ = commands.AppendLine(sessionStartupCommand);
         }
         if (commands.Length > 0)
         {
@@ -324,6 +343,7 @@ public sealed class SessionManager(
         public DeferredTerminalChannel Channel { get; } = channel;
         public SemaphoreSlim Gate { get; } = new(1, 1);
         public CancellationTokenSource ConnectCancellation { get; private set; } = new();
+        public string? StartupCommand { get; init; }
         public ISshConnection? ConnectionHandle { get; set; }
         public ISshShell? Shell { get; set; }
         public EventHandler<SshDisconnectedEventArgs>? DisconnectedHandler { get; set; }

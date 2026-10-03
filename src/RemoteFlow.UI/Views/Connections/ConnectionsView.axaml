@@ -410,6 +410,7 @@
                   <ContextMenu>
                     <MenuItem Command="{Binding ConnectCommand}" Header="Connect" />
                     <MenuItem Command="{Binding OpenSftpCommand}" Header="Open SFTP" />
+                    <MenuItem Command="{Binding OpenDockerCommand}" Header="Open Docker" />
                     <MenuItem Command="{Binding OpenRdpCommand}" Header="Launch RDP" />
                     <Separator />
                     <MenuItem Command="{Binding EditCommand}" Header="Edit" />

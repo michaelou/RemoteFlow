@@ -58,6 +58,74 @@ public sealed class SshTransportParityTests(SshServerFixture fixture)
         Assert.Equal("parity-error", result.Value.StandardError);
     }
 
+    /// <summary>The lines must arrive while the command is still running — the second batch is a second
+    /// later — and the exit code must be there once the enumeration ends.</summary>
+    [Theory]
+    [MemberData(nameof(Transports))]
+    [Trait("Category", "Integration")]
+    public async Task StreamedCommandHasIdenticalContract(SshTransport transportKind)
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var connection = await ConnectAsync(transportKind, PasswordRequest(), token);
+
+        var started = await connection.StartCommandAsync(
+            "printf 'one\\ntwo\\n'; printf 'oops\\n' >&2; sleep 1; printf 'three\\n'; exit 4",
+            token);
+        await using var command = started.Value;
+        var lines = new List<SshOutputLine>();
+        var firstArrived = TimeSpan.Zero;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        await foreach (var line in command.ReadLinesAsync(token))
+        {
+            if (lines.Count == 0)
+            {
+                firstArrived = clock.Elapsed;
+            }
+
+            lines.Add(line);
+        }
+
+        Assert.True(firstArrived < TimeSpan.FromSeconds(1), $"The first line took {firstArrived} to arrive.");
+        Assert.Equal(
+            ["one", "two", "three"],
+            lines.Where(line => line.Kind == SshOutputKind.StandardOutput).Select(line => line.Text));
+        Assert.Equal("oops", Assert.Single(lines, line => line.Kind == SshOutputKind.StandardError).Text);
+        Assert.Equal(4, command.ExitCode);
+        Assert.Null(command.Failure);
+    }
+
+    /// <summary>A followed log never ends on its own; disposing the stream must, and must leave the
+    /// connection usable for the next command.</summary>
+    [Theory]
+    [MemberData(nameof(Transports))]
+    [Trait("Category", "Integration")]
+    public async Task DisposingAStreamedCommandStopsItAndKeepsTheConnection(SshTransport transportKind)
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var connection = await ConnectAsync(transportKind, PasswordRequest(), token);
+
+        var started = await connection.StartCommandAsync("while true; do echo tick; sleep 0.2; done", token);
+        var command = started.Value;
+        var reading = Task.Run(async () =>
+        {
+            var count = 0;
+            await foreach (var _ in command.ReadLinesAsync(token))
+            {
+                count++;
+            }
+
+            return count;
+        }, token);
+        await Task.Delay(TimeSpan.FromSeconds(1), token);
+
+        await command.DisposeAsync();
+        var ticks = await reading.WaitAsync(TimeSpan.FromSeconds(10), token);
+        var followUp = await connection.ExecuteAsync("printf usable-after-stream", token);
+
+        Assert.True(ticks > 0);
+        Assert.Equal("usable-after-stream", followUp.Value.StandardOutput);
+    }
+
     [Theory]
     [MemberData(nameof(Transports))]
     [Trait("Category", "Integration")]

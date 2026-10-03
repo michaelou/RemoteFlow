@@ -81,6 +81,19 @@ public sealed class ManagedSshSession
     }
 }
 
+/// <summary>How one terminal session differs from the connection it was opened from. The connection's own
+/// startup directory and initial command still run first; these come after.</summary>
+public sealed record SessionOpenOptions
+{
+    /// <summary>The tab's title instead of the connection's name. A number is still appended when another
+    /// open session already carries it.</summary>
+    public string? Title { get; init; }
+
+    /// <summary>Typed into the shell once it is up, after the connection's own initial command — and typed
+    /// again on every reconnect, so a session opened into a container goes back into it.</summary>
+    public string? StartupCommand { get; init; }
+}
+
 public interface ISessionManager : IAsyncDisposable
 {
     event EventHandler<ManagedSshSession>? SessionAdded;
@@ -90,6 +103,11 @@ public interface ISessionManager : IAsyncDisposable
     IReadOnlyList<ManagedSshSession> Sessions { get; }
 
     Task<ManagedSshSession> OpenAsync(Guid connectionId, CancellationToken cancellationToken = default);
+
+    Task<ManagedSshSession> OpenAsync(
+        Guid connectionId,
+        SessionOpenOptions options,
+        CancellationToken cancellationToken = default);
 
     IReadOnlyList<ManagedSshSession> GetForConnection(Guid connectionId);
 

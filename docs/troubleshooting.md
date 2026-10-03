@@ -220,6 +220,27 @@ The first run builds a local Ubuntu/OpenSSH image, which takes a few minutes; la
 Windows, Docker Desktop must be in **Linux containers** mode. These tests do not run in CI, so a green CI
 run does not mean they passed — see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
+## The Docker page says the account is not allowed to use Docker
+
+**Symptom.** Connecting on the Docker page reports that the account is not allowed to use Docker, and
+names a `usermod` command.
+
+**Why.** The page runs `docker` as the account you connect with, and that account cannot open the daemon's
+socket, `/var/run/docker.sock`. On most distributions, only `root` and members of the `docker` group can.
+
+**Fix.** On the server, add the account to the group, then connect again. Group membership is read at
+login, so an SSH session that is already open will not see the change.
+
+```shell
+sudo usermod -aG docker <user>
+```
+
+Membership of the `docker` group is equivalent to root on that machine; decide whether that is what you
+want for the account. RemoteFlow does not fall back to `sudo docker`. The other messages the page can show
+mean what they say: "Docker is not installed on this server" means `docker` is not on the `PATH` of a
+non-interactive SSH session, and "its daemon is not running" means `systemctl status docker` is worth a
+look.
+
 ## The host key changed and RemoteFlow refuses to continue
 
 **Symptom.** A warning shows two fingerprints — the one RemoteFlow stored and the one the server just

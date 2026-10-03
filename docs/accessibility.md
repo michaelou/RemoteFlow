@@ -46,6 +46,13 @@ remote one without being rebound, and `Ctrl+Shift+Left` / `Ctrl+Shift+Right` jum
 `F5`, `F7`, `F2` and `Delete` act on whichever pane holds the keyboard. Both grid splitters are tab stops
 and move with the arrow keys. The full list is in [keybindings.md](keybindings.md#storage-page).
 
+On the **Docker** page: the first tab stop is the connection picker. Each container row carries its
+actions as buttons named for the container — *"Stop api"*, *"Show the logs of api"* — so they are tab
+stops, not only context-menu entries. `Enter` shows the selected container's logs and `Delete` removes it
+after a confirmation. A row announces its name, its state and its image, and the state is written next
+to the coloured dot, so the colour is never the only signal. See
+[keybindings.md](keybindings.md#docker-page).
+
 ## What a screen reader hears
 
 Every actionable control has an accessible name. Icon-only buttons — the arrows, the chevron, the close

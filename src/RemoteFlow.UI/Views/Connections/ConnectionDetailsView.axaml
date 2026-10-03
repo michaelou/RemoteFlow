@@ -29,6 +29,7 @@
         <WrapPanel>
           <Button Margin="0,0,8,8" Command="{Binding ConnectCommand}" Content="Connect" />
           <Button Margin="0,0,8,8" Command="{Binding OpenSftpCommand}" Content="Open SFTP" />
+          <Button Margin="0,0,8,8" Command="{Binding OpenDockerCommand}" Content="Open Docker" />
           <Button Margin="0,0,8,8" Command="{Binding LaunchRdpCommand}" Content="Launch RDP" />
           <Button
               Margin="0,0,8,8"

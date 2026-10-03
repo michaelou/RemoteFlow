@@ -9,6 +9,7 @@ using RemoteFlow.UI.Navigation;
 using RemoteFlow.UI.Services;
 using RemoteFlow.UI.ViewModels;
 using RemoteFlow.UI.ViewModels.Connections;
+using RemoteFlow.UI.ViewModels.Docker;
 using RemoteFlow.UI.ViewModels.CommandPalette;
 using RemoteFlow.UI.ViewModels.Terminal;
 using RemoteFlow.UI.ViewModels.Transfers;
@@ -39,6 +40,7 @@ public static class DependencyInjection
         services.TryAddSingleton<TransfersPageViewModel>();
         services.TryAddSingleton<SftpWorkspaceViewModel>();
         services.TryAddSingleton<StoragePageViewModel>();
+        services.TryAddSingleton<DockerWorkspaceViewModel>();
         services.TryAddSingleton<TerminalSettingsViewModel>();
         services.TryAddSingleton<ShellProfilesViewModel>();
         services.TryAddSingleton<RdpSettingsViewModel>();
@@ -52,7 +54,8 @@ public static class DependencyInjection
         services.TryAddSingleton<TrustedKeysViewModel>();
         // The sidebar is these registrations in order. Transfers comes after SFTP and Storage because it
         // is where those two pages send their work: the queue reads as the tail of the file pages rather
-        // than as a third way to move a file.
+        // than as a third way to move a file. Docker sits after Transfers, with the pages that act on a
+        // server rather than move files to it.
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "connections",
             "Connections",
@@ -78,6 +81,11 @@ public static class DependencyInjection
             "Transfers",
             "Icon.Transfers",
             provider.GetRequiredService<TransfersPageViewModel>));
+        _ = services.AddSingleton(provider => new NavigationPageRegistration(
+            "docker",
+            "Docker",
+            "Icon.Docker",
+            provider.GetRequiredService<DockerWorkspaceViewModel>));
         _ = services.AddSingleton(provider => new NavigationPageRegistration(
             "backup",
             "Backup",
@@ -109,6 +117,8 @@ public static class DependencyInjection
         services.TryAddSingleton<IFilePickerService, AvaloniaFilePickerService>();
         services.TryAddSingleton<ISftpWorkspaceSessionFactory, SftpWorkspaceSessionFactory>();
         services.TryAddSingleton<IStorageWorkspaceSessionFactory, StorageWorkspaceSessionFactory>();
+        services.TryAddSingleton<IDockerWorkspaceSessionFactory, DockerWorkspaceSessionFactory>();
+        services.TryAddSingleton<IContainerShellOpener, ContainerShellOpener>();
         services.TryAddSingleton<ITransferConflictDialogService, TransferConflictDialogService>();
         services.TryAddSingleton<ITransferConflictResolverFactory, TransferConflictResolverFactory>();
         _ = services.Replace(ServiceDescriptor.Singleton<IHostKeyPrompt, HostKeyPromptService>());

@@ -415,6 +415,14 @@ public sealed class RdpConnectionSessionOpenerTests
             throw new NotSupportedException();
         }
 
+        public Task<ManagedSshSession> OpenAsync(
+            Guid connectionId,
+            SessionOpenOptions options,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
         public IReadOnlyList<ManagedSshSession> GetForConnection(Guid connectionId)
         {
             return [];

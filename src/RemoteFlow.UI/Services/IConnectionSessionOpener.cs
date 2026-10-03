@@ -11,6 +11,9 @@ public enum ConnectionOpenMode
     /// until then this mode reports that it is not available rather than letting the default branch try to
     /// open an SSH terminal for a protocol that has none.</summary>
     Storage = 4,
+
+    /// <summary>Manage the containers on an SSH host from the Docker page.</summary>
+    Docker = 5,
 }
 
 /// <summary>Whether the connection opened, and — when it did not — what to tell the person who asked.
