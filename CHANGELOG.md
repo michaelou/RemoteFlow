@@ -7,6 +7,8 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-03
+
 ### Added
 
 - **A Docker page manages the containers on your SSH servers.** Pick a saved SSH connection in the new
@@ -771,7 +773,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/michaelou/RemoteFlow/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/michaelou/RemoteFlow/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/michaelou/RemoteFlow/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/michaelou/RemoteFlow/compare/v0.8.0...v0.8.1
