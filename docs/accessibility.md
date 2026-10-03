@@ -50,8 +50,11 @@ On the **Docker** page: the first tab stop is the connection picker. Each contai
 actions as buttons named for the container — *"Stop api"*, *"Show the logs of api"* — so they are tab
 stops, not only context-menu entries. `Enter` shows the selected container's logs and `Delete` removes it
 after a confirmation. A row announces its name, its state and its image, and the state is written next
-to the coloured dot, so the colour is never the only signal. See
-[keybindings.md](keybindings.md#docker-page).
+to the coloured dot, so the colour is never the only signal. The Compose, Images and Volumes tabs follow
+the same rules: every row button is named for its row (*"Bring shop down"*, *"Delete the volume
+shop_pgdata"*), and a row announces whether it is in use. A button for something that cannot be done, such
+as removing an image a container uses, is disabled rather than hidden, so the row keeps its shape and
+its tooltip says why. See [keybindings.md](keybindings.md#docker-page).
 
 ## What a screen reader hears
 

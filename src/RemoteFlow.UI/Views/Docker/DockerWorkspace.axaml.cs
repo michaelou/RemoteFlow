@@ -92,6 +92,43 @@ public sealed partial class DockerWorkspace : UserControl
         }
     }
 
+    private void ComposeFileBox_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && _viewModel is not null && _viewModel.ComposeUpFromFileCommand.CanExecute(null))
+        {
+            _ = _viewModel.ComposeUpFromFileCommand.ExecuteAsync(null);
+            e.Handled = true;
+        }
+    }
+
+    private void PullBox_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && _viewModel is not null && _viewModel.PullImageCommand.CanExecute(null))
+        {
+            _ = _viewModel.PullImageCommand.ExecuteAsync(null);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Delete removes the selected image, after asking — the same key as on the container list.</summary>
+    private void ImageList_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete && _viewModel?.SelectedImage is { CanRemove: true } image)
+        {
+            _ = _viewModel.RemoveImageCommand.ExecuteAsync(image);
+            e.Handled = true;
+        }
+    }
+
+    private void VolumeList_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Delete && _viewModel?.SelectedVolume is { CanRemove: true } volume)
+        {
+            _ = _viewModel.RemoveVolumeCommand.ExecuteAsync(volume);
+            e.Handled = true;
+        }
+    }
+
     private void Logs_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(DockerLogsViewModel.IsOpen) && sender is DockerLogsViewModel logs)
@@ -100,11 +137,11 @@ public sealed partial class DockerWorkspace : UserControl
         }
     }
 
-    /// <summary>Keeps the newest line in sight while following. Posted, so the list has laid the new rows
+    /// <summary>Keeps the newest line in sight while following a log or running an operation. Posted, so the list has laid the new rows
     /// out before it is asked to scroll to one.</summary>
     private void Logs_OnLinesAppended(object? sender, EventArgs e)
     {
-        if (sender is not DockerLogsViewModel { Follow: true } logs || logs.Lines.Count == 0)
+        if (sender is not DockerLogsViewModel logs || !(logs.Follow || logs.IsOperation) || logs.Lines.Count == 0)
         {
             return;
         }

@@ -68,6 +68,70 @@ public sealed class DockerCliHost(ISshConnection connection, string? username = 
             : DockerResult<ISshRunningCommand>.Success(started.Value);
     }
 
+    public async Task<DockerResult<IReadOnlyList<DockerImage>>> ListImagesAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await RunAsync(DockerCli.ListImagesCommand, cancellationToken).ConfigureAwait(false);
+        return result.IsFailure
+            ? DockerResult<IReadOnlyList<DockerImage>>.Fail(result.Failure)
+            : Parse(result.Value, DockerCli.ParseImages);
+    }
+
+    public async Task<DockerResult> RemoveImageAsync(string reference, CancellationToken cancellationToken = default)
+    {
+        if (!DockerCli.IsValidImageReference(reference))
+        {
+            return InvalidArgument<string>($"'{reference}' is not a valid image reference");
+        }
+
+        var result = await RunAsync(DockerCli.RemoveImageCommand(reference), cancellationToken).ConfigureAwait(false);
+        return result.IsFailure ? result : DockerResult.Success();
+    }
+
+    public async Task<DockerResult<IReadOnlyList<DockerVolume>>> ListVolumesAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await RunAsync(DockerCli.ListVolumesCommand, cancellationToken).ConfigureAwait(false);
+        return result.IsFailure
+            ? DockerResult<IReadOnlyList<DockerVolume>>.Fail(result.Failure)
+            : Parse(result.Value, DockerCli.ParseVolumes);
+    }
+
+    public async Task<DockerResult> RemoveVolumeAsync(string name, CancellationToken cancellationToken = default)
+    {
+        if (!DockerCli.IsValidVolumeName(name))
+        {
+            return InvalidArgument<string>($"'{name}' is not a valid volume name");
+        }
+
+        var result = await RunAsync(DockerCli.RemoveVolumeCommand(name), cancellationToken).ConfigureAwait(false);
+        return result.IsFailure ? result : DockerResult.Success();
+    }
+
+    public async Task<DockerResult<IReadOnlyList<DockerComposeProject>>> ListComposeProjectsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var result = await RunAsync(DockerCli.ListComposeProjectsCommand, cancellationToken).ConfigureAwait(false);
+        return result.IsFailure
+            ? DockerResult<IReadOnlyList<DockerComposeProject>>.Fail(result.Failure)
+            : Parse(result.Value, DockerCli.ParseComposeProjects);
+    }
+
+    public async Task<DockerResult<ISshRunningCommand>> StartOperationAsync(
+        DockerOperation operation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        if (DockerCli.FindInvalidArgument(operation) is { } problem)
+        {
+            return InvalidArgument<ISshRunningCommand>(problem);
+        }
+
+        var started = await _connection.StartCommandAsync(DockerCli.OperationCommand(operation), cancellationToken)
+            .ConfigureAwait(false);
+        return started.IsFailure
+            ? DockerResult<ISshRunningCommand>.Fail(DockerError.ConnectionFailed, started.Failure.Message)
+            : DockerResult<ISshRunningCommand>.Success(started.Value);
+    }
+
     private async Task<DockerResult<string>> RunAsync(string command, CancellationToken cancellationToken)
     {
         var executed = await _connection.ExecuteAsync(command, cancellationToken).ConfigureAwait(false);
@@ -94,6 +158,11 @@ public sealed class DockerCliHost(ISshConnection connection, string? username = 
                 DockerError.UnreadableOutput,
                 $"Docker's answer could not be read: {exception.Message}");
         }
+    }
+
+    private static DockerResult<T> InvalidArgument<T>(string problem)
+    {
+        return DockerResult<T>.Fail(DockerError.InvalidArgument, $"{problem}, so nothing was sent to the server.");
     }
 
     private static DockerResult<T> InvalidReference<T>(string container)

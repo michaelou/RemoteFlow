@@ -7,6 +7,31 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **The Docker page manages compose projects, images and volumes.** The page now has four tabs:
+  Containers as before, plus Compose, Images and Volumes.
+  - **Compose:** lists the server's compose projects, which you can bring up or down from their rows.
+    Bringing a project down always asks first. **Down and delete volumes** asks more firmly, because it
+    deletes the project's data. RemoteFlow remembers each project's compose files, so a project you
+    brought down stays in the list and can be brought back up. You can also bring up a compose file by
+    typing its path on the server.
+  - **Images:** shows which containers use each image. You can pull an image by name, remove unused images
+    and prune dangling ones.
+  - **Volumes:** shows which containers mount each volume. You can delete unused volumes and prune them.
+  - **Running operations:** compose up and down, pulls and prunes can take minutes, so they run in the pane
+    under the list and their output appears as it happens. The lists refresh when the operation ends. The
+    pane cannot be closed while an operation runs, because cutting a `compose up` off halfway leaves a
+    project half up.
+  - **Safety:** an image or volume a container still uses cannot be removed from the page, and nothing is
+    ever forced.
+
+### Fixed
+
+- **The Docker page recognises Docker 29's "daemon not running" message.** Docker 29 reworded it to "failed
+  to connect to the docker API", so the page showed Docker's raw error where it should have said the
+  daemon is not running.
+
 ## [0.9.0] - 2026-10-03
 
 ### Added

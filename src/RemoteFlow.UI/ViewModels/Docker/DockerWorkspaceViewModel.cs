@@ -105,17 +105,20 @@ public sealed partial class DockerContainerItemViewModel(DockerContainer contain
 }
 
 /// <summary>The Docker page: the containers on one server, what they are doing, and the handful of things
-/// worth doing to them without opening a terminal. Everything goes through the <c>docker</c> CLI on an SSH
-/// connection the page holds open; see ADR-0026.</summary>
+/// worth doing to them without opening a terminal — plus, on their own tabs, its compose projects, images
+/// and volumes. Everything goes through the <c>docker</c> CLI on an SSH connection the page holds open; see
+/// ADR-0026 and ADR-0027.</summary>
 public sealed partial class DockerWorkspaceViewModel(
     IDockerWorkspaceSessionFactory sessions,
     IConfirmationDialogService confirmation,
     IContainerShellOpener? shells = null,
     IConnectionQueryService? connectionQueries = null,
-    IClipboardService? clipboard = null) : PageViewModel("Docker"), IAsyncDisposable
+    IClipboardService? clipboard = null,
+    IDockerComposeProjectMemory? composeMemory = null) : PageViewModel("Docker"), IAsyncDisposable
 {
     private readonly IDockerWorkspaceSessionFactory _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
     private readonly IConfirmationDialogService _confirmation = confirmation ?? throw new ArgumentNullException(nameof(confirmation));
+    private readonly IDockerComposeProjectMemory? _composeMemory = composeMemory;
     private readonly List<DockerContainerItemViewModel> _all = [];
     private DockerWorkspaceSession? _session;
     private Guid? _attachedConnectionId;
@@ -166,6 +169,31 @@ public sealed partial class DockerWorkspaceViewModel(
 
     [ObservableProperty]
     public partial string Summary { get; private set; } = string.Empty;
+
+    /// <summary>The tab on screen. Only its list is refreshed with the containers, so the Images tab does not
+    /// cost a <c>docker image ls</c> every five seconds while nobody is looking at it.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsContainersTab))]
+    [NotifyPropertyChangedFor(nameof(FilterPlaceholder))]
+    public partial DockerTab SelectedTab { get; set; }
+
+    public bool IsContainersTab => SelectedTab == DockerTab.Containers;
+
+    /// <summary><see cref="SelectedTab"/> as the tab control's index.</summary>
+    public int SelectedTabIndex
+    {
+        get => (int)SelectedTab;
+        set => SelectedTab = Enum.IsDefined((DockerTab)value) ? (DockerTab)value : DockerTab.Containers;
+    }
+
+    public string FilterPlaceholder => SelectedTab switch
+    {
+        DockerTab.Containers => "Filter by name, image or project",
+        DockerTab.Compose => "Filter by project",
+        DockerTab.Images => "Filter by repository, tag or ID",
+        DockerTab.Volumes => "Filter by name or project",
+        _ => "Filter",
+    };
 
     public bool IsConnected => _session is not null;
 
@@ -231,6 +259,12 @@ public sealed partial class DockerWorkspaceViewModel(
     /// as a failed refresh every five seconds.</summary>
     public async Task AttachAsync(Guid connectionId, CancellationToken cancellationToken = default)
     {
+        if (Logs.IsOperationRunning)
+        {
+            ErrorMessage = $"Wait for '{Logs.Heading}' to finish before switching servers.";
+            return;
+        }
+
         IsLoading = true;
         ErrorMessage = null;
         FeedbackMessage = null;
@@ -313,7 +347,10 @@ public sealed partial class DockerWorkspaceViewModel(
             return;
         }
 
-        await Logs.OpenAsync(_session.Docker, item.Id, item.Name).ConfigureAwait(true);
+        if (!await Logs.OpenAsync(_session.Docker, item.Id, item.Name).ConfigureAwait(true))
+        {
+            ErrorMessage = $"Wait for '{Logs.Heading}' to finish before opening logs.";
+        }
     }
 
     [RelayCommand]
@@ -381,6 +418,17 @@ public sealed partial class DockerWorkspaceViewModel(
     partial void OnFilterTextChanged(string value)
     {
         ApplyFilter();
+        ApplyResourceFilters();
+    }
+
+    partial void OnSelectedTabChanged(DockerTab value)
+    {
+        OnPropertyChanged(nameof(SelectedTabIndex));
+        UpdateSummary();
+        if (IsConnected && value != DockerTab.Containers)
+        {
+            _ = RefreshCoreAsync(includeStats: false, CancellationToken.None);
+        }
     }
 
     partial void OnShowStoppedChanged(bool value)
@@ -430,7 +478,8 @@ public sealed partial class DockerWorkspaceViewModel(
 
             ErrorMessage = null;
             Merge(listed.Value);
-            if (!includeStats || !_all.Any(item => item.IsRunning))
+            await RefreshTabAsync(session, SelectedTab, cancellationToken).ConfigureAwait(true);
+            if (!includeStats || !IsContainersTab || !_all.Any(item => item.IsRunning) || !ReferenceEquals(session, _session))
             {
                 return;
             }
@@ -443,6 +492,12 @@ public sealed partial class DockerWorkspaceViewModel(
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The refresh runs unattended every few seconds; an exception escaping it would end the loop
+            // without a word, and the page would quietly stop updating.
+            ErrorMessage = $"The lists could not be refreshed: {exception.Message}";
         }
         finally
         {
@@ -584,10 +639,7 @@ public sealed partial class DockerWorkspaceViewModel(
             }
         }
 
-        var running = _all.Count(item => item.IsRunning);
-        Summary = _all.Count == 0
-            ? string.Empty
-            : $"{_all.Count} {(_all.Count == 1 ? "container" : "containers")}, {running} running";
+        UpdateSummary();
         OnPropertyChanged(nameof(HasNoContainers));
         OnPropertyChanged(nameof(NoContainersMessage));
     }
@@ -597,6 +649,7 @@ public sealed partial class DockerWorkspaceViewModel(
         await Logs.CloseAsync().ConfigureAwait(false);
         _all.Clear();
         Containers.Clear();
+        ClearResources();
         Summary = string.Empty;
         ServerVersion = null;
         if (_session is not null)

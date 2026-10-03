@@ -16,7 +16,7 @@ using Xunit;
 
 namespace RemoteFlow.UI.Tests;
 
-public sealed class DockerWorkspaceTests
+public sealed partial class DockerWorkspaceTests
 {
     [Fact]
     public async Task AttachingListsContainersByProjectThenNameWithTheirStats()
@@ -301,14 +301,16 @@ public sealed class DockerWorkspaceTests
         string name,
         DockerContainerState state,
         string? project = null,
-        string image = "image:latest")
+        string image = "image:latest",
+        IReadOnlyList<string>? volumes = null)
     {
-        return new DockerContainer(id, name, image, state, state.ToString(), string.Empty, string.Empty, project, null);
+        return new DockerContainer(id, name, image, state, state.ToString(), string.Empty, string.Empty, project, null, volumes);
     }
 
     private static Fixture CreateFixture(
         EnvironmentKind environment = EnvironmentKind.Production,
-        bool[]? confirmations = null)
+        bool[]? confirmations = null,
+        IDockerComposeProjectMemory? composeMemory = null)
     {
         var guids = SystemGuidProvider.Instance;
         var connection = Connection.Create(guids, "web-01", "web.example", ProtocolType.Ssh).Value;
@@ -320,7 +322,9 @@ public sealed class DockerWorkspaceTests
         var viewModel = new DockerWorkspaceViewModel(
             new StubSessionFactory(new DockerWorkspaceSession(connection, ssh, host)),
             confirmation,
-            shells);
+            shells,
+            composeMemory: composeMemory);
+        viewModel.Logs.BatchInterval = TimeSpan.Zero;
         return new Fixture(connection, ssh, host, confirmation, shells, viewModel);
     }
 
@@ -388,6 +392,63 @@ public sealed class DockerWorkspaceTests
         {
             LogRequests.Add((container, options));
             return Task.FromResult(DockerResult<ISshRunningCommand>.Success(Logs));
+        }
+
+        public IReadOnlyList<DockerImage> ImageList { get; set; } = [];
+
+        public IReadOnlyList<DockerVolume> VolumeList { get; set; } = [];
+
+        public IReadOnlyList<DockerComposeProject> ProjectList { get; set; } = [];
+
+        public DockerFailure? ComposeFailure { get; set; }
+
+        public List<DockerOperation> Operations { get; } = [];
+
+        public List<string> RemovedImages { get; } = [];
+
+        public List<string> RemovedVolumes { get; } = [];
+
+        /// <summary>What the next operation streams. Defaults to one that finishes at once with exit code 0.</summary>
+        public Func<DockerOperation, ISshRunningCommand> OperationOutput { get; set; } = _ => FakeSshRunningCommand.Completed(0);
+
+        public Task<DockerResult<IReadOnlyList<DockerImage>>> ListImagesAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(DockerResult<IReadOnlyList<DockerImage>>.Success(ImageList));
+        }
+
+        public Task<DockerResult> RemoveImageAsync(string reference, CancellationToken cancellationToken = default)
+        {
+            RemovedImages.Add(reference);
+            ImageList = [.. ImageList.Where(image => image.Reference != reference)];
+            return Task.FromResult(DockerResult.Success());
+        }
+
+        public Task<DockerResult<IReadOnlyList<DockerVolume>>> ListVolumesAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(DockerResult<IReadOnlyList<DockerVolume>>.Success(VolumeList));
+        }
+
+        public Task<DockerResult> RemoveVolumeAsync(string name, CancellationToken cancellationToken = default)
+        {
+            RemovedVolumes.Add(name);
+            VolumeList = [.. VolumeList.Where(volume => volume.Name != name)];
+            return Task.FromResult(DockerResult.Success());
+        }
+
+        public Task<DockerResult<IReadOnlyList<DockerComposeProject>>> ListComposeProjectsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(ComposeFailure is null
+                ? DockerResult<IReadOnlyList<DockerComposeProject>>.Success(ProjectList)
+                : DockerResult<IReadOnlyList<DockerComposeProject>>.Fail(ComposeFailure));
+        }
+
+        public Task<DockerResult<ISshRunningCommand>> StartOperationAsync(
+            DockerOperation operation,
+            CancellationToken cancellationToken = default)
+        {
+            Operations.Add(operation);
+            return Task.FromResult(DockerResult<ISshRunningCommand>.Success(OperationOutput(operation)));
         }
     }
 

@@ -91,14 +91,15 @@ part of the terminal keymap.
 
 | Binding | Result |
 | --- | --- |
-| `F5` | Refresh the container list. |
-| `Ctrl+F` | Focus the filter box. |
-| `Enter` | Show the selected container's logs (same as a double-click). |
-| `Delete` | Remove the selected container, after a confirmation. Only a stopped container can be removed. |
+| `F5` | Refresh the list on the tab on screen, and the containers. |
+| `Ctrl+F` | Focus the filter box. It filters whichever tab is on screen. |
+| `Enter` | Containers: show the selected container's logs (same as a double-click). In the compose file box: bring that file up. In the pull box: pull the image. |
+| `Delete` | Containers, Images, Volumes: remove the selected row, after a confirmation. Only what nothing uses can be removed. |
 
-Every row action (start or stop, restart, logs, shell) is also a button on the row with its own name,
-so `Tab` reaches each one without opening the context menu. The splitter above the log pane is a tab stop
-and moves with the arrow keys.
+Every row action (start or stop, restart, logs, shell, up, down, remove) is also a button on the row with
+its own name, so `Tab` reaches each one without opening the context menu. The tabs themselves are reached
+with `Tab` and switched with the arrow keys. The splitter above the output pane is a tab stop and moves with
+the arrow keys.
 
 ## Embedded RDP on Windows
 

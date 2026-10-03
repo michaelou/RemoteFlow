@@ -27,6 +27,13 @@ public enum DockerError
 
     /// <summary>Docker answered with something that could not be read.</summary>
     UnreadableOutput = 8,
+
+    /// <summary>Docker is there but the Compose v2 plugin (<c>docker compose</c>) is not.</summary>
+    ComposeNotInstalled = 9,
+
+    /// <summary>An image reference, volume name, project name or file path did not pass validation, so no
+    /// command was sent.</summary>
+    InvalidArgument = 10,
 }
 
 public sealed record DockerFailure(DockerError Error, string Message);
@@ -109,7 +116,9 @@ public enum DockerContainerState
 }
 
 /// <summary>One row of <c>docker ps -a</c>. The compose labels are read individually rather than parsed out
-/// of the comma-joined label list, which cannot be split safely once a value contains a comma.</summary>
+/// of the comma-joined label list, which cannot be split safely once a value contains a comma.
+/// <paramref name="Volumes"/> names the volumes the container mounts; bind mounts are not volumes and do
+/// not appear.</summary>
 public sealed record DockerContainer(
     string Id,
     string Name,
@@ -119,10 +128,36 @@ public sealed record DockerContainer(
     string Ports,
     string CreatedAt,
     string? ComposeProject,
-    string? ComposeService)
+    string? ComposeService,
+    IReadOnlyList<string>? Volumes = null)
 {
     public bool IsRunning => State is DockerContainerState.Running or DockerContainerState.Restarting;
+
+    public IReadOnlyList<string> VolumeNames => Volumes ?? [];
 }
+
+/// <summary>One row of <c>docker image ls</c>. An untagged image has a null repository and tag.
+/// <paramref name="Containers"/> is how many containers use it, when the engine reports that — older
+/// engines answer "N/A" outside <c>docker system df</c>, and that reads as null.</summary>
+public sealed record DockerImage(
+    string Id,
+    string? Repository,
+    string? Tag,
+    string Size,
+    string CreatedSince,
+    int? Containers)
+{
+    /// <summary>What to call it, and what to remove it by: <c>repository:tag</c> when it has one, so removing
+    /// a row removes that tag and not every tag the image carries; otherwise the ID.</summary>
+    public string Reference => Repository is null ? Id : $"{Repository}:{Tag ?? "latest"}";
+}
+
+/// <summary>One row of <c>docker volume ls</c>.</summary>
+public sealed record DockerVolume(string Name, string Driver, string? ComposeProject);
+
+/// <summary>One row of <c>docker compose ls --all</c>: a project that has containers, running or not.
+/// A project brought down has none, and drops off this list.</summary>
+public sealed record DockerComposeProject(string Name, string Status, IReadOnlyList<string> ConfigFiles);
 
 /// <summary>One row of <c>docker stats --no-stream</c>: a single sample, not a live feed. The usage columns
 /// stay as Docker formats them — "12.3MiB / 1.94GiB" — because the units vary row to row and re-deriving
@@ -157,6 +192,23 @@ public sealed record DockerLogOptions
     public bool Timestamps { get; init; }
 }
 
+/// <summary>The commands that can run for minutes — a compose up that pulls, an image pull, a prune — and
+/// so run as a streamed command rather than under the operation timeout.</summary>
+public abstract record DockerOperation
+{
+    private DockerOperation() { }
+
+    public sealed record ComposeUp(string? Project, IReadOnlyList<string> ConfigFiles) : DockerOperation;
+
+    public sealed record ComposeDown(string Project, bool RemoveVolumes) : DockerOperation;
+
+    public sealed record PullImage(string Reference) : DockerOperation;
+
+    public sealed record PruneImages : DockerOperation;
+
+    public sealed record PruneVolumes : DockerOperation;
+}
+
 /// <summary>Docker driven through its CLI over an SSH connection that is already open. Nothing is installed on
 /// the server and the Engine API is never exposed; see ADR-0026.</summary>
 public interface IDockerHost
@@ -182,4 +234,44 @@ public interface IDockerHost
         string container,
         DockerLogOptions options,
         CancellationToken cancellationToken = default);
+
+    Task<DockerResult<IReadOnlyList<DockerImage>>> ListImagesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Removes one image by its <see cref="DockerImage.Reference"/>. Never forced: an image a
+    /// container still uses is refused by Docker, and that refusal is the answer.</summary>
+    Task<DockerResult> RemoveImageAsync(string reference, CancellationToken cancellationToken = default);
+
+    Task<DockerResult<IReadOnlyList<DockerVolume>>> ListVolumesAsync(CancellationToken cancellationToken = default);
+
+    Task<DockerResult> RemoveVolumeAsync(string name, CancellationToken cancellationToken = default);
+
+    Task<DockerResult<IReadOnlyList<DockerComposeProject>>> ListComposeProjectsAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Starts a long-running command and hands back its output. As with logs, the caller owns the
+    /// running command.</summary>
+    Task<DockerResult<ISshRunningCommand>> StartOperationAsync(
+        DockerOperation operation,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>A compose project RemoteFlow has seen on a server, with the files it was brought up from — the
+/// one thing <c>docker compose ls</c> stops reporting once the project is down, and the one thing needed
+/// to bring it back up.</summary>
+public sealed record RememberedComposeProject(Guid ConnectionId, string Name, string[] ConfigFiles);
+
+public interface IDockerComposeProjectMemory
+{
+    Task<IReadOnlyList<RememberedComposeProject>> RecallAsync(
+        Guid connectionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Records the projects just listed, replacing what was known about each by name. Projects not
+    /// in the list are kept: not being listed is exactly what being down looks like.</summary>
+    Task RememberAsync(
+        Guid connectionId,
+        IReadOnlyList<DockerComposeProject> projects,
+        CancellationToken cancellationToken = default);
+
+    Task ForgetAsync(Guid connectionId, string name, CancellationToken cancellationToken = default);
 }

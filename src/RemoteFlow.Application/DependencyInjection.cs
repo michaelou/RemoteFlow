@@ -4,9 +4,11 @@ using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Ssh;
 using RemoteFlow.Application.Abstractions.Sftp;
 using RemoteFlow.Application.Abstractions.Backup;
+using RemoteFlow.Application.Abstractions.Docker;
 using RemoteFlow.Application.Abstractions.Storage;
 using RemoteFlow.Application.Services;
 using RemoteFlow.Application.Services.Backup;
+using RemoteFlow.Application.Services.Docker;
 using RemoteFlow.Domain.Abstractions;
 
 namespace RemoteFlow.Application;
@@ -39,6 +41,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IEmbeddedRdpSessionProvider>(NoEmbeddedRdpSessionProvider.Instance);
         services.TryAddSingleton<IRemoteEditServiceFactory, RemoteEditServiceFactory>();
         services.TryAddSingleton<ILocalFolderMemory, SettingsLocalFolderMemory>();
+        services.TryAddSingleton<IDockerComposeProjectMemory, SettingsDockerComposeProjectMemory>();
         return services;
     }
 }

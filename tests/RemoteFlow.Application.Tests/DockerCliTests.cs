@@ -70,7 +70,7 @@ public sealed class DockerCliTests
         // The template carries double quotes and braces; it reaches docker intact only if the shell sees one
         // single-quoted argument with no quote of its own inside.
         var command = DockerCli.ListContainersCommand;
-        var format = command["docker ps --all --format ".Length..];
+        var format = command["docker ps --all --no-trunc --format ".Length..];
         Assert.StartsWith("'{", format, StringComparison.Ordinal);
         Assert.EndsWith("}'", format, StringComparison.Ordinal);
         Assert.DoesNotContain('\'', format[1..^1]);
@@ -110,6 +110,8 @@ public sealed class DockerCliTests
     [InlineData(127, "bash: docker: command not found", DockerError.NotInstalled)]
     [InlineData(1, "permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Get \"http://%2Fvar%2Frun%2Fdocker.sock/v1.47/containers/json\": dial unix /var/run/docker.sock: connect: permission denied", DockerError.PermissionDenied)]
     [InlineData(1, "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?", DockerError.DaemonUnavailable)]
+    [InlineData(1, "failed to connect to the docker API at unix:///var/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /var/run/docker.sock: connect: no such file or directory", DockerError.DaemonUnavailable)]
+    [InlineData(1, "permission denied while trying to connect to the docker API at unix:///var/run/docker.sock", DockerError.PermissionDenied)]
     [InlineData(1, "Error response from daemon: No such container: web", DockerError.NoSuchContainer)]
     [InlineData(1, "Error response from daemon: conflict: unable to remove\nsecond line", DockerError.CommandFailed)]
     public void FailuresAreDescribedInTermsSomeoneCanActOn(int exitCode, string standardError, DockerError expected)

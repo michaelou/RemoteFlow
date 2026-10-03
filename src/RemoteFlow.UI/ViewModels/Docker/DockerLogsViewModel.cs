@@ -8,23 +8,30 @@ using RemoteFlow.Application.Abstractions.Ssh;
 
 namespace RemoteFlow.UI.ViewModels.Docker;
 
-/// <summary>One line of a container's log. Lines the container wrote to standard error are kept apart so
-/// the view can mark them.</summary>
+/// <summary>One line of a container's log, or of an operation's output. Lines written to standard error are
+/// kept apart so the view can mark them.</summary>
 public sealed record DockerLogLine(string Text, bool IsError);
 
-/// <summary>The log pane under the container list: the last few hundred lines of one container, optionally
-/// followed as it writes more.
+/// <summary>How an operation shown in the pane ended.</summary>
+public sealed record DockerOperationOutcome(bool Succeeded, string Message);
+
+/// <summary>The output pane under the Docker page's lists. It shows one of two things: the last few hundred
+/// lines of a container's log, optionally followed as it writes more; or the output of an operation that
+/// can run for minutes — a compose up that pulls, an image pull, a prune — as it happens.
 ///
 /// Lines are read off the SSH channel on the thread pool and handed to the list in batches, a few times a
 /// second at most, so a chatty container costs a handful of layout passes rather than one per line. The
-/// pane keeps the newest <see cref="MaxLines"/>; the server keeps the rest.</summary>
+/// pane keeps the newest <see cref="MaxLines"/>; the server keeps the rest.
+///
+/// An operation cannot be closed or replaced while it runs: closing the pane closes the channel, and a
+/// <c>docker compose up</c> cut off halfway leaves a project half up.</summary>
 public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = null) : ObservableObject, IAsyncDisposable
 {
     private readonly List<DockerLogLine> _all = [];
-    private IDockerHost? _host;
-    private string? _containerId;
+    private Func<CancellationToken, Task<DockerResult<ISshRunningCommand>>>? _start;
     private ISshRunningCommand? _command;
     private CancellationTokenSource? _reading;
+    private TaskCompletionSource<DockerOperationOutcome>? _operation;
 
     public const int MaxLines = 5000;
 
@@ -43,7 +50,14 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
     public partial bool IsOpen { get; private set; }
 
     [ObservableProperty]
-    public partial string? ContainerName { get; private set; }
+    public partial string Heading { get; private set; } = "Logs";
+
+    /// <summary>True while the pane shows an operation rather than a log: the log-only controls hide.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLog))]
+    [NotifyPropertyChangedFor(nameof(IsOperationRunning))]
+    [NotifyCanExecuteChangedFor(nameof(CloseCommand))]
+    public partial bool IsOperation { get; private set; }
 
     [ObservableProperty]
     public partial bool Follow { get; set; } = true;
@@ -55,39 +69,75 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
     public partial string FilterText { get; set; } = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOperationRunning))]
+    [NotifyCanExecuteChangedFor(nameof(CloseCommand))]
     public partial bool IsStreaming { get; private set; }
 
     [ObservableProperty]
     public partial string? StatusMessage { get; private set; }
 
+    public bool IsLog => !IsOperation;
+
+    public bool IsOperationRunning => IsOperation && IsStreaming;
+
     /// <summary>Raised after a batch is added, so the view can keep the newest line in sight while following.</summary>
     public event EventHandler? LinesAppended;
 
-    public string Heading => ContainerName is null ? "Logs" : $"Logs — {ContainerName}";
-
-    public async Task OpenAsync(IDockerHost host, string containerId, string containerName)
+    /// <summary>Shows a container's log. Refused — returning false — while an operation is running.</summary>
+    public async Task<bool> OpenAsync(IDockerHost host, string containerId, string containerName)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentException.ThrowIfNullOrWhiteSpace(containerId);
+        if (IsOperationRunning)
+        {
+            return false;
+        }
+
         await StopAsync().ConfigureAwait(true);
-        _host = host;
-        _containerId = containerId;
-        ContainerName = containerName;
-        OnPropertyChanged(nameof(Heading));
+        _start = cancellationToken => host.OpenLogsAsync(
+            containerId,
+            new DockerLogOptions { Tail = Tail, Follow = Follow, Timestamps = Timestamps },
+            cancellationToken);
+        IsOperation = false;
+        Heading = $"Logs — {containerName}";
         IsOpen = true;
         await StartAsync().ConfigureAwait(true);
+        return true;
+    }
+
+    /// <summary>Runs an operation in the pane and completes when it has ended, with how it ended. Null when
+    /// another operation is still running, since cutting that one off is never what was meant.</summary>
+    public async Task<DockerOperationOutcome?> RunOperationAsync(
+        string heading,
+        Func<CancellationToken, Task<DockerResult<ISshRunningCommand>>> start)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(heading);
+        ArgumentNullException.ThrowIfNull(start);
+        if (IsOperationRunning)
+        {
+            return null;
+        }
+
+        await StopAsync().ConfigureAwait(true);
+        var operation = new TaskCompletionSource<DockerOperationOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _operation = operation;
+        _start = start;
+        IsOperation = true;
+        Heading = heading;
+        IsOpen = true;
+        await StartAsync().ConfigureAwait(true);
+        return await operation.Task.ConfigureAwait(true);
     }
 
     /// <summary>Hides the pane and stops reading, which closes the channel and ends a followed
-    /// <c>docker logs</c> on the server.</summary>
-    [RelayCommand]
+    /// <c>docker logs</c> on the server. Not available while an operation runs.</summary>
+    [RelayCommand(CanExecute = nameof(CanClose))]
     public async Task CloseAsync()
     {
         await StopAsync().ConfigureAwait(true);
-        _host = null;
-        _containerId = null;
-        ContainerName = null;
-        OnPropertyChanged(nameof(Heading));
+        _start = null;
+        Heading = "Logs";
+        IsOperation = false;
         IsOpen = false;
         StatusMessage = null;
         ClearLines();
@@ -96,7 +146,7 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
     [RelayCommand]
     public Task ReloadAsync()
     {
-        return _host is null ? Task.CompletedTask : RestartAsync();
+        return _start is null || IsOperation ? Task.CompletedTask : RestartAsync();
     }
 
     [RelayCommand]
@@ -127,12 +177,12 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
 
     partial void OnFollowChanged(bool value)
     {
-        _ = RestartIfOpenAsync();
+        _ = RestartIfLogAsync();
     }
 
     partial void OnTimestampsChanged(bool value)
     {
-        _ = RestartIfOpenAsync();
+        _ = RestartIfLogAsync();
     }
 
     partial void OnFilterTextChanged(string value)
@@ -144,9 +194,14 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
         }
     }
 
-    private Task RestartIfOpenAsync()
+    private bool CanClose()
     {
-        return _host is null ? Task.CompletedTask : RestartAsync();
+        return !IsOperationRunning;
+    }
+
+    private Task RestartIfLogAsync()
+    {
+        return _start is null || IsOperation ? Task.CompletedTask : RestartAsync();
     }
 
     private async Task RestartAsync()
@@ -157,19 +212,16 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
 
     private async Task StartAsync()
     {
-        if (_host is null || _containerId is null)
+        if (_start is null)
         {
             return;
         }
 
         ClearLines();
-        StatusMessage = Follow ? "Following…" : "Loading…";
+        StatusMessage = IsOperation ? "Running…" : Follow ? "Following…" : "Loading…";
         var reading = new CancellationTokenSource();
         _reading = reading;
-        var opened = await _host.OpenLogsAsync(
-            _containerId,
-            new DockerLogOptions { Tail = Tail, Follow = Follow, Timestamps = Timestamps },
-            reading.Token).ConfigureAwait(true);
+        var opened = await _start(reading.Token).ConfigureAwait(true);
         if (!ReferenceEquals(reading, _reading))
         {
             if (opened.IsSuccess)
@@ -183,6 +235,7 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
         if (opened.IsFailure)
         {
             StatusMessage = opened.Failure.Message;
+            FinishOperation(new DockerOperationOutcome(false, opened.Failure.Message));
             return;
         }
 
@@ -217,6 +270,7 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
 
         reading?.Dispose();
         IsStreaming = false;
+        FinishOperation(new DockerOperationOutcome(false, "The operation was stopped."));
     }
 
     private async Task PumpAsync(ISshRunningCommand command, CancellationToken cancellationToken)
@@ -226,13 +280,18 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
             SingleReader = true,
             SingleWriter = true,
         });
+        // Compose and pull write their progress to standard error, so for an operation the stream says
+        // nothing about trouble: the exit code does. Only a container's own standard error is marked.
+        var markErrors = !IsOperation;
         var reader = Task.Run(async () =>
         {
             try
             {
                 await foreach (var line in command.ReadLinesAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    _ = pending.Writer.TryWrite(new DockerLogLine(line.Text, line.Kind == SshOutputKind.StandardError));
+                    _ = pending.Writer.TryWrite(new DockerLogLine(
+                        line.Text,
+                        markErrors && line.Kind == SshOutputKind.StandardError));
                 }
             }
             catch (OperationCanceledException)
@@ -272,6 +331,20 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
         }
 
         IsStreaming = false;
+        if (IsOperation)
+        {
+            var outcome = command.Failure is { } broken
+                ? new DockerOperationOutcome(false, $"The connection broke: {broken.Message}")
+                : command.ExitCode is 0
+                    ? new DockerOperationOutcome(true, "Finished.")
+                    : new DockerOperationOutcome(false, command.ExitCode is { } code
+                        ? $"Failed: exited with code {code}."
+                        : "Ended without an exit code.");
+            StatusMessage = outcome.Message;
+            FinishOperation(outcome);
+            return;
+        }
+
         StatusMessage = command.Failure is { } failure
             ? $"The log stream broke: {failure.Message}"
             : command.ExitCode is { } exitCode and not 0 && received == 0
@@ -279,6 +352,13 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
                 : Follow
                     ? "The log stream ended; the container may have stopped."
                     : null;
+    }
+
+    private void FinishOperation(DockerOperationOutcome outcome)
+    {
+        var operation = _operation;
+        _operation = null;
+        _ = operation?.TrySetResult(outcome);
     }
 
     private void Append(List<DockerLogLine> batch)
@@ -304,7 +384,7 @@ public sealed partial class DockerLogsViewModel(IClipboardService? clipboard = n
             Lines.RemoveAt(0);
         }
 
-        if (IsStreaming && Follow)
+        if (IsStreaming && Follow && !IsOperation)
         {
             StatusMessage = "Following…";
         }

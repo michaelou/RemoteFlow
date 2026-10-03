@@ -162,6 +162,12 @@ public static class SettingKeys
     /// two land in the same folder rather than each keeping its own idea of where you were.</summary>
     public static SettingKey<string?> LastLocalFolder { get; } = new("LastLocalFolder", null);
 
+    /// <summary>The compose projects the Docker page has seen, per connection, with the files each was
+    /// brought up from. <c>docker compose ls</c> forgets a project the moment it is brought down, and this
+    /// is what lets the page bring it back up.</summary>
+    public static SettingKey<global::RemoteFlow.Application.Abstractions.Docker.RememberedComposeProject[]> DockerComposeProjects { get; } =
+        new("DockerComposeProjects", []);
+
     public static IReadOnlyList<ISettingKey> All { get; } =
     [
         Theme,
@@ -203,5 +209,6 @@ public static class SettingKeys
         ShowConnectionDetailLine,
         NavigationExpanded,
         AutoBackup,
+        DockerComposeProjects,
     ];
 }

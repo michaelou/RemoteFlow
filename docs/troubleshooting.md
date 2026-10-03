@@ -220,6 +220,31 @@ The first run builds a local Ubuntu/OpenSSH image, which takes a few minutes; la
 Windows, Docker Desktop must be in **Linux containers** mode. These tests do not run in CI, so a green CI
 run does not mean they passed — see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
+## The Compose tab says the Docker Compose plugin is not installed
+
+**Symptom.** The Containers, Images and Volumes tabs work, but the Compose tab says the plugin is not
+installed.
+
+**Why.** `docker compose` is a separate plugin, and this server has Docker without it. The older
+standalone `docker-compose` (v1) is not supported: it cannot list projects.
+
+**Fix.** Install the plugin on the server. On Debian and Ubuntu with Docker's own repository, run
+`sudo apt install docker-compose-plugin`. Check it with `docker compose version`.
+
+## Up on a compose project uses the wrong settings, or cannot find its `.env`
+
+**Symptom.** Bringing a project up from the Compose tab starts it with different settings than running
+`docker compose up` in its folder would.
+
+**Why.** RemoteFlow brings a project up with the compose files Docker last reported for it, each passed
+with `-f`. The first file's folder becomes the project directory, which is where compose looks for `.env`.
+If the project was first started from a different folder, or with files that have since moved, those are
+the files RemoteFlow still knows.
+
+**Fix.** Bring it up once from the right place: type the path of its compose file in the box at the top of
+the Compose tab, or run it in a terminal. The next refresh records the files Docker reports. **Forget**
+removes a project RemoteFlow remembers but that no longer exists.
+
 ## The Docker page says the account is not allowed to use Docker
 
 **Symptom.** Connecting on the Docker page reports that the account is not allowed to use Docker, and
