@@ -7,6 +7,8 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-03
+
 ### Added
 
 - **The Docker page shows each container's IP address and published ports.** Two new columns on the
@@ -818,7 +820,8 @@ The **Changed** and **Fixed** entries above describe work done against earlier p
 same development line. Nobody upgrading from a published version encountered any of it; they are kept
 because they say what the code does now and why.
 
-[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/michaelou/RemoteFlow/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/michaelou/RemoteFlow/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/michaelou/RemoteFlow/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/michaelou/RemoteFlow/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/michaelou/RemoteFlow/compare/v0.8.2...v0.8.3
