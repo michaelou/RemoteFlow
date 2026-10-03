@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using RemoteFlow.Application.Abstractions;
 using RemoteFlow.Application.Abstractions.Docker;
 using RemoteFlow.Application.Queries;
+using RemoteFlow.Application.Services.Docker;
 using RemoteFlow.Domain.Enums;
 using RemoteFlow.UI.Services;
 
@@ -23,6 +24,12 @@ public sealed partial class DockerContainerItemViewModel(DockerContainer contain
     [NotifyPropertyChangedFor(nameof(Image))]
     [NotifyPropertyChangedFor(nameof(Status))]
     [NotifyPropertyChangedFor(nameof(Ports))]
+    [NotifyPropertyChangedFor(nameof(PortsText))]
+    [NotifyPropertyChangedFor(nameof(PortsTip))]
+    [NotifyPropertyChangedFor(nameof(Address))]
+    [NotifyPropertyChangedFor(nameof(HasAddress))]
+    [NotifyPropertyChangedFor(nameof(AddressText))]
+    [NotifyPropertyChangedFor(nameof(AddressTip))]
     [NotifyPropertyChangedFor(nameof(Project))]
     [NotifyPropertyChangedFor(nameof(State))]
     [NotifyPropertyChangedFor(nameof(StateText))]
@@ -55,6 +62,33 @@ public sealed partial class DockerContainerItemViewModel(DockerContainer contain
     public string Status => Container.Status;
 
     public string Ports => Container.Ports;
+
+    /// <summary>The published ports, shortened — "8080→80/tcp" — or a dash when there are none.</summary>
+    public string PortsText => DockerCli.SummarizePorts(Container.Ports) is { Count: > 0 } ports
+        ? string.Join(", ", ports)
+        : "—";
+
+    /// <summary>Docker's own wording, which the shortened column leaves out: the bind addresses.</summary>
+    public string? PortsTip => string.IsNullOrWhiteSpace(Container.Ports)
+        ? null
+        : Container.Ports.Replace(", ", "\n", StringComparison.Ordinal);
+
+    /// <summary>The address to reach the container on from the server: its first IPv4 address, or IPv6
+    /// when it has no IPv4 one.</summary>
+    public string? Address => Container.NetworkList.Select(network => network.IPv4Address).FirstOrDefault(address => address is not null)
+        ?? Container.NetworkList.Select(network => network.IPv6Address).FirstOrDefault(address => address is not null);
+
+    public bool HasAddress => Address is not null;
+
+    /// <summary>A container on the host network has no address of its own, and says so.</summary>
+    public string AddressText => Address
+        ?? (Container.NetworkList.Any(network => network.Name == "host") ? "host" : "—");
+
+    /// <summary>Every network with its addresses, one per line, for a container on more than one.</summary>
+    public string? AddressTip => Container.NetworkList.Count == 0
+        ? null
+        : string.Join('\n', Container.NetworkList.Select(network =>
+            $"{network.Name}: {string.Join(", ", new[] { network.IPv4Address, network.IPv6Address }.OfType<string>().DefaultIfEmpty("no address"))}"));
 
     /// <summary>The compose project, or a dash for a container started on its own.</summary>
     public string Project => Container.ComposeProject ?? "—";
@@ -188,7 +222,7 @@ public sealed partial class DockerWorkspaceViewModel(
 
     public string FilterPlaceholder => SelectedTab switch
     {
-        DockerTab.Containers => "Filter by name, image or project",
+        DockerTab.Containers => "Filter by name, image, project, IP or port",
         DockerTab.Compose => "Filter by project",
         DockerTab.Images => "Filter by repository, tag or ID",
         DockerTab.Volumes => "Filter by name or project",
@@ -265,6 +299,11 @@ public sealed partial class DockerWorkspaceViewModel(
             return;
         }
 
+        if (!await ConfirmDiscardComposeEditsAsync().ConfigureAwait(true))
+        {
+            return;
+        }
+
         IsLoading = true;
         ErrorMessage = null;
         FeedbackMessage = null;
@@ -289,6 +328,7 @@ public sealed partial class DockerWorkspaceViewModel(
                 ? null
                 : $"Docker {probe.Value.ServerVersion}";
             OnPropertyChanged(nameof(IsConnected));
+            OnPropertyChanged(nameof(CanEditComposeFiles));
             IsLoading = false;
             await RefreshCoreAsync(includeStats: true, cancellationToken).ConfigureAwait(true);
         }
@@ -304,6 +344,7 @@ public sealed partial class DockerWorkspaceViewModel(
         {
             IsLoading = false;
             OnPropertyChanged(nameof(IsConnected));
+            OnPropertyChanged(nameof(CanEditComposeFiles));
             OnPropertyChanged(nameof(HasNoContainers));
         }
     }
@@ -384,6 +425,19 @@ public sealed partial class DockerWorkspaceViewModel(
 
         var result = await clipboard.WriteTextAsync(item.Id).ConfigureAwait(true);
         FeedbackMessage = result.Succeeded ? $"Copied the ID of {item.Name}." : result.ErrorMessage;
+    }
+
+    [RelayCommand]
+    public async Task CopyAddressAsync(DockerContainerItemViewModel? item)
+    {
+        item ??= SelectedContainer;
+        if (item?.Address is not { } address || clipboard is null)
+        {
+            return;
+        }
+
+        var result = await clipboard.WriteTextAsync(address).ConfigureAwait(true);
+        FeedbackMessage = result.Succeeded ? $"Copied the IP address of {item.Name}." : result.ErrorMessage;
     }
 
     /// <summary>The page came on screen: start the periodic refresh.</summary>
@@ -611,6 +665,10 @@ public sealed partial class DockerWorkspaceViewModel(
                 || item.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)
                 || item.Image.Contains(filter, StringComparison.OrdinalIgnoreCase)
                 || item.Id.StartsWith(filter, StringComparison.OrdinalIgnoreCase)
+                || item.Ports.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                || item.Container.NetworkList.Any(network =>
+                    (network.IPv4Address?.StartsWith(filter, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || (network.IPv6Address?.StartsWith(filter, StringComparison.OrdinalIgnoreCase) ?? false))
                 || (item.Container.ComposeProject?.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false))
             .OrderBy(item => item.Container.ComposeProject is null ? 1 : 0)
             .ThenBy(item => item.Container.ComposeProject, StringComparer.OrdinalIgnoreCase)
@@ -647,6 +705,7 @@ public sealed partial class DockerWorkspaceViewModel(
     private async Task DisposeSessionAsync()
     {
         await Logs.CloseAsync().ConfigureAwait(false);
+        ComposeEditor.Close();
         _all.Clear();
         Containers.Clear();
         ClearResources();
@@ -660,6 +719,7 @@ public sealed partial class DockerWorkspaceViewModel(
         }
 
         OnPropertyChanged(nameof(IsConnected));
+        OnPropertyChanged(nameof(CanEditComposeFiles));
     }
 
     private bool CanConnectSelected()

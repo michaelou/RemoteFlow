@@ -14,18 +14,28 @@ public interface IDockerWorkspaceSessionFactory
 }
 
 /// <summary>One SSH connection held open for the Docker page. Every list, action and log on the page is a
-/// separate exec channel on it, so a refresh does not pay for a handshake.</summary>
+/// separate exec channel on it, so a refresh does not pay for a handshake. Compose files are read and
+/// written over an SFTP channel on the same connection, opened the first time one is.</summary>
 public sealed class DockerWorkspaceSession(
     Connection definition,
     ISshConnection connection,
-    IDockerHost docker) : IAsyncDisposable
+    IDockerHost docker,
+    IDockerComposeFiles? composeFiles = null) : IAsyncDisposable
 {
     public Connection Definition { get; } = definition;
 
     public IDockerHost Docker { get; } = docker;
 
+    /// <summary>Null where the session cannot edit files, which leaves the compose editor off.</summary>
+    public IDockerComposeFiles? ComposeFiles { get; } = composeFiles;
+
     public async ValueTask DisposeAsync()
     {
+        if (ComposeFiles is IAsyncDisposable files)
+        {
+            await files.DisposeAsync().ConfigureAwait(false);
+        }
+
         await connection.DisposeAsync().ConfigureAwait(false);
     }
 }
@@ -71,7 +81,8 @@ public sealed class DockerWorkspaceSessionFactory(
             var session = new DockerWorkspaceSession(
                 definition,
                 connected.Value,
-                new DockerCliHost(connected.Value, definition.Username));
+                new DockerCliHost(connected.Value, definition.Username),
+                new SftpDockerComposeFiles(connected.Value.OpenSftp()));
             await recent.RecordOpenedAsync(definition.Id, clock.UtcNow, cancellationToken).ConfigureAwait(false);
             return session;
         }

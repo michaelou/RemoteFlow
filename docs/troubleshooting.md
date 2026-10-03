@@ -245,6 +245,30 @@ the files RemoteFlow still knows.
 the Compose tab, or run it in a terminal. The next refresh records the files Docker reports. **Forget**
 removes a project RemoteFlow remembers but that no longer exists.
 
+## A compose file cannot be opened or saved on the Docker page
+
+**Symptom.** **Edit** or **Save** on the Compose tab reports that the file could not be read or saved, or
+that the SSH account does not have permission.
+
+**Why.** Compose files are read and written over SFTP as the connection's SSH account, not through Docker.
+Being in the `docker` group lets an account run compose, but not write files it does not own. Files under
+`/srv` or `/opt` are often owned by root. A server with its SFTP subsystem turned off cannot open files at
+all.
+
+**Fix.** Give the account write access to the project folder, for example `sudo chown -R deploy /srv/shop`,
+or keep the project in a folder the account owns. If SFTP is off, enable the `Subsystem sftp` line in
+`/etc/ssh/sshd_config`.
+
+## A compose save is refused because the file changed on the server
+
+**Symptom.** **Save** says the file was changed on the server after it was opened.
+
+**Why.** Someone or something else changed the file while it was open in the page. Saving would have
+overwritten that change, so RemoteFlow refused.
+
+**Fix.** Copy your changes, select **Reload** to see what is on the server now, then make your changes
+again and save.
+
 ## The Docker page says the account is not allowed to use Docker
 
 **Symptom.** Connecting on the Docker page reports that the account is not allowed to use Docker, and

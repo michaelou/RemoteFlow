@@ -154,6 +154,7 @@ public sealed partial class DockerComposeProjectItemViewModel(string name) : Obs
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ConfigFilesText))]
     [NotifyPropertyChangedFor(nameof(CanUp))]
+    [NotifyPropertyChangedFor(nameof(CanEdit))]
     public partial IReadOnlyList<string> ConfigFiles { get; private set; } = [];
 
     [ObservableProperty]
@@ -174,6 +175,9 @@ public sealed partial class DockerComposeProjectItemViewModel(string name) : Obs
     public bool CanUp => !IsBusy && ConfigFiles.Count > 0;
 
     public bool CanDown => !IsBusy && IsListed;
+
+    /// <summary>Editing needs to know where the file is, the same as Up does.</summary>
+    public bool CanEdit => ConfigFiles.Count > 0;
 
     public bool CanForget => !IsBusy && !IsListed;
 

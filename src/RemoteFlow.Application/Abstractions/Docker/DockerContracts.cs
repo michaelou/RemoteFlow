@@ -34,6 +34,13 @@ public enum DockerError
     /// <summary>An image reference, volume name, project name or file path did not pass validation, so no
     /// command was sent.</summary>
     InvalidArgument = 10,
+
+    /// <summary>A compose file changed on the server — or appeared, or went away — after it was opened, so
+    /// saving would have overwritten someone else's edit.</summary>
+    FileChanged = 11,
+
+    /// <summary>A compose file could not be read or written over SFTP.</summary>
+    FileUnavailable = 12,
 }
 
 public sealed record DockerFailure(DockerError Error, string Message);
@@ -115,10 +122,15 @@ public enum DockerContainerState
     Dead = 7,
 }
 
+/// <summary>One network a running container is attached to, with its addresses on it. A container on the
+/// host network has neither address: it shares the server's.</summary>
+public sealed record DockerContainerNetwork(string Name, string? IPv4Address, string? IPv6Address);
+
 /// <summary>One row of <c>docker ps -a</c>. The compose labels are read individually rather than parsed out
 /// of the comma-joined label list, which cannot be split safely once a value contains a comma.
 /// <paramref name="Volumes"/> names the volumes the container mounts; bind mounts are not volumes and do
-/// not appear.</summary>
+/// not appear. <paramref name="Networks"/> comes from <c>docker inspect</c>, which is asked only about
+/// running containers: a stopped one has no address.</summary>
 public sealed record DockerContainer(
     string Id,
     string Name,
@@ -129,11 +141,14 @@ public sealed record DockerContainer(
     string CreatedAt,
     string? ComposeProject,
     string? ComposeService,
-    IReadOnlyList<string>? Volumes = null)
+    IReadOnlyList<string>? Volumes = null,
+    IReadOnlyList<DockerContainerNetwork>? Networks = null)
 {
     public bool IsRunning => State is DockerContainerState.Running or DockerContainerState.Restarting;
 
     public IReadOnlyList<string> VolumeNames => Volumes ?? [];
+
+    public IReadOnlyList<DockerContainerNetwork> NetworkList => Networks ?? [];
 }
 
 /// <summary>One row of <c>docker image ls</c>. An untagged image has a null repository and tag.
@@ -252,6 +267,29 @@ public interface IDockerHost
     /// running command.</summary>
     Task<DockerResult<ISshRunningCommand>> StartOperationAsync(
         DockerOperation operation,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Asks compose whether the files make a valid project — <c>docker compose config --quiet</c> —
+    /// without starting anything. A failure carries compose's own explanation.</summary>
+    Task<DockerResult> ValidateComposeAsync(
+        IReadOnlyList<string> configFiles,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>Compose files on the server, read and written over SFTP on the page's connection. A save never
+/// overwrites blindly: it is told what the file held when it was opened, and refuses when that is no longer
+/// what is there.</summary>
+public interface IDockerComposeFiles
+{
+    Task<DockerResult<string>> ReadAsync(string path, CancellationToken cancellationToken = default);
+
+    /// <summary>Saves <paramref name="text"/> to <paramref name="path"/>. <paramref name="expected"/> is what
+    /// the file held when it was opened, or null for a new file — which then must not exist yet, and whose
+    /// missing folders are created.</summary>
+    Task<DockerResult> WriteAsync(
+        string path,
+        string text,
+        string? expected,
         CancellationToken cancellationToken = default);
 }
 

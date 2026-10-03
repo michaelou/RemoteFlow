@@ -7,6 +7,24 @@ whatever commit carries a `v`-prefixed tag, so an entry here and a tag are two h
 
 ## [Unreleased]
 
+### Added
+
+- **The Docker page shows each container's IP address and published ports.** Two new columns on the
+  Containers tab. **IP** is the container's address on its first network; hover it to see every network it
+  is on, or right-click the row and choose **Copy IP address**. A container on the host network shows
+  `host`. **Ports** shortens Docker's list to what is published where: `0.0.0.0:8080->80/tcp, [::]:8080->80/tcp`
+  becomes `8080→80/tcp`, and a port bound to one address keeps it. Hover it for Docker's own wording. The
+  filter box matches addresses and ports too.
+- **Compose files can be edited, and new ones written, on the Docker page.** On the Compose tab, open a
+  project's compose file with its **Edit** button, a double-click or `Enter`. Change it, then **Save**
+  (`Ctrl+S`) or **Save and up** (`Ctrl+Shift+S`). Every save is checked with `docker compose config`, so a
+  mistake is reported before an up would trip on it. **New file…** writes a new compose file at the path
+  you choose, creating its folders, and **Save and up** starts it as a new project.
+  - **Safety:** a save never overwrites blindly. If the file changed on the server after you opened it,
+    the save is refused and nothing is lost on either side. A new file never replaces an existing one. A
+    save replaces the file in one step, so a dropped connection cannot leave it half written, and the
+    file's permissions and line endings are kept.
+
 ## [0.10.0] - 2026-10-03
 
 ### Added

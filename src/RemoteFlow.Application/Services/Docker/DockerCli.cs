@@ -28,6 +28,11 @@ public static partial class DockerCli
         "{\"name\":{{json .Name}},\"driver\":{{json .Driver}}," +
         "\"project\":{{json (.Label \"com.docker.compose.project\")}}}";
 
+    /// <summary>The networks of a container from <c>docker inspect</c>, which <c>docker ps</c> names but
+    /// gives no addresses for.</summary>
+    private const string _networksFormat =
+        "{\"id\":{{json .Id}},\"networks\":{{json .NetworkSettings.Networks}}}";
+
     /// <summary>The command that replaces the login shell of a fresh terminal with a shell inside the
     /// container: bash when the image has it, sh when it does not. <c>exec</c>, so leaving the container
     /// ends the tab instead of dropping back to the host without a word.</summary>
@@ -124,6 +129,38 @@ public static partial class DockerCli
         return $"exec docker exec -it {QuoteReference(container)} sh -c {Quote(_shellProbe)}";
     }
 
+    /// <summary>One <c>docker inspect</c> for every container asked about, rather than one each. <c>--type
+    /// container</c> so an image that happens to share a name is never inspected instead.</summary>
+    public static string InspectNetworksCommand(IReadOnlyList<string> containers)
+    {
+        ArgumentNullException.ThrowIfNull(containers);
+        return containers.Count > 0
+            ? $"docker inspect --type container --format {Quote(_networksFormat)} " +
+                string.Join(' ', containers.Select(QuoteReference))
+            : throw new ArgumentException("At least one container is needed.", nameof(containers));
+    }
+
+    /// <summary>Checks a project without starting it. The files are given as compose up would be given them,
+    /// so a later file's overrides — and the first file's folder, where <c>.env</c> is read — apply.</summary>
+    public static string ValidateComposeCommand(IReadOnlyList<string> configFiles)
+    {
+        ArgumentNullException.ThrowIfNull(configFiles);
+        if (configFiles.Count == 0)
+        {
+            throw new ArgumentException("Compose needs at least one file to check.", nameof(configFiles));
+        }
+
+        var command = new StringBuilder("docker compose");
+        foreach (var file in configFiles)
+        {
+            _ = command.Append(" -f ").Append(IsValidComposeFile(file)
+                ? Quote(file)
+                : throw new ArgumentException($"'{file}' is not a usable compose file path.", nameof(configFiles)));
+        }
+
+        return command.Append(" config --quiet").ToString();
+    }
+
     public static string RemoveImageCommand(string reference)
     {
         return IsValidImageReference(reference)
@@ -199,6 +236,67 @@ public static partial class DockerCli
         }
 
         return containers;
+    }
+
+    /// <summary>The networks of each inspected container, by full ID. An empty address is Docker's way of
+    /// saying there is none — on the host network, or on IPv6 when it is off — and reads as null.</summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<DockerContainerNetwork>> ParseNetworks(string output)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        var networks = new Dictionary<string, IReadOnlyList<DockerContainerNetwork>>(StringComparer.Ordinal);
+        foreach (var line in JsonLines(output))
+        {
+            using var document = JsonDocument.Parse(line);
+            var row = document.RootElement;
+            var id = Text(row, "id");
+            if (id.Length == 0)
+            {
+                continue;
+            }
+
+            networks[id] = row.TryGetProperty("networks", out var attached) && attached.ValueKind == JsonValueKind.Object
+                ? [.. attached.EnumerateObject().Select(network => new DockerContainerNetwork(
+                    network.Name,
+                    OptionalText(network.Value, "IPAddress"),
+                    OptionalText(network.Value, "GlobalIPv6Address")))]
+                : [];
+        }
+
+        return networks;
+    }
+
+    /// <summary>The <c>Ports</c> column made short enough for a list: a port published on every address
+    /// is written as its port alone, and the IPv6 twin Docker lists beside each IPv4 one is dropped.
+    /// "0.0.0.0:8080->80/tcp, [::]:8080->80/tcp, 443/tcp" becomes "8080→80/tcp" and "443/tcp". A port
+    /// bound to one address keeps it, because that is the point of binding it.</summary>
+    public static IReadOnlyList<string> SummarizePorts(string? ports)
+    {
+        if (string.IsNullOrWhiteSpace(ports))
+        {
+            return [];
+        }
+
+        var summary = new List<string>();
+        foreach (var entry in ports.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var arrow = entry.IndexOf("->", StringComparison.Ordinal);
+            var text = entry;
+            if (arrow > 0)
+            {
+                var published = entry[..arrow];
+                var separator = published.LastIndexOf(':');
+                var address = separator < 0 ? string.Empty : published[..separator];
+                var port = published[(separator + 1)..];
+                text = (address is "" or "0.0.0.0" or "::" or "[::]" ? port : published) + "→" + entry[(arrow + 2)..];
+            }
+
+            if (!summary.Contains(text, StringComparer.Ordinal))
+            {
+                summary.Add(text);
+            }
+        }
+
+        return summary;
     }
 
     public static IReadOnlyList<DockerImage> ParseImages(string output)

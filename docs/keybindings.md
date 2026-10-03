@@ -93,11 +93,14 @@ part of the terminal keymap.
 | --- | --- |
 | `F5` | Refresh the list on the tab on screen, and the containers. |
 | `Ctrl+F` | Focus the filter box. It filters whichever tab is on screen. |
-| `Enter` | Containers: show the selected container's logs (same as a double-click). In the compose file box: bring that file up. In the pull box: pull the image. |
+| `Enter` | Containers: show the selected container's logs (same as a double-click). Compose: open the selected project's compose file (same as a double-click). In the compose file box: bring that file up. In the pull box: pull the image. |
 | `Delete` | Containers, Images, Volumes: remove the selected row, after a confirmation. Only what nothing uses can be removed. |
+| `Ctrl+S` | In the compose editor: save the file, then check it with `docker compose config`. |
+| `Ctrl+Shift+S` | In the compose editor: save, check, and bring the project up. |
 
-Every row action (start or stop, restart, logs, shell, up, down, remove) is also a button on the row with
-its own name, so `Tab` reaches each one without opening the context menu. The tabs themselves are reached
+Every row action (start or stop, restart, logs, shell, edit, up, down, remove) is also a button on the row
+with its own name, so `Tab` reaches each one without opening the context menu. In the compose editor, `Tab`
+moves to the next control rather than typing a tab, because YAML does not allow tabs for indentation. The tabs themselves are reached
 with `Tab` and switched with the arrow keys. The splitter above the output pane is a tab stop and moves with
 the arrow keys.
 

@@ -257,7 +257,11 @@ public sealed partial class DockerWorkspaceTests
     {
         var token = TestContext.Current.CancellationToken;
         var fixture = CreateFixture();
-        fixture.Host.Containers = [Container("c1", "api", DockerContainerState.Running, project: "shop")];
+        fixture.Host.Containers =
+        [
+            Container("c1", "api", DockerContainerState.Running, project: "shop", ports: "0.0.0.0:8080->80/tcp",
+                networks: [new DockerContainerNetwork("shop_default", "172.18.0.4", null)]),
+        ];
         await fixture.ViewModel.AttachAsync(fixture.Connection.Id, token);
         var window = new Window
         {
@@ -273,6 +277,8 @@ public sealed partial class DockerWorkspaceTests
         // fixed column and a star column are both checked, because the star ones also need equal widths.
         AssertSameLeft(window, "Name", "api");
         AssertSameLeft(window, "Project", "shop");
+        AssertSameLeft(window, "IP", "172.18.0.4");
+        AssertSameLeft(window, "Ports", "8080→80/tcp");
         window.Close();
         fixture.ViewModel.Deactivate();
     }
@@ -302,15 +308,18 @@ public sealed partial class DockerWorkspaceTests
         DockerContainerState state,
         string? project = null,
         string image = "image:latest",
-        IReadOnlyList<string>? volumes = null)
+        IReadOnlyList<string>? volumes = null,
+        string ports = "",
+        IReadOnlyList<DockerContainerNetwork>? networks = null)
     {
-        return new DockerContainer(id, name, image, state, state.ToString(), string.Empty, string.Empty, project, null, volumes);
+        return new DockerContainer(id, name, image, state, state.ToString(), ports, string.Empty, project, null, volumes, networks);
     }
 
     private static Fixture CreateFixture(
         EnvironmentKind environment = EnvironmentKind.Production,
         bool[]? confirmations = null,
-        IDockerComposeProjectMemory? composeMemory = null)
+        IDockerComposeProjectMemory? composeMemory = null,
+        IDockerComposeFiles? composeFiles = null)
     {
         var guids = SystemGuidProvider.Instance;
         var connection = Connection.Create(guids, "web-01", "web.example", ProtocolType.Ssh).Value;
@@ -320,7 +329,7 @@ public sealed partial class DockerWorkspaceTests
         var confirmation = new QueuedConfirmation(confirmations ?? [true, true, true]);
         var shells = new RecordingShellOpener();
         var viewModel = new DockerWorkspaceViewModel(
-            new StubSessionFactory(new DockerWorkspaceSession(connection, ssh, host)),
+            new StubSessionFactory(new DockerWorkspaceSession(connection, ssh, host, composeFiles)),
             confirmation,
             shells,
             composeMemory: composeMemory);
@@ -449,6 +458,21 @@ public sealed partial class DockerWorkspaceTests
         {
             Operations.Add(operation);
             return Task.FromResult(DockerResult<ISshRunningCommand>.Success(OperationOutput(operation)));
+        }
+
+        /// <summary>What the next compose check reports; null means compose accepts the files.</summary>
+        public DockerFailure? ValidationFailure { get; set; }
+
+        public List<IReadOnlyList<string>> Validations { get; } = [];
+
+        public Task<DockerResult> ValidateComposeAsync(
+            IReadOnlyList<string> configFiles,
+            CancellationToken cancellationToken = default)
+        {
+            Validations.Add(configFiles);
+            return Task.FromResult(ValidationFailure is null
+                ? DockerResult.Success()
+                : DockerResult.Fail(ValidationFailure.Error, ValidationFailure.Message));
         }
     }
 

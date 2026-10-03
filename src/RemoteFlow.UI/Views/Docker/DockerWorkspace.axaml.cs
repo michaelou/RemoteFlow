@@ -29,6 +29,7 @@ public sealed partial class DockerWorkspace : UserControl
         _viewModel = viewModel;
         viewModel.Logs.PropertyChanged += Logs_OnPropertyChanged;
         viewModel.Logs.LinesAppended += Logs_OnLinesAppended;
+        viewModel.ComposeEditor.PropertyChanged += ComposeEditor_OnPropertyChanged;
         SizeLogsRow(viewModel.Logs.IsOpen);
         viewModel.Activate();
         await viewModel.LoadConnectionsAsync().ConfigureAwait(true);
@@ -46,6 +47,7 @@ public sealed partial class DockerWorkspace : UserControl
         _viewModel.Deactivate();
         _viewModel.Logs.PropertyChanged -= Logs_OnPropertyChanged;
         _viewModel.Logs.LinesAppended -= Logs_OnLinesAppended;
+        _viewModel.ComposeEditor.PropertyChanged -= ComposeEditor_OnPropertyChanged;
         _viewModel = null;
     }
 
@@ -56,12 +58,67 @@ public sealed partial class DockerWorkspace : UserControl
             _ = viewModel.RefreshCommand.ExecuteAsync(null);
             e.Handled = true;
         }
+        else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control) && _viewModel is { ComposeEditor.IsOpen: true } editing)
+        {
+            _ = e.KeyModifiers.HasFlag(KeyModifiers.Shift)
+                ? editing.SaveComposeFileAndUpCommand.ExecuteAsync(null)
+                : editing.SaveComposeFileCommand.ExecuteAsync(null);
+            e.Handled = true;
+        }
         else if (e.Key == Key.F && e.KeyModifiers.HasFlag(KeyModifiers.Control) && _viewModel is { IsConnected: true })
         {
             _ = FilterBox.Focus();
             FilterBox.SelectAll();
             e.Handled = true;
         }
+    }
+
+    private void ProjectList_OnDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (_viewModel?.SelectedProject is { CanEdit: true } project)
+        {
+            _ = _viewModel.EditComposeFileCommand.ExecuteAsync(project);
+        }
+    }
+
+    /// <summary>Enter opens the project's compose file, the same as a double-click.</summary>
+    private void ProjectList_OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && _viewModel?.SelectedProject is { CanEdit: true } project)
+        {
+            _ = _viewModel.EditComposeFileCommand.ExecuteAsync(project);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Another file of the project was picked; the view model opens it, or puts the pick back
+    /// when unsaved changes are kept.</summary>
+    private void ComposeFilePicker_OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_viewModel?.ComposeEditor is { IsOpen: true, IsNew: false } editor
+            && editor.SelectedFile is { } file
+            && file != editor.Path)
+        {
+            _ = _viewModel.SwitchComposeFileCommand.ExecuteAsync(file);
+        }
+    }
+
+    /// <summary>The editor takes the keyboard when it opens — on the path box for a new file, which needs
+    /// one first — and gives it back to the project list when it closes.</summary>
+    private void ComposeEditor_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(DockerComposeEditorViewModel.IsOpen) || sender is not DockerComposeEditorViewModel editor)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            Control target = !editor.IsOpen
+                ? ProjectList
+                : editor.IsNew && string.IsNullOrWhiteSpace(editor.Path) ? ComposeEditorPathBox : ComposeEditorText;
+            _ = target.Focus();
+        }, DispatcherPriority.Background);
     }
 
     private void ContainerList_OnDoubleTapped(object? sender, TappedEventArgs e)

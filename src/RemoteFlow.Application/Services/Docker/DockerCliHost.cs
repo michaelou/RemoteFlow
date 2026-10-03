@@ -22,9 +22,16 @@ public sealed class DockerCliHost(ISshConnection connection, string? username = 
         CancellationToken cancellationToken = default)
     {
         var result = await RunAsync(DockerCli.ListContainersCommand, cancellationToken).ConfigureAwait(false);
-        return result.IsFailure
-            ? DockerResult<IReadOnlyList<DockerContainer>>.Fail(result.Failure)
-            : Parse(result.Value, DockerCli.ParseContainers);
+        if (result.IsFailure)
+        {
+            return DockerResult<IReadOnlyList<DockerContainer>>.Fail(result.Failure);
+        }
+
+        var listed = Parse(result.Value, DockerCli.ParseContainers);
+        return listed.IsFailure
+            ? listed
+            : DockerResult<IReadOnlyList<DockerContainer>>.Success(
+                await WithNetworksAsync(listed.Value, cancellationToken).ConfigureAwait(false));
     }
 
     public async Task<DockerResult<IReadOnlyList<DockerContainerStats>>> GetStatsAsync(
@@ -130,6 +137,63 @@ public sealed class DockerCliHost(ISshConnection connection, string? username = 
         return started.IsFailure
             ? DockerResult<ISshRunningCommand>.Fail(DockerError.ConnectionFailed, started.Failure.Message)
             : DockerResult<ISshRunningCommand>.Success(started.Value);
+    }
+
+    public async Task<DockerResult> ValidateComposeAsync(
+        IReadOnlyList<string> configFiles,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(configFiles);
+        if (configFiles.Count == 0)
+        {
+            return InvalidArgument<string>("No compose file was given");
+        }
+
+        if (configFiles.FirstOrDefault(file => !DockerCli.IsValidComposeFile(file)) is { } invalid)
+        {
+            return InvalidArgument<string>($"'{invalid}' is not a usable compose file path");
+        }
+
+        var result = await RunAsync(DockerCli.ValidateComposeCommand(configFiles), cancellationToken).ConfigureAwait(false);
+        return result.IsFailure ? result : DockerResult.Success();
+    }
+
+    /// <summary>Adds the addresses of the running containers. They are a detail of the list, not the list
+    /// itself: when <c>docker inspect</c> fails — a container removed between the two commands is enough —
+    /// what it did answer is kept, and the rest go without.</summary>
+    private async Task<IReadOnlyList<DockerContainer>> WithNetworksAsync(
+        IReadOnlyList<DockerContainer> containers,
+        CancellationToken cancellationToken)
+    {
+        var running = containers
+            .Where(container => container.IsRunning && DockerCli.IsValidContainerReference(container.Id))
+            .Select(container => container.Id)
+            .ToList();
+        if (running.Count == 0)
+        {
+            return containers;
+        }
+
+        var executed = await _connection.ExecuteAsync(DockerCli.InspectNetworksCommand(running), cancellationToken)
+            .ConfigureAwait(false);
+        if (executed.IsFailure)
+        {
+            return containers;
+        }
+
+        IReadOnlyDictionary<string, IReadOnlyList<DockerContainerNetwork>> networks;
+        try
+        {
+            networks = DockerCli.ParseNetworks(executed.Value.StandardOutput);
+        }
+        catch (JsonException)
+        {
+            return containers;
+        }
+
+        return [.. containers.Select(container => networks.TryGetValue(container.Id, out var attached)
+            ? container with { Networks = attached }
+            : container)];
     }
 
     private async Task<DockerResult<string>> RunAsync(string command, CancellationToken cancellationToken)

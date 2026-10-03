@@ -152,14 +152,16 @@
             <TabItem Header="Containers">
               <Grid RowDefinitions="Auto,*">
                   <Border Classes="browser-header">
-                    <Grid Margin="4,4,0,4" ColumnDefinitions="100,2*,*,2*,1.5*,70,150,124">
+                    <Grid Margin="4,4,0,4" ColumnDefinitions="100,2*,*,2*,1.5*,120,1.5*,70,150,124">
                       <TextBlock Text="State" />
                       <TextBlock Grid.Column="1" Text="Name" />
                       <TextBlock Grid.Column="2" Text="Project" />
                       <TextBlock Grid.Column="3" Text="Image" />
                       <TextBlock Grid.Column="4" Text="Status" />
-                      <TextBlock Grid.Column="5" HorizontalAlignment="Right" Text="CPU" />
-                      <TextBlock Grid.Column="6" Margin="12,0,0,0" Text="Memory" />
+                      <TextBlock Grid.Column="5" Text="IP" />
+                      <TextBlock Grid.Column="6" Text="Ports" />
+                      <TextBlock Grid.Column="7" HorizontalAlignment="Right" Text="CPU" />
+                      <TextBlock Grid.Column="8" Margin="12,0,0,0" Text="Memory" />
                     </Grid>
                   </Border>
 
@@ -183,7 +185,7 @@
                             MinHeight="28"
                             Background="Transparent"
                             AutomationProperties.Name="{Binding AccessibleName}"
-                            ColumnDefinitions="100,2*,*,2*,1.5*,70,150,124">
+                            ColumnDefinitions="100,2*,*,2*,1.5*,120,1.5*,70,150,124">
                           <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <Ellipse Width="8" Height="8" Classes="state-dot" Classes.running="{Binding IsRunning}" />
                             <TextBlock Text="{Binding StateText}" Foreground="{DynamicResource Brush.Text.Secondary}" />
@@ -191,12 +193,14 @@
                           <TextBlock Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Id}" />
                           <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Project}" TextTrimming="CharacterEllipsis" />
                           <TextBlock Grid.Column="3" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Image}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Image}" />
-                          <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Status}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Ports}" />
-                          <TextBlock Grid.Column="5" VerticalAlignment="Center" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding CpuText}" />
-                          <TextBlock Grid.Column="6" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding MemoryText}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Grid.Column="4" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding Status}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Status}" />
+                          <TextBlock Grid.Column="5" VerticalAlignment="Center" FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace" FontSize="12" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding AddressText}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding AddressTip}" />
+                          <TextBlock Grid.Column="6" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding PortsText}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding PortsTip}" />
+                          <TextBlock Grid.Column="7" VerticalAlignment="Center" HorizontalAlignment="Right" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding CpuText}" />
+                          <TextBlock Grid.Column="8" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding MemoryText}" TextTrimming="CharacterEllipsis" />
                           <!-- Each action is a named button rather than only a menu entry, so the keyboard reaches
                                it with Tab; the context menu repeats them for the pointer. -->
-                          <StackPanel Grid.Column="7" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right">
+                          <StackPanel Grid.Column="9" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right">
                             <ProgressBar Width="24" MinWidth="24" Height="3" IsIndeterminate="True" VerticalAlignment="Center" IsVisible="{Binding IsBusy}" />
                             <Button
                                 Classes="icon row"
@@ -255,6 +259,7 @@
                               <MenuItem Header="Open shell" IsEnabled="{Binding CanOpenShell}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).OpenShellCommand}" CommandParameter="{Binding}" />
                               <Separator />
                               <MenuItem Header="Copy ID" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).CopyIdCommand}" CommandParameter="{Binding}" />
+                              <MenuItem Header="Copy IP address" IsEnabled="{Binding HasAddress}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).CopyAddressCommand}" CommandParameter="{Binding}" />
                               <MenuItem Header="Remove…" IsEnabled="{Binding CanRemove}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).RemoveContainerCommand}" CommandParameter="{Binding}" />
                             </MenuFlyout>
                           </Grid.ContextFlyout>
@@ -274,104 +279,241 @@
             </TabItem>
 
             <TabItem Header="Compose">
-              <Grid RowDefinitions="Auto,Auto,Auto,*">
-                <!-- A compose file RemoteFlow has never seen: the project shows up below once it is up. -->
-                <Grid Margin="8,8,8,4" ColumnDefinitions="*,Auto">
-                  <TextBox
-                      x:Name="ComposeFileBox"
-                      AutomationProperties.Name="Compose file to bring up"
-                      PlaceholderText="/srv/app/compose.yaml — bring a compose file on the server up"
-                      Text="{Binding ComposeFilePath}"
-                      KeyDown="ComposeFileBox_OnKeyDown" />
-                  <Button
-                      Grid.Column="1"
-                      Margin="8,0,0,0"
-                      AutomationProperties.Name="Bring the compose file up"
-                      Command="{Binding ComposeUpFromFileCommand}"
-                      ToolTip.Tip="docker compose -f &lt;file&gt; up --detach">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                      <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Play}" />
-                      <TextBlock Text="Up" />
-                    </StackPanel>
-                  </Button>
-                </Grid>
-                <TextBlock
-                    Grid.Row="1"
-                    Margin="12,4"
-                    Foreground="{DynamicResource Brush.Text.Secondary}"
-                    TextWrapping="Wrap"
-                    IsVisible="{Binding ComposeMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                    Text="{Binding ComposeMessage}" />
-                <Border Grid.Row="2" Classes="browser-header">
-                  <Grid Margin="4,4,0,4" ColumnDefinitions="2*,1.2*,4*,96">
-                    <TextBlock Text="Project" />
-                    <TextBlock Grid.Column="1" Text="Status" />
-                    <TextBlock Grid.Column="2" Text="Compose files" />
+              <Grid>
+                <Grid RowDefinitions="Auto,Auto,Auto,*" IsVisible="{Binding !ComposeEditor.IsOpen}">
+                  <!-- A compose file RemoteFlow has never seen: the project shows up below once it is up. -->
+                  <Grid Margin="8,8,8,4" ColumnDefinitions="*,Auto,Auto">
+                    <TextBox
+                        x:Name="ComposeFileBox"
+                        AutomationProperties.Name="Compose file to bring up"
+                        PlaceholderText="/srv/app/compose.yaml — bring a compose file on the server up, or write a new one there"
+                        Text="{Binding ComposeFilePath}"
+                        KeyDown="ComposeFileBox_OnKeyDown" />
+                    <Button
+                        Grid.Column="1"
+                        Margin="8,0,0,0"
+                        AutomationProperties.Name="Bring the compose file up"
+                        Command="{Binding ComposeUpFromFileCommand}"
+                        ToolTip.Tip="docker compose -f &lt;file&gt; up --detach">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Play}" />
+                        <TextBlock Text="Up" />
+                      </StackPanel>
+                    </Button>
+                    <Button
+                        Grid.Column="2"
+                        Margin="8,0,0,0"
+                        AutomationProperties.Name="Write a new compose file"
+                        IsEnabled="{Binding CanEditComposeFiles}"
+                        Command="{Binding NewComposeFileCommand}"
+                        ToolTip.Tip="Write a new compose file on the server, at the path typed here or one chosen next">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Add}" />
+                        <TextBlock Text="New file…" />
+                      </StackPanel>
+                    </Button>
                   </Grid>
-                </Border>
-                <ListBox
-                    x:Name="ProjectList"
-                    Grid.Row="3"
-                    AutomationProperties.Name="Compose projects"
-                    Classes="browser"
-                    Background="Transparent"
-                    ItemsSource="{Binding ComposeProjects}"
-                    SelectedItem="{Binding SelectedProject}">
-                  <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="viewModels:DockerComposeProjectItemViewModel">
-                      <Grid
-                          Margin="4,0,0,0"
-                          MinHeight="28"
-                          Background="Transparent"
-                          AutomationProperties.Name="{Binding AccessibleName}"
-                          ColumnDefinitions="2*,1.2*,4*,96">
-                        <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                          <Ellipse Width="8" Height="8" Classes="state-dot" Classes.running="{Binding IsRunning}" />
-                          <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource Brush.Text.Secondary}" />
-                        </StackPanel>
-                        <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding ConfigFilesText}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ConfigFilesText}" />
-                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right">
-                          <ProgressBar Width="24" MinWidth="24" Height="3" IsIndeterminate="True" VerticalAlignment="Center" IsVisible="{Binding IsBusy}" />
-                          <Button
-                              Classes="icon row"
-                              AutomationProperties.Name="{Binding Name, StringFormat='Bring {0} up'}"
-                              IsEnabled="{Binding CanUp}"
-                              Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ComposeUpCommand}"
-                              CommandParameter="{Binding}"
-                              ToolTip.Tip="Up">
-                            <PathIcon Data="{DynamicResource Icon.Play}" />
-                          </Button>
-                          <Button
-                              Classes="icon row"
-                              AutomationProperties.Name="{Binding Name, StringFormat='Bring {0} down'}"
-                              IsEnabled="{Binding CanDown}"
-                              Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ComposeDownCommand}"
-                              CommandParameter="{Binding}"
-                              ToolTip.Tip="Down">
-                            <PathIcon Data="{DynamicResource Icon.Stop}" />
-                          </Button>
-                        </StackPanel>
-                        <Grid.ContextFlyout>
-                          <MenuFlyout>
-                            <MenuItem Header="Up" IsEnabled="{Binding CanUp}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ComposeUpCommand}" CommandParameter="{Binding}" />
-                            <MenuItem Header="Down…" IsEnabled="{Binding CanDown}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ComposeDownCommand}" CommandParameter="{Binding}" />
-                            <MenuItem Header="Down and delete volumes…" IsEnabled="{Binding CanDown}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ComposeDownWithVolumesCommand}" CommandParameter="{Binding}" />
-                            <Separator />
-                            <MenuItem Header="Forget" IsEnabled="{Binding CanForget}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ForgetProjectCommand}" CommandParameter="{Binding}" />
-                          </MenuFlyout>
-                        </Grid.ContextFlyout>
-                      </Grid>
-                    </DataTemplate>
-                  </ListBox.ItemTemplate>
-                </ListBox>
-                <TextBlock
-                    Grid.Row="3"
-                    Margin="0,40"
-                    HorizontalAlignment="Center"
-                    Foreground="{DynamicResource Brush.Text.Secondary}"
-                    IsVisible="{Binding HasNoComposeProjects}"
-                    Text="No compose projects on this server yet." />
+                  <TextBlock
+                      Grid.Row="1"
+                      Margin="12,4"
+                      Foreground="{DynamicResource Brush.Text.Secondary}"
+                      TextWrapping="Wrap"
+                      IsVisible="{Binding ComposeMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                      Text="{Binding ComposeMessage}" />
+                  <Border Grid.Row="2" Classes="browser-header">
+                    <Grid Margin="4,4,0,4" ColumnDefinitions="2*,1.2*,4*,124">
+                      <TextBlock Text="Project" />
+                      <TextBlock Grid.Column="1" Text="Status" />
+                      <TextBlock Grid.Column="2" Text="Compose files" />
+                    </Grid>
+                  </Border>
+                  <ListBox
+                      x:Name="ProjectList"
+                      Grid.Row="3"
+                      AutomationProperties.Name="Compose projects"
+                      Classes="browser"
+                      Background="Transparent"
+                      ItemsSource="{Binding ComposeProjects}"
+                      SelectedItem="{Binding SelectedProject}"
+                      DoubleTapped="ProjectList_OnDoubleTapped"
+                      KeyDown="ProjectList_OnKeyDown">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate x:DataType="viewModels:DockerComposeProjectItemViewModel">
+                        <Grid
+                            Margin="4,0,0,0"
+                            MinHeight="28"
+                            Background="Transparent"
+                            AutomationProperties.Name="{Binding AccessibleName}"
+                            ColumnDefinitions="2*,1.2*,4*,124">
+                          <TextBlock VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Ellipse Width="8" Height="8" Classes="state-dot" Classes.running="{Binding IsRunning}" />
+                            <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource Brush.Text.Secondary}" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="2" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="{Binding ConfigFilesText}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ConfigFilesText}" />
+                          <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right">
+                            <ProgressBar Width="24" MinWidth="24" Height="3" IsIndeterminate="True" VerticalAlignment="Center" IsVisible="{Binding IsBusy}" />
+                            <Button
+                                Classes="icon row"
+                                AutomationProperties.Name="{Binding Name, StringFormat='Edit the compose file of {0}'}"
+                                IsEnabled="{Binding CanEdit}"
+                                Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).EditComposeFileCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="Edit the compose file (Enter)">
+                              <PathIcon Data="{DynamicResource Icon.Edit}" />
+                            </Button>
+                            <Button
+                                Classes="icon row"
+                                AutomationProperties.Name="{Binding Name, StringFormat='Bring {0} up'}"
+                                IsEnabled="{Binding CanUp}"
+                                Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ComposeUpCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="Up">
+                              <PathIcon Data="{DynamicResource Icon.Play}" />
+                            </Button>
+                            <Button
+                                Classes="icon row"
+                                AutomationProperties.Name="{Binding Name, StringFormat='Bring {0} down'}"
+                                IsEnabled="{Binding CanDown}"
+                                Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ComposeDownCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="Down">
+                              <PathIcon Data="{DynamicResource Icon.Stop}" />
+                            </Button>
+                          </StackPanel>
+                          <Grid.ContextFlyout>
+                            <MenuFlyout>
+                              <MenuItem Header="Edit compose file" IsEnabled="{Binding CanEdit}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).EditComposeFileCommand}" CommandParameter="{Binding}" />
+                              <Separator />
+                              <MenuItem Header="Up" IsEnabled="{Binding CanUp}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ComposeUpCommand}" CommandParameter="{Binding}" />
+                              <MenuItem Header="Down…" IsEnabled="{Binding CanDown}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ComposeDownCommand}" CommandParameter="{Binding}" />
+                              <MenuItem Header="Down and delete volumes…" IsEnabled="{Binding CanDown}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ComposeDownWithVolumesCommand}" CommandParameter="{Binding}" />
+                              <Separator />
+                              <MenuItem Header="Forget" IsEnabled="{Binding CanForget}" Command="{Binding $parent[UserControl].((viewModels:DockerWorkspaceViewModel)DataContext).ForgetProjectCommand}" CommandParameter="{Binding}" />
+                            </MenuFlyout>
+                          </Grid.ContextFlyout>
+                        </Grid>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                  <TextBlock
+                      Grid.Row="3"
+                      Margin="0,40"
+                      HorizontalAlignment="Center"
+                      Foreground="{DynamicResource Brush.Text.Secondary}"
+                      IsVisible="{Binding HasNoComposeProjects}"
+                      Text="No compose projects on this server yet." />
+                </Grid>
+
+                <!-- The compose editor, in place of the project list while a file is open. -->
+                <Grid RowDefinitions="Auto,Auto,*,Auto" IsVisible="{Binding ComposeEditor.IsOpen}">
+                  <Grid Margin="8,8,8,6" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+                    <Button
+                        Classes="icon"
+                        AutomationProperties.Name="Close the editor and go back to the compose projects"
+                        Command="{Binding CloseComposeEditorCommand}"
+                        ToolTip.Tip="Back to the projects">
+                      <PathIcon Data="{DynamicResource Icon.Back}" />
+                    </Button>
+                    <TextBlock Grid.Column="1" Margin="8,0,12,0" VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding ComposeEditor.Heading}" />
+                    <TextBlock
+                        Grid.Column="2"
+                        VerticalAlignment="Center"
+                        Foreground="{DynamicResource Brush.Text.Secondary}"
+                        IsVisible="{Binding ComposeEditor.IsDirty}"
+                        Text="Unsaved changes" />
+                    <ProgressBar Grid.Column="3" Width="40" MinWidth="40" Height="3" Margin="0,0,8,0" IsIndeterminate="True" VerticalAlignment="Center" IsVisible="{Binding ComposeEditor.IsBusy}" />
+                    <Button
+                        Grid.Column="4"
+                        AutomationProperties.Name="Reload the compose file from the server"
+                        IsVisible="{Binding !ComposeEditor.IsNew}"
+                        IsEnabled="{Binding !ComposeEditor.IsBusy}"
+                        Command="{Binding ReloadComposeFileCommand}"
+                        ToolTip.Tip="Read the file from the server again, dropping unsaved changes">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Refresh}" />
+                        <TextBlock Text="Reload" />
+                      </StackPanel>
+                    </Button>
+                    <Button
+                        Grid.Column="5"
+                        Margin="8,0,0,0"
+                        AutomationProperties.Name="Save the compose file"
+                        IsEnabled="{Binding !ComposeEditor.IsBusy}"
+                        Command="{Binding SaveComposeFileCommand}"
+                        ToolTip.Tip="Save, then check the file with docker compose config (Ctrl+S)">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Upload}" />
+                        <TextBlock Text="Save" />
+                      </StackPanel>
+                    </Button>
+                    <Button
+                        Grid.Column="6"
+                        Margin="8,0,0,0"
+                        Classes="accent"
+                        AutomationProperties.Name="Save the compose file and bring the project up"
+                        IsEnabled="{Binding !ComposeEditor.IsBusy}"
+                        Command="{Binding SaveComposeFileAndUpCommand}"
+                        ToolTip.Tip="Save, check, and bring the project up (Ctrl+Shift+S)">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Width="14" Height="14" Data="{DynamicResource Icon.Play}" />
+                        <TextBlock Text="Save and up" />
+                      </StackPanel>
+                    </Button>
+                  </Grid>
+
+                  <Grid Grid.Row="1" Margin="8,0,8,6" ColumnDefinitions="Auto,*">
+                    <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource Brush.Text.Secondary}" Text="File" />
+                    <TextBox
+                        x:Name="ComposeEditorPathBox"
+                        Grid.Column="1"
+                        AutomationProperties.Name="Where to save the new compose file"
+                        FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"
+                        IsVisible="{Binding ComposeEditor.IsNew}"
+                        PlaceholderText="/srv/app/compose.yaml — the full path on the server; missing folders are created"
+                        Text="{Binding ComposeEditor.Path}" />
+                    <ComboBox
+                        Grid.Column="1"
+                        HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="Compose file to edit"
+                        IsVisible="{Binding ComposeEditor.HasFileChoice}"
+                        ItemsSource="{Binding ComposeEditor.Files}"
+                        SelectedItem="{Binding ComposeEditor.SelectedFile}"
+                        SelectionChanged="ComposeFilePicker_OnSelectionChanged" />
+                    <SelectableTextBlock
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"
+                        IsVisible="{Binding ComposeEditor.ShowsPlainPath}"
+                        Text="{Binding ComposeEditor.Path}" />
+                  </Grid>
+
+                  <!-- Tab moves on rather than typing a tab: YAML does not allow tabs for indentation, and a
+                       text box that keeps Tab would hold the keyboard captive. -->
+                  <TextBox
+                      x:Name="ComposeEditorText"
+                      Grid.Row="2"
+                      Margin="8,0"
+                      AutomationProperties.Name="Compose file contents"
+                      AcceptsReturn="True"
+                      AcceptsTab="False"
+                      NewLine="&#10;"
+                      TextWrapping="NoWrap"
+                      VerticalContentAlignment="Top"
+                      FontFamily="Cascadia Mono,Consolas,DejaVu Sans Mono,monospace"
+                      FontSize="13"
+                      IsReadOnly="{Binding ComposeEditor.IsBusy}"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      Text="{Binding ComposeEditor.Text}" />
+
+                  <TextBlock
+                      Grid.Row="3"
+                      Margin="12,6,12,8"
+                      Foreground="{DynamicResource Brush.Text.Secondary}"
+                      TextWrapping="Wrap"
+                      Text="Ctrl+S saves and checks the file with docker compose config. Indent with spaces: Tab moves to the next control." />
+                </Grid>
               </Grid>
             </TabItem>
 

@@ -54,7 +54,9 @@ to the coloured dot, so the colour is never the only signal. The Compose, Images
 the same rules: every row button is named for its row (*"Bring shop down"*, *"Delete the volume
 shop_pgdata"*), and a row announces whether it is in use. A button for something that cannot be done, such
 as removing an image a container uses, is disabled rather than hidden, so the row keeps its shape and
-its tooltip says why. See [keybindings.md](keybindings.md#docker-page).
+its tooltip says why. The compose editor takes focus when it opens: the path box for a new file, otherwise
+the text. In the text, `Tab` moves on rather than typing a tab, so the keyboard is never trapped there. When
+the editor closes, focus returns to the project list. See [keybindings.md](keybindings.md#docker-page).
 
 ## What a screen reader hears
 
