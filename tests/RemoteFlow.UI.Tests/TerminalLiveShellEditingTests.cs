@@ -68,6 +68,10 @@ public sealed class TerminalLiveShellEditingTests
                 TermName = "xterm-256color",
             }));
 
+        // Typing before the prompt races bash's start-up: the terminal echoes the early keys itself, then
+        // readline draws the prompt and the same line again beside them, and the row holds both.
+        await UntilAsync(session, screen => screen.Any(IsPrompt), token);
+
         const string head = "aaaaaaaaaa";
         const string tail = "bbbbbbbbbb";
         await TypeAsync(session, $"echo {head}MIDDLE{tail}", token);
@@ -83,6 +87,13 @@ public sealed class TerminalLiveShellEditingTests
         // And the shell agrees: echo writes its argument back, on a row of its own.
         await TypeAsync(session, "\n", token);
         await UntilAsync(session, screen => screen.Any(row => row.Contains(edited, StringComparison.Ordinal)), token);
+    }
+
+    /// <summary>bash's default prompt without a profile, <c>bash-5.2$ </c> or <c>bash-5.2# </c> as root.</summary>
+    private static bool IsPrompt(string row)
+    {
+        var trimmed = row.TrimEnd();
+        return trimmed.Length > 0 && trimmed[^1] is '$' or '#';
     }
 
     /// <summary>The line being edited, from the command onwards, so that the prompt does not matter.</summary>
